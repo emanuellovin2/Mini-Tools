@@ -203,7 +203,7 @@ Wave 4 — affiliate redesign + refund policy (sequential: #18 → #19):
 
 Wave 5 — sticky features (parallel-able within wave):
 - [x] #23 Subscription pause (`paused_until`, Stripe `pause_collection`)
-- [ ] #24 Vendor analytics (MRR, churn, cohort, LTV)
+- [x] #24 Vendor analytics (MRR, churn, cohort, LTV)
 - [ ] #25 Affiliate leaderboard + badges + public profiles
 
 Wave 6 — docs:

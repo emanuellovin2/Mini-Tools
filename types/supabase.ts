@@ -468,6 +468,7 @@ export type Database = {
         Row: {
           amount_cents: number
           net_amount_cents: number
+          app_id: string | null
           created_at: string
           id: string
           is_reseller_sale: boolean
@@ -475,11 +476,13 @@ export type Database = {
           stripe_charge_id: string | null
           stripe_event_id: string | null
           stripe_invoice_id: string | null
+          subscription_id: string | null
           vendor_id: string
         }
         Insert: {
           amount_cents: number
           net_amount_cents: number
+          app_id?: string | null
           created_at?: string
           id?: string
           is_reseller_sale?: boolean
@@ -487,11 +490,13 @@ export type Database = {
           stripe_charge_id?: string | null
           stripe_event_id?: string | null
           stripe_invoice_id?: string | null
+          subscription_id?: string | null
           vendor_id: string
         }
         Update: {
           amount_cents?: number
           net_amount_cents?: number
+          app_id?: string | null
           created_at?: string
           id?: string
           is_reseller_sale?: boolean
@@ -499,6 +504,7 @@ export type Database = {
           stripe_charge_id?: string | null
           stripe_event_id?: string | null
           stripe_invoice_id?: string | null
+          subscription_id?: string | null
           vendor_id?: string
         }
         Relationships: [
@@ -507,6 +513,20 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_revenue_events_app_id_fkey"
+            columns: ["app_id"]
+            isOneToOne: false
+            referencedRelation: "apps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_revenue_events_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
             referencedColumns: ["id"]
           },
         ]
@@ -593,6 +613,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      vendor_cohort_retention: {
+        Args: { p_vendor_id: string }
+        Returns: {
+          cohort_month: string
+          month_offset: number
+          retained_count: number
+          cohort_size: number
+        }[]
+      }
       get_marketplace_app: {
         Args: { p_id: string }
         Returns: {

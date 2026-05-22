@@ -590,6 +590,8 @@ export async function handleInvoicePaid(
   await admin.from("vendor_revenue_events").upsert(
     {
       vendor_id: app.vendor_id,
+      app_id: appId,
+      subscription_id: subscriptionId,
       amount_cents: grossAmountCents,
       net_amount_cents: netAmountCents,
       is_reseller_sale: isResellerSale,

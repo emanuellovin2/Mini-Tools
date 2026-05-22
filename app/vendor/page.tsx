@@ -6,6 +6,11 @@ import {
   getVendorApps,
   getVendorStats,
   aggregateStats,
+  getVendorMRR,
+  getVendorMRRWaterfall,
+  getVendorChurnRate,
+  getVendorCohortRetention,
+  getVendorLTV,
   type VendorApp,
   type VendorSubscriptionStat,
 } from "@/lib/services/vendor";
@@ -13,6 +18,11 @@ import AppForm from "./_components/AppForm";
 import AffiliateCommissionForm from "./_components/AffiliateCommissionForm";
 import ProfileForm from "./_components/ProfileForm";
 import StripeConnect from "./_components/StripeConnect";
+import MRRCard from "./_components/MRRCard";
+import MRRWaterfallChart from "./_components/MRRWaterfallChart";
+import CohortRetentionTable from "./_components/CohortRetentionTable";
+import ChurnRateCard from "./_components/ChurnRateCard";
+import LTVCard from "./_components/LTVCard";
 
 export const metadata: Metadata = { title: "Vendor Dashboard — [PLATFORM]" };
 
@@ -110,7 +120,11 @@ function EarningsSummary({ stats }: { stats: VendorSubscriptionStat[] }) {
   );
 }
 
-export default async function VendorDashboard() {
+export default async function VendorDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ app?: string }>;
+}) {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -125,10 +139,26 @@ export default async function VendorDashboard() {
 
   if (profile?.role !== "vendor") redirect("/login");
 
-  const [apps, stats] = await Promise.all([
+  const { app: selectedAppId } = await searchParams;
+  const appFilter = selectedAppId || undefined;
+
+  const [apps, stats, mrr, waterfall, cohort, ltv] = await Promise.all([
     getVendorApps(user.id),
     getVendorStats(),
+    getVendorMRR(user.id, appFilter),
+    getVendorMRRWaterfall(user.id, 6, appFilter),
+    getVendorCohortRetention(user.id),
+    getVendorLTV(user.id),
   ]);
+
+  // Trailing 3-month average churn for the ChurnRateCard
+  const now = new Date();
+  const [c1, c2, c3] = await Promise.all([
+    getVendorChurnRate(user.id, now, appFilter),
+    getVendorChurnRate(user.id, new Date(now.getFullYear(), now.getMonth() - 1, 1), appFilter),
+    getVendorChurnRate(user.id, new Date(now.getFullYear(), now.getMonth() - 2, 1), appFilter),
+  ]);
+  const trailing3Bps = Math.round((c1 + c2 + c3) / 3);
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -169,6 +199,71 @@ export default async function VendorDashboard() {
 
           {/* Right column */}
           <div className="lg:col-span-2 space-y-6">
+            {/* ── Analytics ─────────────────────────────────────────────── */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold">Analytics</h2>
+                {/* Per-app filter */}
+                <form method="GET">
+                  <select
+                    name="app"
+                    defaultValue={selectedAppId ?? ""}
+                    onChange={(e) => {
+                      (e.currentTarget.form as HTMLFormElement).submit();
+                    }}
+                    className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                  >
+                    <option value="">All apps</option>
+                    {apps.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                  <noscript>
+                    <button type="submit" className="ml-2 text-xs underline">
+                      Filter
+                    </button>
+                  </noscript>
+                </form>
+              </div>
+
+              {/* KPI cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <MRRCard snapshot={mrr} waterfall={waterfall} />
+                <ChurnRateCard churnBps={c1} trailing3Bps={trailing3Bps} />
+                <LTVCard ltv={ltv} />
+              </div>
+
+              {/* MRR waterfall bar chart */}
+              <div className="mb-6">
+                <p className="text-xs font-medium text-gray-500 mb-3">
+                  New vs Churned MRR — last 6 months
+                </p>
+                <MRRWaterfallChart data={waterfall} />
+              </div>
+
+              {/* Cohort retention heatmap */}
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-3">
+                  Cohort retention
+                </p>
+                <CohortRetentionTable rows={cohort} />
+              </div>
+
+              <p className="text-xs text-gray-400 mt-4">
+                MRR includes direct + affiliate subs. Reseller-sold subs counted at vendor floor.{" "}
+                <a
+                  href="#methodology"
+                  className="underline hover:text-gray-600"
+                  id="methodology"
+                >
+                  Methodology
+                </a>
+                : MRR = sum of active subscription prices; LTV = avg price ÷ monthly churn rate.
+              </p>
+            </div>
+
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <h2 className="font-semibold mb-4">Earnings</h2>
               <EarningsSummary stats={stats} />
