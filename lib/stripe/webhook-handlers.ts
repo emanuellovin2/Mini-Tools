@@ -3,7 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/supabase";
 import { getStripe } from "./client";
 import { stripeStatusToSubscriptionStatus } from "./entitlements";
-import { getVendorCutBps, transferVendorShare, reverseTransfers } from "./transfers";
+import { getVendorCutBps, transferVendorShare, transferAffiliateShare, reverseTransfers } from "./transfers";
+import { recordAttribution } from "@/lib/services/affiliate";
 import { logMoneyFlow, logAccessEvent } from "@/lib/logger";
 import {
   sendSubscriptionReceipt,
@@ -46,7 +47,7 @@ export async function handleCheckoutSessionCompleted(
 ): Promise<void> {
   if (session.mode !== "subscription") return;
 
-  const { buyer_id, app_id, anon_user_id } = session.metadata ?? {};
+  const { buyer_id, app_id, anon_user_id, affiliate_id, aff_code } = session.metadata ?? {};
   if (!buyer_id || !app_id || !anon_user_id) {
     throw new Error(`Missing metadata in checkout session ${session.id}`);
   }
@@ -58,22 +59,49 @@ export async function handleCheckoutSessionCompleted(
   const priceCents = sub.items.data[0]?.price?.unit_amount ?? 0;
   const periodEnd = getSubPeriodEnd(sub);
 
-  const { error } = await admin.from("subscriptions").upsert(
-    {
-      buyer_id,
-      app_id,
-      stripe_subscription_id: subscriptionId,
-      stripe_customer_id: session.customer as string,
-      status,
-      price_cents: priceCents,
-      currency: sub.currency,
-      anon_user_id,
-      cancel_at_period_end: sub.cancel_at_period_end,
-      current_period_end: new Date(periodEnd * 1000).toISOString(),
-    },
-    { onConflict: "stripe_subscription_id" }
-  );
+  // Self-referral guard: drop affiliate attribution if buyer is the affiliate
+  const resolvedAffiliateId =
+    affiliate_id && affiliate_id !== buyer_id ? affiliate_id : null;
+  const resolvedAffCode = resolvedAffiliateId ? aff_code : null;
+
+  const { error, data: upsertedRows } = await admin
+    .from("subscriptions")
+    .upsert(
+      {
+        buyer_id,
+        app_id,
+        stripe_subscription_id: subscriptionId,
+        stripe_customer_id: session.customer as string,
+        status,
+        price_cents: priceCents,
+        currency: sub.currency,
+        anon_user_id,
+        cancel_at_period_end: sub.cancel_at_period_end,
+        current_period_end: new Date(periodEnd * 1000).toISOString(),
+        affiliate_id: resolvedAffiliateId,
+      },
+      { onConflict: "stripe_subscription_id" }
+    )
+    .select("id")
+    .maybeSingle();
   if (error) throw new Error(`subscriptions upsert failed: ${error.message}`);
+
+  // Write affiliate attribution row (idempotent via UNIQUE(subscription_id))
+  if (resolvedAffiliateId && resolvedAffCode && upsertedRows?.id) {
+    await recordAttribution({
+      subscriptionId: upsertedRows.id,
+      affiliateId: resolvedAffiliateId,
+      code: resolvedAffCode,
+    });
+    await writeAuditLog(admin, {
+      actor_id: null,
+      actor_role: "system",
+      action: "affiliate.attribution.recorded",
+      entity_type: "affiliate_attributions",
+      entity_id: upsertedRows.id,
+      metadata: { affiliate_id: resolvedAffiliateId, code: resolvedAffCode, app_id },
+    });
+  }
 
   await writeAuditLog(admin, {
     actor_id: null,
@@ -81,7 +109,7 @@ export async function handleCheckoutSessionCompleted(
     action: "subscription.created",
     entity_type: "subscriptions",
     entity_id: subscriptionId,
-    metadata: { buyer_id, app_id, status },
+    metadata: { buyer_id, app_id, status, affiliate_id: resolvedAffiliateId ?? undefined },
   });
 
   logAccessEvent({ action: "subscription.created", entity_id: subscriptionId, app_id, status });
@@ -144,18 +172,20 @@ export async function handleInvoicePaid(
     .update({ status: "active" })
     .eq("stripe_subscription_id", subscriptionId);
 
-  // Resolve app_id + reseller_id — DB first, Stripe metadata fallback for out-of-order events
+  // Resolve app_id + reseller_id + affiliate_id — DB first, Stripe metadata fallback for out-of-order events
   let appId: string | null = null;
   let isResellerSale = false;
+  let affiliateIdForTransfer: string | null = null;
   const { data: subRow } = await admin
     .from("subscriptions")
-    .select("app_id, reseller_id")
+    .select("app_id, reseller_id, affiliate_id")
     .eq("stripe_subscription_id", subscriptionId)
     .maybeSingle();
 
   if (subRow?.app_id) {
     appId = subRow.app_id;
     isResellerSale = !!subRow.reseller_id;
+    affiliateIdForTransfer = subRow.affiliate_id ?? null;
   } else {
     const stripe = getStripe();
     const stripeSub = await stripe.subscriptions.retrieve(subscriptionId);
@@ -188,6 +218,53 @@ export async function handleInvoicePaid(
     stripeAccountId: vendorProfile.stripe_account_id,
     cutBps,
   });
+
+  // Affiliate transfer: 50% of the platform's cut (SPEC §4a, §11)
+  let affiliateShareCents: number | null = null;
+  let affiliateTransferId: string | null = null;
+  if (affiliateIdForTransfer && !isResellerSale) {
+    const { data: affiliateProfile } = await admin
+      .from("profiles")
+      .select("stripe_account_id, charges_enabled")
+      .eq("id", affiliateIdForTransfer)
+      .single();
+
+    if (affiliateProfile?.stripe_account_id && affiliateProfile.charges_enabled) {
+      const result = await transferAffiliateShare({
+        invoiceId,
+        amountCents,
+        affiliateId: affiliateIdForTransfer,
+        stripeAccountId: affiliateProfile.stripe_account_id,
+        cutBps,
+      });
+      affiliateShareCents = result.affiliateShareCents;
+      affiliateTransferId = result.transferId;
+
+      await writeAuditLog(admin, {
+        actor_id: null,
+        actor_role: "system",
+        action: "affiliate.transfer.created",
+        entity_type: "affiliate_attributions",
+        entity_id: subscriptionId,
+        metadata: {
+          invoice_id: invoiceId,
+          affiliate_id: affiliateIdForTransfer,
+          affiliate_share_cents: affiliateShareCents,
+          transfer_id: affiliateTransferId,
+          cut_bps: cutBps,
+        },
+      });
+
+      logMoneyFlow({
+        action: "affiliate.transfer.created",
+        entity_id: subscriptionId,
+        invoice_id: invoiceId,
+        amount_cents: affiliateShareCents,
+        transfer_id: affiliateTransferId,
+        cut_bps: cutBps,
+      });
+    }
+  }
 
   // Link PaymentIntent → transfer_group so charge.refunded can find the invoice
   const stripe = getStripe();
@@ -232,6 +309,13 @@ export async function handleInvoicePaid(
       vendor_share_cents: vendorShareCents,
       transfer_id: transferId,
       cut_bps: cutBps,
+      ...(affiliateIdForTransfer
+        ? {
+            affiliate_id: affiliateIdForTransfer,
+            affiliate_share_cents: affiliateShareCents,
+            affiliate_transfer_id: affiliateTransferId,
+          }
+        : {}),
     },
   });
 

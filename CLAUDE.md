@@ -31,7 +31,7 @@ stripe listen --forward-to localhost:3000/api/webhooks   # forward webhooks in d
 2. **`BUILD_PROMPTS.md`** — index of the ordered build plan (#1–#14). Each prompt lives as its own file in `build_prompts/`. Build in order; run each prompt's **Verify** step before moving on.
 3. **`ENGINEERING.md`** — engineering principles. Every prompt must follow them (money as cents + bps, Separate Charges & Transfers, idempotent webhooks, RLS + RLS tests, strict TS, tests on critical paths). Read before writing code.
 
-## Folder structure (established in #1–#7)
+## Folder structure (established in #1–#13)
 ```
 lib/
   logger.ts          # structured JSON logger — logWebhookEvent, logMoneyFlow, logAccessEvent, logEmail (no PII/secrets)
@@ -41,16 +41,17 @@ lib/
     marketplace.ts   # public browse + search
     buyer.ts         # getBuyerSubscriptions() — joins subscriptions + apps for the dashboard
     admin.ts         # getPlatformStats, getPendingApps, getVendors, getAllSubscriptions, getAuditLog, getChurnAlerts, dispatchChurnAlerts
+    affiliate.ts     # createAffiliateLink, getAffiliateLinks, validateAffiliateCode, getAffiliateStats, recordAttribution
     reconciliation.ts  # runReconciliation(), getReconciliationRuns() — Stripe↔DB drift detection
   stripe/
-    __tests__/       # Stripe helper tests
+    __tests__/       # Stripe helper tests (incl. affiliate.test.ts — money math for all 3 tiers)
     billing.ts       # computeTier() pure function (SPEC §3 tier boundaries)
     client.ts        # Stripe SDK singleton
-    connect.ts       # Connect onboarding helpers
+    connect.ts       # Connect onboarding helpers (used by vendor + affiliate + reseller)
     customers.ts     # Stripe Customer helpers
     entitlements.ts  # stripeStatusToSubscriptionStatus()
     products.ts      # product/price helpers
-    transfers.ts     # transferVendorShare(), reverseTransfers(), getVendorCutBps()
+    transfers.ts     # transferVendorShare(), transferAffiliateShare(), reverseTransfers(), getVendorCutBps()
     webhook-handlers.ts  # all Stripe event handlers (+ structured logging, receipt/dunning emails)
   email/
     resend.ts        # sendSubscriptionReceipt, sendPaymentFailedNotice, sendChurnAlert, sendReconciliationDigest — all degrade gracefully on Resend outage
@@ -66,12 +67,21 @@ app/
     webhooks/        # Stripe webhook endpoint (raw body, signature-verified, structured logging)
     stripe/          # Connect onboarding + product sync routes
     admin/           # admin approve-app route
+    affiliate/
+      links/         # POST /api/affiliate/links — generates 8-char base62 code
+      onboard/       # GET /api/affiliate/onboard — redirects to Stripe Connect Express onboarding
     well-known/      # JWKS endpoint
   buyer/
     page.tsx             # buyer dashboard: subscription list, Launch, cancel-at-period-end
     actions.ts           # cancelSubscriptionAction (Server Action)
     _components/
       CancelButton.tsx   # client component — confirm dialog + useTransition
+  affiliate/
+    page.tsx             # affiliate dashboard: Connect onboarding, generate links, aggregate stats (no buyer PII)
+    actions.ts           # createAffiliateLinkAction (Server Action)
+    _components/
+      GenerateLinkForm.tsx
+      LinksList.tsx
   admin/
     page.tsx             # admin dashboard: stats, approvals, vendors, subscriptions, audit log, churn
     actions.ts           # approveAppAction, rejectAppAction, syncVendorStripeAction
@@ -80,6 +90,7 @@ app/
     _components/
       ApproveRejectButtons.tsx
       SyncStripeButton.tsx
+proxy.ts             # Next.js middleware: auth enforcement, role routing, ?aff= cookie capture (30d HTTP-only)
 supabase/
   migrations/        # all schema changes — never manual dashboard edits
   functions/
@@ -87,8 +98,6 @@ supabase/
     daily-reconciliation-cron/ # Edge Function: 0 2 * * * — Stripe↔DB checks + Resend digest
 types/
   supabase.ts        # auto-generated from `npm run types` — never hand-edit
-                     # NOTE: after `supabase db push` for migration #12, re-run `npm run types`
-                     # to add reconciliation_runs to the generated types
 ```
 
 ## How to work in this repo
@@ -143,7 +152,7 @@ All required vars are validated at boot (Zod) — a missing/malformed required v
 - [x] #12 Observability & Stripe↔DB reconciliation
 
 **Phase 2**
-- [ ] #13 Affiliate role + referral links + 50% split of platform cut
+- [x] #13 Affiliate role + referral links + 50% split of platform cut
 - [ ] #14 Reseller role + $19/mo subscription + storefront offers + 5% platform fee
 
 ## Guardrails

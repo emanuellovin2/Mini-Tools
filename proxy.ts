@@ -4,8 +4,33 @@ import type { Database } from "@/types/supabase";
 import { ROLE_DASHBOARDS, type UserRole } from "@/lib/auth/roles";
 
 // Paths accessible without authentication
-const PUBLIC_PATHS = ["/login", "/signup", "/api/auth", "/api/webhooks", "/api/verify", "/.well-known", "/marketplace", "/app"];
+const PUBLIC_PATHS = ["/login", "/signup", "/api/auth", "/api/webhooks", "/api/verify", "/.well-known", "/marketplace", "/app", "/r"];
 const AUTH_ONLY_PUBLIC = ["/login", "/signup"];
+
+// Capture ?aff=<code> on any public page visit and set an HTTP-only attribution cookie.
+// Returns a modified response (or the original if no capture needed).
+async function captureAffiliateCookie(
+  request: NextRequest,
+  response: NextResponse
+): Promise<NextResponse> {
+  const affCode = request.nextUrl.searchParams.get("aff");
+  if (!affCode) return response;
+
+  // Validate code format: 1–16 alphanumeric chars (base62)
+  if (!/^[0-9A-Za-z]{1,16}$/.test(affCode)) return response;
+
+  // Existence validation via the admin API would need a DB call — skip here for performance.
+  // Invalid codes are silently ignored at subscribe time (validateAffiliateCode returns null).
+  // Self-referral check happens at subscribe time where we have the buyer identity.
+  response.cookies.set("aff_code", affCode, {
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 30, // 30 days
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+  });
+  return response;
+}
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -15,7 +40,8 @@ export async function proxy(request: NextRequest) {
     PUBLIC_PATHS.some((p) => pathname.startsWith(p)) &&
     !AUTH_ONLY_PUBLIC.some((p) => pathname.startsWith(p))
   ) {
-    return refreshSession(request);
+    const res = await refreshSession(request);
+    return captureAffiliateCookie(request, res);
   }
 
   // For /login and /signup: let unauthenticated through, redirect authenticated to dashboard
@@ -27,7 +53,7 @@ export async function proxy(request: NextRequest) {
         new URL(ROLE_DASHBOARDS[role] ?? "/buyer", request.url)
       );
     }
-    return response;
+    return captureAffiliateCookie(request, response);
   }
 
   const { response, user } = await getSessionUser(request);
@@ -54,7 +80,7 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  return response;
+  return captureAffiliateCookie(request, response);
 }
 
 async function getSessionUser(request: NextRequest) {
