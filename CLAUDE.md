@@ -199,10 +199,10 @@ Wave 3 — design system:
 
 Wave 4 — affiliate redesign + refund policy (sequential: #18 → #19):
 - [x] #18 Affiliate model redesign (vendor-funded, active-MRR-tiered) — **blocks #19 and #25**
-- [ ] #19 Refund vendor-only / dispute all-reverse split policy
+- [x] #19 Refund vendor-only / dispute all-reverse split policy
 
 Wave 5 — sticky features (parallel-able within wave):
-- [ ] #23 Subscription pause (`paused_until`, Stripe `pause_collection`)
+- [x] #23 Subscription pause (`paused_until`, Stripe `pause_collection`)
 - [ ] #24 Vendor analytics (MRR, churn, cohort, LTV)
 - [ ] #25 Affiliate leaderboard + badges + public profiles
 

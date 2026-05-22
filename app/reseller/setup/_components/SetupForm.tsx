@@ -85,7 +85,7 @@ export default function SetupForm({ currentSlug, hasActiveSub }: Props) {
       {/* Step 2: Subscribe */}
       <div>
         <p className="text-sm font-medium mb-1">
-          Step 2: Subscribe to the reseller plan ($19/mo){" "}
+          Step 2: Subscribe to the reseller plan{" "}
           {hasActiveSub && <span className="text-green-600">✓ Active</span>}
         </p>
         {!hasActiveSub ? (
@@ -94,7 +94,7 @@ export default function SetupForm({ currentSlug, hasActiveSub }: Props) {
             disabled={!slugSaved}
             className="w-full py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Subscribe for $19/mo
+            Start 30-day free trial — $19/mo after trial
           </button>
         ) : (
           <p className="text-sm text-gray-500">Your reseller subscription is active.</p>

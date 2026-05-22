@@ -1,0 +1,27 @@
+{
+  "/Users/lovinemanuel/Desktop/Mini-Tools/.claude/settings.local.json": {
+    "mtime": 1779380650.6204972,
+    "ast_hash": "d3ee25951badbec7f2a4c484eb3388fb",
+    "semantic_hash": "d3ee25951badbec7f2a4c484eb3388fb"
+  },
+  "/Users/lovinemanuel/Desktop/Mini-Tools/ENGINEERING.md": {
+    "mtime": 1779381429.1451285,
+    "ast_hash": "068a2ca117f317ed1a610fd593adf503",
+    "semantic_hash": "068a2ca117f317ed1a610fd593adf503"
+  },
+  "/Users/lovinemanuel/Desktop/Mini-Tools/BUILD_PROMPTS.md": {
+    "mtime": 1779381618.5794418,
+    "ast_hash": "4f5da5b45972f65441a7e33b1ce9512b",
+    "semantic_hash": "4f5da5b45972f65441a7e33b1ce9512b"
+  },
+  "/Users/lovinemanuel/Desktop/Mini-Tools/SPEC.md": {
+    "mtime": 1779381407.1625156,
+    "ast_hash": "9fbbeb9b604827f868fceb14bcdff173",
+    "semantic_hash": "9fbbeb9b604827f868fceb14bcdff173"
+  },
+  "/Users/lovinemanuel/Desktop/Mini-Tools/CLAUDE.md": {
+    "mtime": 1779381342.3960752,
+    "ast_hash": "cbbf37cf5de2e5a2a16fb84e5bc1d363",
+    "semantic_hash": "cbbf37cf5de2e5a2a16fb84e5bc1d363"
+  }
+}

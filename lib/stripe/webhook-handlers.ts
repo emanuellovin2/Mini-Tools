@@ -12,6 +12,7 @@ import {
   transferResellerVendorFloor,
   transferResellerShare,
   reverseTransfers,
+  reverseVendorTransfers,
 } from "./transfers";
 import { recordAttribution } from "@/lib/services/affiliate";
 import {
@@ -278,6 +279,19 @@ export async function handleSubscriptionUpdated(
   }
 
   // Regular buyer subscription update.
+  // Sync pause_collection → paused_until so access checks and buyer UI stay accurate.
+  const pauseCollection = sub.pause_collection as { resumes_at?: number | null } | null;
+  const pausedUntil = pauseCollection?.resumes_at
+    ? new Date(pauseCollection.resumes_at * 1000).toISOString()
+    : null;
+
+  // Read existing pause_started_at to avoid overwriting it on subsequent webhook deliveries.
+  const { data: existingSub } = await admin
+    .from("subscriptions")
+    .select("pause_started_at")
+    .eq("stripe_subscription_id", sub.id)
+    .maybeSingle();
+
   const { error } = await admin
     .from("subscriptions")
     .update({
@@ -287,6 +301,10 @@ export async function handleSubscriptionUpdated(
       canceled_at: sub.canceled_at
         ? new Date(sub.canceled_at * 1000).toISOString()
         : null,
+      paused_until: pausedUntil,
+      pause_started_at: pausedUntil && !existingSub?.pause_started_at
+        ? new Date().toISOString()
+        : (pausedUntil ? existingSub?.pause_started_at ?? null : null),
     })
     .eq("stripe_subscription_id", sub.id);
   if (error) throw new Error(`subscription update failed: ${error.message}`);
@@ -754,7 +772,9 @@ export async function handleChargeRefunded(
   if (!tg?.startsWith("invoice_")) return;
   const invoiceId = tg.slice("invoice_".length);
 
-  await reverseTransfers({ invoiceId, chargeId: charge.id });
+  // Voluntary refund: vendor absorbs the cost — only reverse the vendor transfer.
+  // Affiliate and reseller markup shares are intentionally kept (SPEC §19 locked decision).
+  await reverseVendorTransfers({ invoiceId, chargeId: charge.id });
 
   // The most recent refund is data[0] (Stripe orders newest-first).
   // Using this delta rather than cumulative amount_refunded avoids double-counting
@@ -812,7 +832,9 @@ export async function handleDisputeEvent(
   const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
   if (!chargeId) return;
 
-  if (eventType === "charge.dispute.created") {
+  // Dispute lost: reverse ALL transfers (vendor + affiliate/reseller all absorb the loss).
+  // Only act on closed+lost — created events are logged only, no reversal yet.
+  if (eventType === "charge.dispute.closed" && dispute.status === "lost") {
     const stripe = getStripe();
     const charge = await stripe.charges.retrieve(chargeId);
     const piId = typeof charge.payment_intent === "string"

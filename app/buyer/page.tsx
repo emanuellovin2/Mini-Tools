@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import CancelButton from "./_components/CancelButton";
+import { PauseButton, ResumeButton } from "./_components/PauseButton";
 
 export const metadata: Metadata = {
   title: "My Apps — [PLATFORM]",
@@ -27,7 +28,14 @@ function formatDate(iso: string) {
   });
 }
 
+function isPaused(sub: BuyerSubscription) {
+  return !!sub.paused_until && new Date(sub.paused_until) > new Date();
+}
+
 function StatusBadge({ sub }: { sub: BuyerSubscription }) {
+  if (isPaused(sub)) {
+    return <Badge variant="warning">Paused until {formatDate(sub.paused_until!)}</Badge>;
+  }
   if (sub.status === "incomplete") {
     return (
       <Badge variant="warning">
@@ -53,7 +61,10 @@ function StatusBadge({ sub }: { sub: BuyerSubscription }) {
 }
 
 function SubscriptionCard({ sub }: { sub: BuyerSubscription }) {
-  const isLaunchable = (sub.status === "active" || sub.status === "trialing");
+  const paused = isPaused(sub);
+  const isActive = (sub.status === "active" || sub.status === "trialing") && !paused;
+  const isLaunchable = isActive;
+  const isPauseable = isActive && !sub.cancel_at_period_end;
   const isCancellable = (sub.status === "active" || sub.status === "trialing") && !sub.cancel_at_period_end;
 
   return (
@@ -78,6 +89,12 @@ function SubscriptionCard({ sub }: { sub: BuyerSubscription }) {
           <StatusBadge sub={sub} />
         </div>
 
+        {paused && (
+          <p className="text-xs text-yellow-700 bg-yellow-50 rounded-lg px-3 py-2 mb-3">
+            Access is paused. Billing resumes automatically on{" "}
+            <strong>{formatDate(sub.paused_until!)}</strong>.
+          </p>
+        )}
         {sub.status === "incomplete" && (
           <p className="text-xs text-yellow-700 bg-yellow-50 rounded-lg px-3 py-2 mb-3">
             Payment is being confirmed. Access will activate within seconds.
@@ -109,6 +126,13 @@ function SubscriptionCard({ sub }: { sub: BuyerSubscription }) {
             <Link href={`/app/${sub.app_id}`}>
               <Button variant="ghost" size="sm">Details</Button>
             </Link>
+            {paused && <ResumeButton subscriptionId={sub.id} />}
+            {isPauseable && (
+              <PauseButton
+                subscriptionId={sub.id}
+                currentPeriodEnd={sub.current_period_end}
+              />
+            )}
             {isCancellable && <CancelButton subscriptionId={sub.id} />}
           </div>
         </div>
@@ -131,12 +155,16 @@ export default async function BuyerDashboard() {
   if (profile?.role !== "buyer") redirect("/login");
 
   const subscriptions = await getBuyerSubscriptions(user.id);
-  const active = subscriptions.filter((s) =>
-    ["active", "trialing", "incomplete", "past_due"].includes(s.status)
-  );
-  const past = subscriptions.filter((s) =>
-    ["canceled", "unpaid", "paused"].includes(s.status)
-  );
+  const now = new Date();
+  const active = subscriptions.filter((s) => {
+    // Include paused (paused_until > now) in "active" section — same sub, not churned
+    if (s.paused_until && new Date(s.paused_until) > now) return true;
+    return ["active", "trialing", "incomplete", "past_due"].includes(s.status);
+  });
+  const past = subscriptions.filter((s) => {
+    if (s.paused_until && new Date(s.paused_until) > now) return false;
+    return ["canceled", "unpaid", "paused"].includes(s.status);
+  });
 
   return (
     <DashboardShell nav={buyerNav} user={{ email: profile.display_name ?? user.email ?? "", role: "buyer" }}>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/services/supabase-server";
+import { createAdminClient } from "@/lib/services/supabase";
 import { getStripe } from "@/lib/stripe/client";
 import { getOrCreateStripeCustomer } from "@/lib/stripe/customers";
 
@@ -34,6 +35,15 @@ export async function POST(_req: NextRequest): Promise<NextResponse> {
 
   const customerId = await getOrCreateStripeCustomer(user.id, user.email ?? "");
 
+  // Anti-abuse: only offer trial to first-time resellers
+  const admin = createAdminClient();
+  const { data: prior } = await admin
+    .from("reseller_subscriptions")
+    .select("id")
+    .eq("reseller_id", user.id)
+    .maybeSingle();
+  const trialDays = prior ? 0 : (Number(process.env.RESELLER_TRIAL_DAYS) || 30);
+
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
@@ -45,6 +55,7 @@ export async function POST(_req: NextRequest): Promise<NextResponse> {
       reseller_id: user.id,
     },
     subscription_data: {
+      trial_period_days: trialDays > 0 ? trialDays : undefined,
       metadata: {
         reseller_platform_sub: "true",
         reseller_id: user.id,

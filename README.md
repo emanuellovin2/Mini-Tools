@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# [PLATFORM]
 
-## Getting Started
+A two-sided SaaS marketplace. See `SPEC.md` for full product and engineering spec.
 
-First, run the development server:
+## Prerequisites
+
+- Node.js 20+
+- [Docker Desktop](https://docs.docker.com/desktop) — required for local Supabase
+- [Supabase CLI](https://supabase.com/docs/guides/cli/getting-started)
+- [Stripe CLI](https://stripe.com/docs/stripe-cli) — required from #6
+
+## Local development setup
 
 ```bash
+# 1. Install deps
+npm install
+
+# 2. Start Docker Desktop, then start local Supabase
+supabase start
+# Copy the printed anon key + service_role key into .env.local
+
+# 3. Configure environment
+cp .env.local.example .env.local
+# Fill in all values (see .env.local.example for instructions)
+
+# 4. Apply migrations
+supabase db push
+
+# 5. Generate TypeScript types from the local schema
+npm run types
+
+# 6. Run dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Local ↔ hosted Supabase workflow
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- All schema changes go through migration files in `supabase/migrations/` — never edit the dashboard directly.
+- Develop against the local stack (`supabase start`), verify, then push to the hosted project via the Supabase dashboard or `supabase db push --linked`.
+- After a schema change, re-run `npm run types` to regenerate `types/supabase.ts`.
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+| Script | Purpose |
+|--------|---------|
+| `npm run dev` | Next.js dev server |
+| `npm run typecheck` | Strict TypeScript check (`tsc --noEmit`) |
+| `npm test` | Run Vitest test suite |
+| `npm run test:watch` | Vitest in watch mode |
+| `npm run types` | Regenerate Supabase types from local stack |
+| `supabase start` | Start local Supabase (requires Docker) |
+| `supabase stop` | Stop local Supabase |
+| `supabase db push` | Apply migrations to local stack |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## RS256 key pair (JWT)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Generate once:
 
-## Deploy on Vercel
+```bash
+openssl genrsa -out private.pem 2048
+openssl rsa -in private.pem -pubout -out public.pem
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Paste PEM contents into `.env.local` (escape newlines as `\n`). **Never commit `private.pem`** — it's in `.gitignore`.

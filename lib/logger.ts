@@ -54,6 +54,7 @@ export function logMoneyFlow(opts: {
   action: string;
   entity_id: string | null;
   amount_cents?: number;
+  net_amount_cents?: number;
   vendor_id?: string;
   transfer_id?: string;
   cut_bps?: number;

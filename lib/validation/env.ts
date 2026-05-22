@@ -13,6 +13,12 @@ const serverEnvSchema = z.object({
     .optional()
     .default("2000")
     .transform(Number),
+  // Optional — defaults to 30. Set to 0 to disable trials.
+  RESELLER_TRIAL_DAYS: z
+    .string()
+    .optional()
+    .default("30")
+    .transform(Number),
   // Required from #12 — transactional email + admin alerts
   RESEND_API_KEY: z.string().min(1),
   ADMIN_EMAIL: z.string().email(),

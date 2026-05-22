@@ -11,6 +11,7 @@ import {
   handleSubscriptionUpdated,
   handleInvoicePaid,
   handleChargeRefunded,
+  handleDisputeEvent,
 } from "../webhook-handlers";
 
 // ── Stripe mock ──────────────────────────────────────────────────────────────
@@ -25,15 +26,18 @@ vi.mock("@/lib/stripe/transfers", () => ({
     .fn()
     .mockResolvedValue({ transferId: "tr_aff_test", affiliateShareCents: 100 }),
   reverseTransfers: vi.fn().mockResolvedValue(undefined),
+  reverseVendorTransfers: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/lib/services/affiliate", () => ({
   recordAttribution: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { getStripe } from "@/lib/stripe/client";
-import { reverseTransfers, transferVendorShare } from "@/lib/stripe/transfers";
+import { reverseTransfers, reverseVendorTransfers, transferVendorShare } from "@/lib/stripe/transfers";
 
 const mockGetStripe = vi.mocked(getStripe);
+
+beforeEach(() => vi.clearAllMocks());
 
 // ── Admin client mock factory ─────────────────────────────────────────────────
 //
@@ -271,6 +275,28 @@ describe("handleSubscriptionUpdated", () => {
     expect(log).toBeDefined();
     expect((log?.data as Record<string, unknown>).action).toBe("subscription.updated");
   });
+
+  it("sets paused_until when pause_collection.resumes_at is present", async () => {
+    const resumesAt = Math.floor(Date.now() / 1000) + 30 * 86400;
+    const sub = makeStripeSub({
+      pause_collection: { behavior: "void", resumes_at: resumesAt },
+    });
+    const admin = makeAdmin();
+    await handleSubscriptionUpdated(sub, admin);
+
+    const upd = admin._updated.find((u) => u.table === "subscriptions");
+    const data = upd?.data as Record<string, unknown>;
+    expect(data.paused_until).toBe(new Date(resumesAt * 1000).toISOString());
+  });
+
+  it("clears paused_until when pause_collection is null (resume)", async () => {
+    const sub = makeStripeSub({ pause_collection: null });
+    const admin = makeAdmin();
+    await handleSubscriptionUpdated(sub, admin);
+
+    const upd = admin._updated.find((u) => u.table === "subscriptions");
+    expect((upd?.data as Record<string, unknown>).paused_until).toBeNull();
+  });
 });
 
 // ── Tests: handleInvoicePaid ──────────────────────────────────────────────────
@@ -372,6 +398,7 @@ describe("handleChargeRefunded", () => {
 
     const admin = makeAdmin();
     await handleChargeRefunded(makeCharge(), admin, "evt_refund_001");
+    expect(reverseVendorTransfers).not.toHaveBeenCalled();
     expect(reverseTransfers).not.toHaveBeenCalled();
     expect(admin._upserted).toHaveLength(0);
   });
@@ -385,10 +412,10 @@ describe("handleChargeRefunded", () => {
 
     const admin = makeAdmin();
     await handleChargeRefunded(makeCharge(), admin, "evt_refund_002");
-    expect(reverseTransfers).not.toHaveBeenCalled();
+    expect(reverseVendorTransfers).not.toHaveBeenCalled();
   });
 
-  it("calls reverseTransfers with correct invoiceId when transfer_group matches", async () => {
+  it("calls reverseVendorTransfers (not reverseTransfers) on voluntary refund", async () => {
     mockGetStripe.mockReturnValue({
       paymentIntents: {
         retrieve: vi.fn().mockResolvedValue({ transfer_group: "invoice_in_001" }),
@@ -402,9 +429,10 @@ describe("handleChargeRefunded", () => {
     });
 
     await handleChargeRefunded(makeCharge(), admin, "evt_refund_003");
-    expect(reverseTransfers).toHaveBeenCalledWith(
+    expect(reverseVendorTransfers).toHaveBeenCalledWith(
       expect.objectContaining({ invoiceId: "in_001" })
     );
+    expect(reverseTransfers).not.toHaveBeenCalled();
   });
 
   it("records negative revenue event with ignoreDuplicates:true", async () => {
@@ -461,5 +489,66 @@ describe("handleChargeRefunded", () => {
     await handleChargeRefunded(makeCharge(), admin, "evt_refund_005");
     const log = admin._inserted.find((i) => i.table === "audit_log");
     expect((log?.data as Record<string, unknown>).action).toBe("charge.refunded");
+  });
+});
+
+// ── Tests: handleDisputeEvent ─────────────────────────────────────────────────
+
+function makeDispute(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "dp_001",
+    charge: "ch_001",
+    status: "lost",
+    ...overrides,
+  } as unknown as import("stripe").Stripe.Dispute;
+}
+
+describe("handleDisputeEvent", () => {
+  function makeStripeForDispute(transferGroup: string | null = "invoice_in_001") {
+    return {
+      charges: { retrieve: vi.fn().mockResolvedValue({ payment_intent: "pi_001" }) },
+      paymentIntents: { retrieve: vi.fn().mockResolvedValue({ transfer_group: transferGroup }) },
+    } as unknown as ReturnType<typeof getStripe>;
+  }
+
+  it("reverses ALL transfers on charge.dispute.closed outcome=lost", async () => {
+    mockGetStripe.mockReturnValue(makeStripeForDispute());
+    const admin = makeAdmin();
+    await handleDisputeEvent(makeDispute({ status: "lost" }), "charge.dispute.closed", admin);
+    expect(reverseTransfers).toHaveBeenCalledWith(
+      expect.objectContaining({ invoiceId: "in_001" })
+    );
+    expect(reverseVendorTransfers).not.toHaveBeenCalled();
+  });
+
+  it("does NOT reverse on charge.dispute.closed outcome!=lost", async () => {
+    mockGetStripe.mockReturnValue(makeStripeForDispute());
+    const admin = makeAdmin();
+    await handleDisputeEvent(makeDispute({ status: "won" }), "charge.dispute.closed", admin);
+    expect(reverseTransfers).not.toHaveBeenCalled();
+    expect(reverseVendorTransfers).not.toHaveBeenCalled();
+  });
+
+  it("does NOT reverse on charge.dispute.created — log only", async () => {
+    mockGetStripe.mockReturnValue(makeStripeForDispute());
+    const admin = makeAdmin();
+    await handleDisputeEvent(makeDispute({ status: "needs_response" }), "charge.dispute.created", admin);
+    expect(reverseTransfers).not.toHaveBeenCalled();
+    expect(reverseVendorTransfers).not.toHaveBeenCalled();
+  });
+
+  it("skips reversal when transfer_group is not an invoice group", async () => {
+    mockGetStripe.mockReturnValue(makeStripeForDispute("other_group"));
+    const admin = makeAdmin();
+    await handleDisputeEvent(makeDispute({ status: "lost" }), "charge.dispute.closed", admin);
+    expect(reverseTransfers).not.toHaveBeenCalled();
+  });
+
+  it("writes audit_log entry for dispute event", async () => {
+    mockGetStripe.mockReturnValue(makeStripeForDispute());
+    const admin = makeAdmin();
+    await handleDisputeEvent(makeDispute({ status: "lost" }), "charge.dispute.closed", admin);
+    const log = admin._inserted.find((i) => i.table === "audit_log");
+    expect((log?.data as Record<string, unknown>).action).toBe("charge.dispute.closed");
   });
 });

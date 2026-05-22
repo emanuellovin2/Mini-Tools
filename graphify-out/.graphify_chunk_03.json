@@ -1,0 +1,1133 @@
+{
+  "nodes": [
+    {
+      "id": "affiliate__components_generatelinktorform_generatelinktorform",
+      "label": "GenerateLinkForm Component",
+      "file_type": "code",
+      "source_file": "app/affiliate/_components/GenerateLinkForm.tsx",
+      "source_location": "line 6",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "affiliate__components_linkslist_linkslist",
+      "label": "LinksList Component",
+      "file_type": "code",
+      "source_file": "app/affiliate/_components/LinksList.tsx",
+      "source_location": "line 10",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "login_page_loginpage",
+      "label": "LoginPage Component",
+      "file_type": "code",
+      "source_file": "app/login/page.tsx",
+      "source_location": "line 8",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "buyer_actions_cancelsubscriptionaction",
+      "label": "cancelSubscriptionAction Server Action",
+      "file_type": "code",
+      "source_file": "app/buyer/actions.ts",
+      "source_location": "line 14",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "buyer_page_buyerdashboard",
+      "label": "BuyerDashboard Page",
+      "file_type": "code",
+      "source_file": "app/buyer/page.tsx",
+      "source_location": "line 138",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "buyer_page_subscriptioncard",
+      "label": "SubscriptionCard Component",
+      "file_type": "code",
+      "source_file": "app/buyer/page.tsx",
+      "source_location": "line 65",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "buyer__components_cancelbutton_cancelbutton",
+      "label": "CancelButton Component",
+      "file_type": "code",
+      "source_file": "app/buyer/_components/CancelButton.tsx",
+      "source_location": "line 6",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "vendor_actions_submitappaction",
+      "label": "submitAppAction Server Action",
+      "file_type": "code",
+      "source_file": "app/vendor/actions.ts",
+      "source_location": "line 28",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "vendor_actions_updatedisplaynameaction",
+      "label": "updateDisplayNameAction Server Action",
+      "file_type": "code",
+      "source_file": "app/vendor/actions.ts",
+      "source_location": "line 111",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "vendor_actions_requirevendor",
+      "label": "requireVendor Auth Guard",
+      "file_type": "code",
+      "source_file": "app/vendor/actions.ts",
+      "source_location": "line 12",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "vendor_page_vendordashboard",
+      "label": "VendorDashboard Page",
+      "file_type": "code",
+      "source_file": "app/vendor/page.tsx",
+      "source_location": "line 106",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "vendor__components_stripeconnect_stripeconnect",
+      "label": "StripeConnect Component",
+      "file_type": "code",
+      "source_file": "app/vendor/_components/StripeConnect.tsx",
+      "source_location": "line 11",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "vendor__components_appform_appform",
+      "label": "AppForm Component",
+      "file_type": "code",
+      "source_file": "app/vendor/_components/AppForm.tsx",
+      "source_location": "line 13",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "vendor__components_profileform_profileform",
+      "label": "ProfileForm Component",
+      "file_type": "code",
+      "source_file": "app/vendor/_components/ProfileForm.tsx",
+      "source_location": "line 6",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "supabase_seed_seed",
+      "label": "Supabase Seed Data",
+      "file_type": "code",
+      "source_file": "supabase/seed.sql",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000001_profiles_table",
+      "label": "profiles Table",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000001_profiles_and_roles.sql",
+      "source_location": "line 5",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000001_user_role_enum",
+      "label": "user_role ENUM (admin, vendor, buyer, reseller)",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000001_profiles_and_roles.sql",
+      "source_location": "line 2",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000001_handle_new_user",
+      "label": "handle_new_user Trigger Function",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000001_profiles_and_roles.sql",
+      "source_location": "line 28",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000002_affiliate_role",
+      "label": "affiliate user_role Enum Value",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000002_add_affiliate_role.sql",
+      "source_location": "line 3",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000003_apps_table",
+      "label": "apps Table",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 73",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000003_subscriptions_table",
+      "label": "subscriptions Table",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 107",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000003_vendor_billing_table",
+      "label": "vendor_billing Table",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 167",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000003_webhook_events_table",
+      "label": "webhook_events Table",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 193",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000003_audit_log_table",
+      "label": "audit_log Table",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 211",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000003_affiliate_links_table",
+      "label": "affiliate_links Table",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 230",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000003_reseller_offers_table",
+      "label": "reseller_offers Table",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 247",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000003_reseller_subscriptions_table",
+      "label": "reseller_subscriptions Table",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 304",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000003_affiliate_attributions_table",
+      "label": "affiliate_attributions Table",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 324",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000003_vendor_subscription_stats",
+      "label": "vendor_subscription_stats() SECURITY DEFINER Function",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 475",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000003_reseller_sale_stats",
+      "label": "reseller_sale_stats() SECURITY DEFINER Function",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 499",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000003_affiliate_stats",
+      "label": "affiliate_stats() SECURITY DEFINER Function",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 528",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000003_get_current_user_role",
+      "label": "get_current_user_role() SECURITY DEFINER Function",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 17",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000003_validate_reseller_offer_price",
+      "label": "validate_reseller_offer_price() Trigger Function",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 274",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000004_list_marketplace_apps",
+      "label": "list_marketplace_apps() RPC Function",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000004_marketplace_rpc.sql",
+      "source_location": "line 9",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000004_get_marketplace_app",
+      "label": "get_marketplace_app() RPC Function",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000004_marketplace_rpc.sql",
+      "source_location": "line 57",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260521000004_list_marketplace_categories",
+      "label": "list_marketplace_categories() RPC Function",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260521000004_marketplace_rpc.sql",
+      "source_location": "line 90",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260522000001_applogos_bucket",
+      "label": "app-logos Storage Bucket",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260522000001_storage_app_logos.sql",
+      "source_location": "line 2",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260522000003_vendor_revenue_events_table",
+      "label": "vendor_revenue_events Table",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260522000003_vendor_revenue_events.sql",
+      "source_location": "line 7",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260522000003_compute_vendor_billing",
+      "label": "compute_vendor_billing() RPC Function",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260522000003_vendor_revenue_events.sql",
+      "source_location": "line 47",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260522000004_apps_first_verified_at",
+      "label": "apps.first_verified_at Column",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260522000004_apps_first_verified_at.sql",
+      "source_location": "line 3",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260522000006_reconciliation_runs_table",
+      "label": "reconciliation_runs Table",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260522000006_reconciliation.sql",
+      "source_location": "line 8",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrations_20260522000009_handle_new_user_updated",
+      "label": "handle_new_user() Updated (reseller + affiliate support)",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260522000009_reseller_signup.sql",
+      "source_location": "line 2",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_settings_local_permissions",
+      "label": "Claude Local Permissions Settings",
+      "file_type": "document",
+      "source_file": ".claude/settings.local.json",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_launch_json_devconfig",
+      "label": "Launch Dev Configuration",
+      "file_type": "document",
+      "source_file": ".claude/launch.json",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "affiliate__components_generatelinktorform_generatelinktorform",
+      "target": "affiliate__components_generatelinktorform_generatelinktorform",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/affiliate/_components/GenerateLinkForm.tsx",
+      "source_location": "line 19",
+      "weight": 1.0
+    },
+    {
+      "source": "affiliate__components_linkslist_linkslist",
+      "target": "migrations_20260521000003_affiliate_links_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/affiliate/_components/LinksList.tsx",
+      "source_location": "line 3-7",
+      "weight": 1.0
+    },
+    {
+      "source": "affiliate__components_linkslist_linkslist",
+      "target": "migrations_20260521000003_affiliate_links_table",
+      "relation": "shares_data_with",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "app/affiliate/_components/LinksList.tsx",
+      "source_location": "line 26",
+      "weight": 0.9
+    },
+    {
+      "source": "login_page_loginpage",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "app/login/page.tsx",
+      "source_location": "line 21",
+      "weight": 0.8
+    },
+    {
+      "source": "buyer_actions_cancelsubscriptionaction",
+      "target": "migrations_20260521000003_subscriptions_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/buyer/actions.ts",
+      "source_location": "line 27",
+      "weight": 1.0
+    },
+    {
+      "source": "buyer_actions_cancelsubscriptionaction",
+      "target": "migrations_20260521000003_audit_log_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/buyer/actions.ts",
+      "source_location": "line 47",
+      "weight": 1.0
+    },
+    {
+      "source": "buyer__components_cancelbutton_cancelbutton",
+      "target": "buyer_actions_cancelsubscriptionaction",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/buyer/_components/CancelButton.tsx",
+      "source_location": "line 12",
+      "weight": 1.0
+    },
+    {
+      "source": "buyer_page_buyerdashboard",
+      "target": "migrations_20260521000003_subscriptions_table",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "app/buyer/page.tsx",
+      "source_location": "line 153",
+      "weight": 0.9
+    },
+    {
+      "source": "buyer_page_subscriptioncard",
+      "target": "buyer__components_cancelbutton_cancelbutton",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/buyer/page.tsx",
+      "source_location": "line 131",
+      "weight": 1.0
+    },
+    {
+      "source": "vendor_actions_submitappaction",
+      "target": "vendor_actions_requirevendor",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/vendor/actions.ts",
+      "source_location": "line 32",
+      "weight": 1.0
+    },
+    {
+      "source": "vendor_actions_updatedisplaynameaction",
+      "target": "vendor_actions_requirevendor",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/vendor/actions.ts",
+      "source_location": "line 115",
+      "weight": 1.0
+    },
+    {
+      "source": "vendor_actions_submitappaction",
+      "target": "migrations_20260521000003_apps_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/vendor/actions.ts",
+      "source_location": "line 93",
+      "weight": 1.0
+    },
+    {
+      "source": "vendor_actions_submitappaction",
+      "target": "migrations_20260522000001_applogos_bucket",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/vendor/actions.ts",
+      "source_location": "line 77",
+      "weight": 1.0
+    },
+    {
+      "source": "vendor_actions_updatedisplaynameaction",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/vendor/actions.ts",
+      "source_location": "line 125",
+      "weight": 1.0
+    },
+    {
+      "source": "vendor__components_appform_appform",
+      "target": "vendor_actions_submitappaction",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/vendor/_components/AppForm.tsx",
+      "source_location": "line 14",
+      "weight": 1.0
+    },
+    {
+      "source": "vendor__components_profileform_profileform",
+      "target": "vendor_actions_updatedisplaynameaction",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/vendor/_components/ProfileForm.tsx",
+      "source_location": "line 11",
+      "weight": 1.0
+    },
+    {
+      "source": "vendor__components_stripeconnect_stripeconnect",
+      "target": "vendor__components_stripeconnect_stripeconnect",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/vendor/_components/StripeConnect.tsx",
+      "source_location": "line 23",
+      "weight": 1.0
+    },
+    {
+      "source": "vendor_page_vendordashboard",
+      "target": "vendor__components_appform_appform",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/vendor/page.tsx",
+      "source_location": "line 196",
+      "weight": 1.0
+    },
+    {
+      "source": "vendor_page_vendordashboard",
+      "target": "vendor__components_profileform_profileform",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/vendor/page.tsx",
+      "source_location": "line 150",
+      "weight": 1.0
+    },
+    {
+      "source": "vendor_page_vendordashboard",
+      "target": "vendor__components_stripeconnect_stripeconnect",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/vendor/page.tsx",
+      "source_location": "line 155",
+      "weight": 1.0
+    },
+    {
+      "source": "vendor_page_vendordashboard",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/vendor/page.tsx",
+      "source_location": "line 113",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_apps_table",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 75",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_subscriptions_table",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 109-124",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_subscriptions_table",
+      "target": "migrations_20260521000003_apps_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 110",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_subscriptions_table",
+      "target": "migrations_20260521000003_reseller_offers_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 339",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_vendor_billing_table",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 169",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_affiliate_links_table",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 233",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_affiliate_links_table",
+      "target": "migrations_20260521000003_apps_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 235",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_reseller_offers_table",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 250",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_reseller_offers_table",
+      "target": "migrations_20260521000003_apps_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 252",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_reseller_subscriptions_table",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 307",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_affiliate_attributions_table",
+      "target": "migrations_20260521000003_subscriptions_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 327",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_affiliate_attributions_table",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 329",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_validate_reseller_offer_price",
+      "target": "migrations_20260521000003_apps_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 279",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_validate_reseller_offer_price",
+      "target": "migrations_20260521000003_reseller_offers_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 296",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_vendor_subscription_stats",
+      "target": "migrations_20260521000003_subscriptions_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 488",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_vendor_subscription_stats",
+      "target": "migrations_20260521000003_apps_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 490",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_reseller_sale_stats",
+      "target": "migrations_20260521000003_subscriptions_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 513",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_affiliate_stats",
+      "target": "migrations_20260521000003_subscriptions_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 540",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000003_get_current_user_role",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 24",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000004_list_marketplace_apps",
+      "target": "migrations_20260521000003_apps_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000004_marketplace_rpc.sql",
+      "source_location": "line 37",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000004_list_marketplace_apps",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000004_marketplace_rpc.sql",
+      "source_location": "line 38",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000004_get_marketplace_app",
+      "target": "migrations_20260521000003_apps_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000004_marketplace_rpc.sql",
+      "source_location": "line 77",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000004_get_marketplace_app",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000004_marketplace_rpc.sql",
+      "source_location": "line 78",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260521000004_list_marketplace_categories",
+      "target": "migrations_20260521000003_apps_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000004_marketplace_rpc.sql",
+      "source_location": "line 98",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260522000003_vendor_revenue_events_table",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260522000003_vendor_revenue_events.sql",
+      "source_location": "line 9",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260522000003_compute_vendor_billing",
+      "target": "migrations_20260522000003_vendor_revenue_events_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260522000003_vendor_revenue_events.sql",
+      "source_location": "line 64",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260522000003_compute_vendor_billing",
+      "target": "migrations_20260521000003_vendor_billing_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260522000003_vendor_revenue_events.sql",
+      "source_location": "line 81",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260522000004_apps_first_verified_at",
+      "target": "migrations_20260521000003_apps_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260522000004_apps_first_verified_at.sql",
+      "source_location": "line 3",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260522000006_reconciliation_runs_table",
+      "target": "migrations_20260521000003_get_current_user_role",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260522000006_reconciliation.sql",
+      "source_location": "line 24",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260522000009_handle_new_user_updated",
+      "target": "migrations_20260521000001_handle_new_user",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260522000009_reseller_signup.sql",
+      "source_location": "line 2",
+      "weight": 1.0
+    },
+    {
+      "source": "migrations_20260522000009_handle_new_user_updated",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260522000009_reseller_signup.sql",
+      "source_location": "line 20",
+      "weight": 1.0
+    },
+    {
+      "source": "supabase_seed_seed",
+      "target": "migrations_20260521000001_profiles_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/seed.sql",
+      "source_location": "line 64",
+      "weight": 1.0
+    },
+    {
+      "source": "supabase_seed_seed",
+      "target": "migrations_20260521000003_apps_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/seed.sql",
+      "source_location": "line 93",
+      "weight": 1.0
+    },
+    {
+      "source": "supabase_seed_seed",
+      "target": "migrations_20260521000003_subscriptions_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/seed.sql",
+      "source_location": "line 129",
+      "weight": 1.0
+    },
+    {
+      "source": "supabase_seed_seed",
+      "target": "migrations_20260521000003_vendor_billing_table",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/seed.sql",
+      "source_location": "line 176",
+      "weight": 1.0
+    },
+    {
+      "source": "buyer_actions_cancelsubscriptionaction",
+      "target": "vendor_actions_submitappaction",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.65,
+      "source_file": "app/buyer/actions.ts",
+      "source_location": null,
+      "weight": 0.5
+    },
+    {
+      "source": "migrations_20260521000003_vendor_subscription_stats",
+      "target": "migrations_20260521000003_reseller_sale_stats",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 475-546",
+      "weight": 0.8
+    },
+    {
+      "source": "migrations_20260521000003_reseller_sale_stats",
+      "target": "migrations_20260521000003_affiliate_stats",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "supabase/migrations/20260521000003_schema.sql",
+      "source_location": "line 499-546",
+      "weight": 0.8
+    },
+    {
+      "source": "migrations_20260521000004_list_marketplace_apps",
+      "target": "migrations_20260521000003_vendor_subscription_stats",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.65,
+      "source_file": "supabase/migrations/20260521000004_marketplace_rpc.sql",
+      "source_location": null,
+      "weight": 0.5
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "anti_poaching_boundary_functions",
+      "label": "Anti-Poaching SECURITY DEFINER Boundary Functions",
+      "nodes": [
+        "migrations_20260521000003_vendor_subscription_stats",
+        "migrations_20260521000003_reseller_sale_stats",
+        "migrations_20260521000003_affiliate_stats"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations/20260521000003_schema.sql"
+    },
+    {
+      "id": "buyer_cancel_flow",
+      "label": "Buyer Subscription Cancellation Flow",
+      "nodes": [
+        "buyer_page_subscriptioncard",
+        "buyer__components_cancelbutton_cancelbutton",
+        "buyer_actions_cancelsubscriptionaction"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/buyer/page.tsx"
+    },
+    {
+      "id": "vendor_app_submission_flow",
+      "label": "Vendor App Submission Flow",
+      "nodes": [
+        "vendor_page_vendordashboard",
+        "vendor__components_appform_appform",
+        "vendor_actions_submitappaction"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/vendor/page.tsx"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

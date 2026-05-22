@@ -170,6 +170,7 @@ export async function transferResellerShare({
 }
 
 // Reverse all transfers in the transfer_group for this invoice.
+// Used for disputes (outcome=lost) — all parties absorb the loss.
 // Idempotent: skips already-reversed transfers.
 export async function reverseTransfers({
   invoiceId,
@@ -186,6 +187,30 @@ export async function reverseTransfers({
       transfer.id,
       { metadata: { charge_id: chargeId, invoice_id: invoiceId } },
       { idempotencyKey: `reversal:transfer_${transfer.id}:charge_${chargeId}` }
+    );
+  }
+}
+
+// Reverse only the vendor transfer(s) in the group — used for voluntary refunds.
+// Affiliate and reseller shares are NOT reversed: the vendor absorbs the cost.
+// Vendor transfers are identified by having `vendor_id` in their metadata.
+// Idempotent: skips already-reversed transfers.
+export async function reverseVendorTransfers({
+  invoiceId,
+  chargeId,
+}: {
+  invoiceId: string;
+  chargeId: string;
+}): Promise<void> {
+  const stripe = getStripe();
+  const transfers = await stripe.transfers.list({ transfer_group: `invoice_${invoiceId}` });
+  for (const transfer of transfers.data) {
+    if (transfer.reversed) continue;
+    if (!transfer.metadata?.vendor_id) continue; // skip affiliate and reseller markup transfers
+    await stripe.transfers.createReversal(
+      transfer.id,
+      { metadata: { charge_id: chargeId, invoice_id: invoiceId, policy: "vendor_only" } },
+      { idempotencyKey: `reversal:vendor:transfer_${transfer.id}:charge_${chargeId}` }
     );
   }
 }

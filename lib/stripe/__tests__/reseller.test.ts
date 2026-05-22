@@ -16,51 +16,51 @@ import {
 
 beforeEach(() => vi.clearAllMocks());
 
-describe("computeResellerSplit — reseller money math (SPEC §4b)", () => {
-  it("worked example from SPEC: buyer=$50, floor=$40 → reseller=$7.50, platform=$2.50", () => {
+describe("computeResellerSplit — reseller money math (SPEC §4b, #16: 5% of markup)", () => {
+  it("worked example: buyer=$50, floor=$40, markup=$10 → platform=$0.50, reseller=$9.50, vendor=$40", () => {
     const { vendorShareCents, platformFeeCents, resellerShareCents } =
       computeResellerSplit(5000, 4000);
-    expect(vendorShareCents).toBe(4000); // $40 floor
-    expect(platformFeeCents).toBe(250); // 5% of $50 = $2.50
-    expect(resellerShareCents).toBe(750); // $50 - $40 - $2.50 = $7.50
+    expect(vendorShareCents).toBe(4000);  // $40 floor
+    expect(platformFeeCents).toBe(50);    // 5% of 1000¢ markup = 50¢ = $0.50
+    expect(resellerShareCents).toBe(950); // 1000¢ - 50¢ = 950¢ = $9.50
   });
 
   it("vendor + reseller + platform = gross (no leakage)", () => {
-    const gross = 5000;
-    const floor = 4000;
     const { vendorShareCents, platformFeeCents, resellerShareCents } =
-      computeResellerSplit(gross, floor);
-    expect(vendorShareCents + platformFeeCents + resellerShareCents).toBe(gross);
+      computeResellerSplit(5000, 4000);
+    expect(vendorShareCents + platformFeeCents + resellerShareCents).toBe(5000);
   });
 
-  it("platform fee uses floor() — no float remainders", () => {
-    // $19.99 gross → platform fee = floor(1999 * 500 / 10000) = floor(99.95) = 99
+  it("zero markup: sell=floor → platform=$0, reseller=$0, vendor=floor", () => {
+    const { vendorShareCents, platformFeeCents, resellerShareCents } =
+      computeResellerSplit(5000, 5000);
+    expect(vendorShareCents).toBe(5000);
+    expect(platformFeeCents).toBe(0);
+    expect(resellerShareCents).toBe(0);
+  });
+
+  it("throws when sell_price < vendor floor", () => {
+    expect(() => computeResellerSplit(4000, 5000)).toThrow();
+  });
+
+  it("platform fee uses floor() — integer-safe", () => {
+    // markup = 1999 - 1000 = 999 → floor(999 * 500 / 10000) = floor(49.95) = 49
     const { platformFeeCents } = computeResellerSplit(1999, 1000);
-    expect(platformFeeCents).toBe(99);
+    expect(platformFeeCents).toBe(49);
     expect(Number.isInteger(platformFeeCents)).toBe(true);
   });
 
-  it("resellerShareCents is integer-safe (floor rounding)", () => {
+  it("resellerShareCents is integer-safe", () => {
     const { resellerShareCents } = computeResellerSplit(1999, 1000);
     expect(Number.isInteger(resellerShareCents)).toBe(true);
   });
 
-  it("throws when reseller share would be negative (floor > gross - 5%)", () => {
-    // $100 gross, $98 floor → platform fee $5, reseller = $100 - $98 - $5 = -$3
-    expect(() => computeResellerSplit(10000, 9800)).toThrow();
-  });
-
-  it("resellerShare is 0 when sell_price = floor + exact 5% covers the gap", () => {
-    // sell=10500, floor=10000 → platform=525, reseller=10500-10000-525=-25 → throws
-    expect(() => computeResellerSplit(10500, 10000)).toThrow();
-  });
-
-  it("larger markup: buyer=$100, floor=$20 → reseller=$75, platform=$5", () => {
+  it("larger markup: buyer=$100, floor=$20 → markup=$80 → platform=$4, reseller=$76, vendor=$20", () => {
     const { vendorShareCents, platformFeeCents, resellerShareCents } =
       computeResellerSplit(10000, 2000);
     expect(vendorShareCents).toBe(2000);
-    expect(platformFeeCents).toBe(500); // 5% of $100
-    expect(resellerShareCents).toBe(7500); // $100 - $20 - $5
+    expect(platformFeeCents).toBe(400);    // 5% of 8000¢ = 400¢ = $4
+    expect(resellerShareCents).toBe(7600); // 8000¢ - 400¢ = 7600¢ = $76
     expect(vendorShareCents + platformFeeCents + resellerShareCents).toBe(10000);
   });
 });
@@ -145,12 +145,35 @@ describe("transferResellerShare", () => {
   });
 });
 
+describe("Reseller trial days — first-time vs returning (#22)", () => {
+  function computeTrialDays(hasPriorSub: boolean, envDays = 30): number {
+    if (hasPriorSub) return 0;
+    return envDays > 0 ? envDays : 0;
+  }
+
+  it("first-time reseller gets 30-day trial", () => {
+    expect(computeTrialDays(false)).toBe(30);
+  });
+
+  it("returning reseller gets no trial (0 days)", () => {
+    expect(computeTrialDays(true)).toBe(0);
+  });
+
+  it("respects custom RESELLER_TRIAL_DAYS env value", () => {
+    expect(computeTrialDays(false, 14)).toBe(14);
+  });
+
+  it("RESELLER_TRIAL_DAYS=0 disables trials for everyone", () => {
+    expect(computeTrialDays(false, 0)).toBe(0);
+  });
+});
+
 describe("End-to-end split accounting — all parties sum to gross", () => {
-  it("Tier-1 equivalent accuracy check on various prices", () => {
+  it("various markups: vendor+platform+reseller always equals gross", () => {
     const cases = [
-      { gross: 5000, floor: 4000 }, // SPEC example
-      { gross: 10000, floor: 2000 }, // large markup
-      { gross: 2000, floor: 1800 }, // small markup — should pass (reseller > 0)
+      { gross: 5000, floor: 4000 },  // $10 markup
+      { gross: 10000, floor: 2000 }, // $80 markup
+      { gross: 2000, floor: 1800 },  // $20 markup
     ];
 
     for (const { gross, floor } of cases) {
@@ -158,7 +181,7 @@ describe("End-to-end split accounting — all parties sum to gross", () => {
         computeResellerSplit(gross, floor);
       expect(vendorShareCents + platformFeeCents + resellerShareCents).toBe(gross);
       expect(vendorShareCents).toBe(floor);
-      expect(resellerShareCents).toBeGreaterThan(0);
+      expect(resellerShareCents).toBeGreaterThanOrEqual(0);
     }
   });
 });

@@ -1,0 +1,1 @@
+{"0": "Auth & Token Access (anon_user_id + JWT + state machine)", "1": "Pricing, Tiers & Billing Cron", "2": "Schema, RLS & Security Hardening", "3": "Roles & Marketplace Surface", "4": "Build Plan Documents", "5": "Webhook Pipeline & Idempotency", "6": "Anti-Poaching & Churn Detection", "7": "Money Flow & Reconciliation", "8": "Boot-time Env Validation"}

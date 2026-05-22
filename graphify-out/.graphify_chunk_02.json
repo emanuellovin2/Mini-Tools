@@ -1,0 +1,1126 @@
+{
+  "nodes": [
+    {
+      "id": "r_reseller_slug_offer_slug_components_subscribebutton",
+      "label": "SubscribeButton Component",
+      "file_type": "code",
+      "source_file": "app/r/[reseller-slug]/[offer-slug]/_components/SubscribeButton.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "reseller_actions_setupresellerslugaction",
+      "label": "setupResellerSlugAction",
+      "file_type": "code",
+      "source_file": "app/reseller/actions.ts",
+      "source_location": "L32",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "reseller_actions_createofferaction",
+      "label": "createOfferAction",
+      "file_type": "code",
+      "source_file": "app/reseller/actions.ts",
+      "source_location": "L59",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "reseller_actions_updateofferstatusaction",
+      "label": "updateOfferStatusAction",
+      "file_type": "code",
+      "source_file": "app/reseller/actions.ts",
+      "source_location": "L127",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "reseller_page_resellerdashboard",
+      "label": "ResellerDashboard Page",
+      "file_type": "code",
+      "source_file": "app/reseller/page.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "reseller_offers_page_offerspage",
+      "label": "Reseller Offers Page",
+      "file_type": "code",
+      "source_file": "app/reseller/offers/page.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "reseller_offers_components_offerstatusbutton",
+      "label": "OfferStatusButton Component",
+      "file_type": "code",
+      "source_file": "app/reseller/offers/_components/OfferStatusButton.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "reseller_offers_components_createofferform",
+      "label": "CreateOfferForm Component",
+      "file_type": "code",
+      "source_file": "app/reseller/offers/_components/CreateOfferForm.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "reseller_setup_page_resellersetuppage",
+      "label": "ResellerSetupPage",
+      "file_type": "code",
+      "source_file": "app/reseller/setup/page.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "reseller_setup_components_setupform",
+      "label": "SetupForm Component",
+      "file_type": "code",
+      "source_file": "app/reseller/setup/_components/SetupForm.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_verify_route_verifyendpoint",
+      "label": "POST /api/verify - Token Verification Endpoint",
+      "file_type": "code",
+      "source_file": "app/api/verify/route.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_auth_signout_route_signoutendpoint",
+      "label": "POST /api/auth/signout",
+      "file_type": "code",
+      "source_file": "app/api/auth/signout/route.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_launch_appid_route_launchendpoint",
+      "label": "GET /api/launch/[app_id] - JWT Launch Endpoint",
+      "file_type": "code",
+      "source_file": "app/api/launch/[app_id]/route.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_admin_approveapp_route_approveendpoint",
+      "label": "POST /api/admin/approve-app",
+      "file_type": "code",
+      "source_file": "app/api/admin/approve-app/route.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_reseller_setup_route_resellersetupendpoint",
+      "label": "POST /api/reseller/setup - Stripe Checkout for $19/mo",
+      "file_type": "code",
+      "source_file": "app/api/reseller/setup/route.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_reseller_checkout_route_resellercheckoutendpoint",
+      "label": "POST /api/reseller/checkout - Buyer Checkout via Reseller Offer",
+      "file_type": "code",
+      "source_file": "app/api/reseller/checkout/route.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_reseller_connect_route_resellerconnectendpoint",
+      "label": "GET /api/reseller/connect - Stripe Connect Onboarding",
+      "file_type": "code",
+      "source_file": "app/api/reseller/connect/route.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_wellknown_jwks_route_jwksendpoint",
+      "label": "GET /.well-known/jwks.json - JWKS Endpoint",
+      "file_type": "code",
+      "source_file": "app/api/well-known/jwks.json/route.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_affiliate_onboard_route_affiliateonboardendpoint",
+      "label": "GET /api/affiliate/onboard - Stripe Connect Onboarding",
+      "file_type": "code",
+      "source_file": "app/api/affiliate/onboard/route.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_affiliate_links_route_affiliatelinksendpoint",
+      "label": "POST /api/affiliate/links - Create Affiliate Link",
+      "file_type": "code",
+      "source_file": "app/api/affiliate/links/route.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_webhooks_route_stripewebhookendpoint",
+      "label": "POST /api/webhooks - Stripe Webhook Handler",
+      "file_type": "code",
+      "source_file": "app/api/webhooks/route.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_stripe_sync_route_stripesyncendpoint",
+      "label": "POST /api/stripe/sync - Sync Vendor Connect Status",
+      "file_type": "code",
+      "source_file": "app/api/stripe/sync/route.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_stripe_connect_route_stripeconnectendpoint",
+      "label": "POST /api/stripe/connect - Vendor Connect Onboarding",
+      "file_type": "code",
+      "source_file": "app/api/stripe/connect/route.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "affiliate_actions_createaffiliatelinkaction",
+      "label": "createAffiliateLinkAction",
+      "file_type": "code",
+      "source_file": "app/affiliate/actions.ts",
+      "source_location": "L13",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "affiliate_page_affiliatedashboardpage",
+      "label": "AffiliateDashboardPage",
+      "file_type": "code",
+      "source_file": "app/affiliate/page.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_stripe_webhookhandlers_handlecheckoutsessioncompleted",
+      "label": "handleCheckoutSessionCompleted",
+      "file_type": "code",
+      "source_file": "lib/stripe/webhook-handlers.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_stripe_webhookhandlers_handlesubscriptionupdated",
+      "label": "handleSubscriptionUpdated",
+      "file_type": "code",
+      "source_file": "lib/stripe/webhook-handlers.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_stripe_webhookhandlers_handleinvoicepaid",
+      "label": "handleInvoicePaid",
+      "file_type": "code",
+      "source_file": "lib/stripe/webhook-handlers.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_stripe_webhookhandlers_handlechargerefunded",
+      "label": "handleChargeRefunded",
+      "file_type": "code",
+      "source_file": "lib/stripe/webhook-handlers.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_auth_jwt_getjwks",
+      "label": "getJwks",
+      "file_type": "code",
+      "source_file": "lib/auth/jwt.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_auth_jwt_buildjwks",
+      "label": "buildJwks",
+      "file_type": "code",
+      "source_file": "lib/auth/jwt.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_auth_jwt_mintlaunchtoken",
+      "label": "mintLaunchToken",
+      "file_type": "code",
+      "source_file": "lib/auth/jwt.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_stripe_connect_getorcreateconnectaccount",
+      "label": "getOrCreateConnectAccount",
+      "file_type": "code",
+      "source_file": "lib/stripe/connect.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_stripe_connect_createonboardinglink",
+      "label": "createOnboardingLink",
+      "file_type": "code",
+      "source_file": "lib/stripe/connect.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_stripe_connect_syncconnectstatus",
+      "label": "syncConnectStatus",
+      "file_type": "code",
+      "source_file": "lib/stripe/connect.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_stripe_customers_getorcreatestripecustomer",
+      "label": "getOrCreateStripeCustomer",
+      "file_type": "code",
+      "source_file": "lib/stripe/customers.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_stripe_anonuser_lookuporgenerate",
+      "label": "lookupOrGenerateAnonUserId",
+      "file_type": "code",
+      "source_file": "lib/stripe/anon-user.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_stripe_products_approveappwithstripe",
+      "label": "approveAppWithStripe",
+      "file_type": "code",
+      "source_file": "lib/stripe/products.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_stripe_entitlements_subscriptionstatustoaccess",
+      "label": "subscriptionStatusToAccess",
+      "file_type": "code",
+      "source_file": "lib/stripe/entitlements.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_services_reseller_getresellersubscription",
+      "label": "getResellerSubscription",
+      "file_type": "code",
+      "source_file": "lib/services/reseller.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_services_reseller_getoffers",
+      "label": "getOffers",
+      "file_type": "code",
+      "source_file": "lib/services/reseller.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_services_reseller_getresellerdashboard",
+      "label": "getResellerDashboard",
+      "file_type": "code",
+      "source_file": "lib/services/reseller.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_services_reseller_getresellableapps",
+      "label": "getResellableApps",
+      "file_type": "code",
+      "source_file": "lib/services/reseller.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_services_reseller_createoffer",
+      "label": "createOffer",
+      "file_type": "code",
+      "source_file": "lib/services/reseller.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_services_reseller_updateofferstatus",
+      "label": "updateOfferStatus",
+      "file_type": "code",
+      "source_file": "lib/services/reseller.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_services_reseller_setresellerslug",
+      "label": "setResellerSlug",
+      "file_type": "code",
+      "source_file": "lib/services/reseller.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_services_reseller_isslugavailable",
+      "label": "isSlugAvailable",
+      "file_type": "code",
+      "source_file": "lib/services/reseller.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_services_affiliate_createaffiliatelink",
+      "label": "createAffiliateLink",
+      "file_type": "code",
+      "source_file": "lib/services/affiliate.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_services_affiliate_getaffiliatelinks",
+      "label": "getAffiliateLinks",
+      "file_type": "code",
+      "source_file": "lib/services/affiliate.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_services_affiliate_getaffiliatestats",
+      "label": "getAffiliateStats",
+      "file_type": "code",
+      "source_file": "lib/services/affiliate.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_utils_ratelimit_checkratelimit",
+      "label": "checkRateLimit",
+      "file_type": "code",
+      "source_file": "lib/utils/rate-limit.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_logger_logwebhookevent",
+      "label": "logWebhookEvent",
+      "file_type": "code",
+      "source_file": "lib/logger.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_validation_reseller_createofferschema",
+      "label": "createOfferSchema",
+      "file_type": "code",
+      "source_file": "lib/validation/reseller.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_validation_reseller_slugschema",
+      "label": "slugSchema",
+      "file_type": "code",
+      "source_file": "lib/validation/reseller.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "r_reseller_slug_offer_slug_components_subscribebutton",
+      "target": "api_reseller_checkout_route_resellercheckoutendpoint",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/r/[reseller-slug]/[offer-slug]/_components/SubscribeButton.tsx",
+      "source_location": "L13",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_actions_setupresellerslugaction",
+      "target": "lib_services_reseller_isslugavailable",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/actions.ts",
+      "source_location": "L45",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_actions_setupresellerslugaction",
+      "target": "lib_services_reseller_setresellerslug",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/actions.ts",
+      "source_location": "L49",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_actions_setupresellerslugaction",
+      "target": "lib_validation_reseller_slugschema",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/actions.ts",
+      "source_location": "L39",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_actions_createofferaction",
+      "target": "lib_services_reseller_createoffer",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/actions.ts",
+      "source_location": "L111",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_actions_createofferaction",
+      "target": "lib_validation_reseller_createofferschema",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/actions.ts",
+      "source_location": "L73",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_actions_updateofferstatusaction",
+      "target": "lib_services_reseller_updateofferstatus",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/actions.ts",
+      "source_location": "L135",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_page_resellerdashboard",
+      "target": "lib_services_reseller_getresellersubscription",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/page.tsx",
+      "source_location": "L53",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_page_resellerdashboard",
+      "target": "lib_services_reseller_getoffers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/page.tsx",
+      "source_location": "L53",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_page_resellerdashboard",
+      "target": "lib_services_reseller_getresellerdashboard",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/page.tsx",
+      "source_location": "L53",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_offers_page_offerspage",
+      "target": "lib_services_reseller_getresellersubscription",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/offers/page.tsx",
+      "source_location": "L39",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_offers_page_offerspage",
+      "target": "lib_services_reseller_getoffers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/offers/page.tsx",
+      "source_location": "L39",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_offers_page_offerspage",
+      "target": "lib_services_reseller_getresellableapps",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/offers/page.tsx",
+      "source_location": "L39",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_offers_components_offerstatusbutton",
+      "target": "reseller_actions_updateofferstatusaction",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/offers/_components/OfferStatusButton.tsx",
+      "source_location": "L27",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_offers_components_createofferform",
+      "target": "reseller_actions_createofferaction",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/offers/_components/CreateOfferForm.tsx",
+      "source_location": "L16",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_setup_page_resellersetuppage",
+      "target": "lib_services_reseller_getresellersubscription",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/setup/page.tsx",
+      "source_location": "L25",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_setup_components_setupform",
+      "target": "reseller_actions_setupresellerslugaction",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/setup/_components/SetupForm.tsx",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "reseller_setup_components_setupform",
+      "target": "api_reseller_setup_route_resellersetupendpoint",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/setup/_components/SetupForm.tsx",
+      "source_location": "L21",
+      "weight": 1.0
+    },
+    {
+      "source": "api_verify_route_verifyendpoint",
+      "target": "lib_auth_jwt_getjwks",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/verify/route.ts",
+      "source_location": "L49",
+      "weight": 1.0
+    },
+    {
+      "source": "api_verify_route_verifyendpoint",
+      "target": "lib_stripe_entitlements_subscriptionstatustoaccess",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/verify/route.ts",
+      "source_location": "L80",
+      "weight": 1.0
+    },
+    {
+      "source": "api_verify_route_verifyendpoint",
+      "target": "lib_utils_ratelimit_checkratelimit",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/verify/route.ts",
+      "source_location": "L29",
+      "weight": 1.0
+    },
+    {
+      "source": "api_launch_appid_route_launchendpoint",
+      "target": "lib_auth_jwt_mintlaunchtoken",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/launch/[app_id]/route.ts",
+      "source_location": "L52",
+      "weight": 1.0
+    },
+    {
+      "source": "api_launch_appid_route_launchendpoint",
+      "target": "lib_stripe_entitlements_subscriptionstatustoaccess",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/launch/[app_id]/route.ts",
+      "source_location": "L51",
+      "weight": 1.0
+    },
+    {
+      "source": "api_admin_approveapp_route_approveendpoint",
+      "target": "lib_stripe_products_approveappwithstripe",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/admin/approve-app/route.ts",
+      "source_location": "L30",
+      "weight": 1.0
+    },
+    {
+      "source": "api_reseller_setup_route_resellersetupendpoint",
+      "target": "lib_stripe_customers_getorcreateshipecustomer",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/reseller/setup/route.ts",
+      "source_location": "L35",
+      "weight": 1.0
+    },
+    {
+      "source": "api_reseller_checkout_route_resellercheckoutendpoint",
+      "target": "lib_stripe_customers_getorcreateshipecustomer",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/reseller/checkout/route.ts",
+      "source_location": "L77",
+      "weight": 1.0
+    },
+    {
+      "source": "api_reseller_checkout_route_resellercheckoutendpoint",
+      "target": "lib_stripe_anonuser_lookuporgenerate",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/reseller/checkout/route.ts",
+      "source_location": "L78",
+      "weight": 1.0
+    },
+    {
+      "source": "api_reseller_connect_route_resellerconnectendpoint",
+      "target": "lib_stripe_connect_getorcreateconnectaccount",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/reseller/connect/route.ts",
+      "source_location": "L23",
+      "weight": 1.0
+    },
+    {
+      "source": "api_reseller_connect_route_resellerconnectendpoint",
+      "target": "lib_stripe_connect_createonboardinglink",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/reseller/connect/route.ts",
+      "source_location": "L24",
+      "weight": 1.0
+    },
+    {
+      "source": "api_affiliate_onboard_route_affiliateonboardendpoint",
+      "target": "lib_stripe_connect_getorcreateconnectaccount",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/affiliate/onboard/route.ts",
+      "source_location": "L23",
+      "weight": 1.0
+    },
+    {
+      "source": "api_affiliate_onboard_route_affiliateonboardendpoint",
+      "target": "lib_stripe_connect_createonboardinglink",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/affiliate/onboard/route.ts",
+      "source_location": "L24",
+      "weight": 1.0
+    },
+    {
+      "source": "api_stripe_connect_route_stripeconnectendpoint",
+      "target": "lib_stripe_connect_getorcreateconnectaccount",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/stripe/connect/route.ts",
+      "source_location": "L23",
+      "weight": 1.0
+    },
+    {
+      "source": "api_stripe_connect_route_stripeconnectendpoint",
+      "target": "lib_stripe_connect_createonboardinglink",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/stripe/connect/route.ts",
+      "source_location": "L24",
+      "weight": 1.0
+    },
+    {
+      "source": "api_stripe_sync_route_stripesyncendpoint",
+      "target": "lib_stripe_connect_syncconnectstatus",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/stripe/sync/route.ts",
+      "source_location": "L27",
+      "weight": 1.0
+    },
+    {
+      "source": "api_wellknown_jwks_route_jwksendpoint",
+      "target": "lib_auth_jwt_buildjwks",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/well-known/jwks.json/route.ts",
+      "source_location": "L5",
+      "weight": 1.0
+    },
+    {
+      "source": "api_affiliate_links_route_affiliatelinksendpoint",
+      "target": "lib_services_affiliate_createaffiliatelink",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/affiliate/links/route.ts",
+      "source_location": "L36",
+      "weight": 1.0
+    },
+    {
+      "source": "affiliate_actions_createaffiliatelinkaction",
+      "target": "lib_services_affiliate_createaffiliatelink",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/affiliate/actions.ts",
+      "source_location": "L33",
+      "weight": 1.0
+    },
+    {
+      "source": "affiliate_page_affiliatedashboardpage",
+      "target": "lib_services_affiliate_getaffiliatelinks",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/affiliate/page.tsx",
+      "source_location": "L33",
+      "weight": 1.0
+    },
+    {
+      "source": "affiliate_page_affiliatedashboardpage",
+      "target": "lib_services_affiliate_getaffiliatestats",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/affiliate/page.tsx",
+      "source_location": "L34",
+      "weight": 1.0
+    },
+    {
+      "source": "api_webhooks_route_stripewebhookendpoint",
+      "target": "lib_stripe_webhookhandlers_handlecheckoutsessioncompleted",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/webhooks/route.ts",
+      "source_location": "L27",
+      "weight": 1.0
+    },
+    {
+      "source": "api_webhooks_route_stripewebhookendpoint",
+      "target": "lib_stripe_webhookhandlers_handlesubscriptionupdated",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/webhooks/route.ts",
+      "source_location": "L31",
+      "weight": 1.0
+    },
+    {
+      "source": "api_webhooks_route_stripewebhookendpoint",
+      "target": "lib_stripe_webhookhandlers_handleinvoicepaid",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/webhooks/route.ts",
+      "source_location": "L34",
+      "weight": 1.0
+    },
+    {
+      "source": "api_webhooks_route_stripewebhookendpoint",
+      "target": "lib_stripe_webhookhandlers_handlechargerefunded",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/webhooks/route.ts",
+      "source_location": "L40",
+      "weight": 1.0
+    },
+    {
+      "source": "api_webhooks_route_stripewebhookendpoint",
+      "target": "lib_logger_logwebhookevent",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/webhooks/route.ts",
+      "source_location": "L89",
+      "weight": 1.0
+    },
+    {
+      "source": "api_reseller_connect_route_resellerconnectendpoint",
+      "target": "api_affiliate_onboard_route_affiliateonboardendpoint",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "app/api/reseller/connect/route.ts",
+      "source_location": null,
+      "weight": 0.85
+    },
+    {
+      "source": "api_stripe_connect_route_stripeconnectendpoint",
+      "target": "api_reseller_connect_route_resellerconnectendpoint",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "app/api/stripe/connect/route.ts",
+      "source_location": null,
+      "weight": 0.85
+    },
+    {
+      "source": "api_verify_route_verifyendpoint",
+      "target": "api_launch_appid_route_launchendpoint",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "app/api/verify/route.ts",
+      "source_location": null,
+      "weight": 0.85
+    },
+    {
+      "source": "reseller_actions_createofferaction",
+      "target": "affiliate_actions_createaffiliatelinkaction",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.65,
+      "source_file": "app/reseller/actions.ts",
+      "source_location": null,
+      "weight": 0.65
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "stripe_connect_onboarding_pattern",
+      "label": "Stripe Connect Onboarding Pattern (Vendor, Affiliate, Reseller)",
+      "nodes": [
+        "api_stripe_connect_route_stripeconnectendpoint",
+        "api_affiliate_onboard_route_affiliateonboardendpoint",
+        "api_reseller_connect_route_resellerconnectendpoint"
+      ],
+      "relation": "implement",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "app/api/stripe/connect/route.ts"
+    },
+    {
+      "id": "reseller_setup_flow",
+      "label": "Reseller Setup Flow (Slug + $19/mo Subscription)",
+      "nodes": [
+        "reseller_setup_page_resellersetuppage",
+        "reseller_setup_components_setupform",
+        "reseller_actions_setupresellerslugaction",
+        "api_reseller_setup_route_resellersetupendpoint"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/reseller/setup/page.tsx"
+    },
+    {
+      "id": "jwt_token_lifecycle",
+      "label": "JWT Token Lifecycle (Mint, Serve JWKS, Verify)",
+      "nodes": [
+        "lib_auth_jwt_mintlaunchtoken",
+        "lib_auth_jwt_buildjwks",
+        "lib_auth_jwt_getjwks",
+        "api_wellknown_jwks_route_jwksendpoint",
+        "api_verify_route_verifyendpoint"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "app/api/verify/route.ts"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

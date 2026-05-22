@@ -369,6 +369,8 @@ export type Database = {
           currency: string
           current_period_end: string
           id: string
+          pause_started_at: string | null
+          paused_until: string | null
           price_cents: number
           reseller_id: string | null
           reseller_offer_id: string | null
@@ -390,6 +392,8 @@ export type Database = {
           currency?: string
           current_period_end: string
           id?: string
+          pause_started_at?: string | null
+          paused_until?: string | null
           price_cents: number
           reseller_id?: string | null
           reseller_offer_id?: string | null
@@ -411,6 +415,8 @@ export type Database = {
           currency?: string
           current_period_end?: string
           id?: string
+          pause_started_at?: string | null
+          paused_until?: string | null
           price_cents?: number
           reseller_id?: string | null
           reseller_offer_id?: string | null
