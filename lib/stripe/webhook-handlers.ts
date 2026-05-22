@@ -3,8 +3,21 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/supabase";
 import { getStripe } from "./client";
 import { stripeStatusToSubscriptionStatus } from "./entitlements";
-import { getVendorCutBps, transferVendorShare, transferAffiliateShare, reverseTransfers } from "./transfers";
+import {
+  getVendorCutBps,
+  transferVendorShare,
+  transferAffiliateShare,
+  computeResellerSplit,
+  transferResellerVendorFloor,
+  transferResellerShare,
+  reverseTransfers,
+} from "./transfers";
 import { recordAttribution } from "@/lib/services/affiliate";
+import {
+  upsertResellerSubscription,
+  isResellerActive,
+  pauseOffersOnLapse,
+} from "@/lib/services/reseller";
 import { logMoneyFlow, logAccessEvent } from "@/lib/logger";
 import {
   sendSubscriptionReceipt,
@@ -47,7 +60,85 @@ export async function handleCheckoutSessionCompleted(
 ): Promise<void> {
   if (session.mode !== "subscription") return;
 
-  const { buyer_id, app_id, anon_user_id, affiliate_id, aff_code } = session.metadata ?? {};
+  const meta = session.metadata ?? {};
+
+  // Reseller platform $19/mo subscription — write to reseller_subscriptions and return.
+  if (meta.reseller_platform_sub === "true") {
+    const { reseller_id } = meta;
+    if (!reseller_id) throw new Error(`Missing reseller_id in checkout session ${session.id}`);
+    const stripe = getStripe();
+    const sub = await stripe.subscriptions.retrieve(session.subscription as string);
+    const status = stripeStatusToSubscriptionStatus(sub.status);
+    const periodEnd = getSubPeriodEnd(sub);
+    await upsertResellerSubscription({
+      resellerId: reseller_id,
+      stripeSubId: sub.id,
+      status,
+      currentPeriodEnd: new Date(periodEnd * 1000).toISOString(),
+      cancelAtPeriodEnd: sub.cancel_at_period_end,
+      canceledAt: sub.canceled_at ? new Date(sub.canceled_at * 1000).toISOString() : null,
+    });
+    await writeAuditLog(admin, {
+      actor_id: null,
+      actor_role: "system",
+      action: "reseller_subscription.created",
+      entity_type: "reseller_subscriptions",
+      entity_id: sub.id,
+      metadata: { reseller_id, status },
+    });
+    return;
+  }
+
+  // Reseller storefront checkout — buyer subscribing via a reseller offer.
+  if (meta.reseller_offer_id) {
+    const { buyer_id, app_id, anon_user_id, reseller_id, reseller_offer_id, vendor_floor_snapshot_cents } = meta;
+    if (!buyer_id || !app_id || !anon_user_id || !reseller_id || !reseller_offer_id || !vendor_floor_snapshot_cents) {
+      throw new Error(`Missing reseller metadata in checkout session ${session.id}`);
+    }
+    const stripe = getStripe();
+    const sub = await stripe.subscriptions.retrieve(session.subscription as string);
+    const status = stripeStatusToSubscriptionStatus(sub.status);
+    const priceCents = sub.items.data[0]?.price?.unit_amount ?? 0;
+    const periodEnd = getSubPeriodEnd(sub);
+
+    const { error, data: upsertedRows } = await admin
+      .from("subscriptions")
+      .upsert(
+        {
+          buyer_id,
+          app_id,
+          stripe_subscription_id: sub.id,
+          stripe_customer_id: session.customer as string,
+          status,
+          price_cents: priceCents,
+          currency: sub.currency,
+          anon_user_id,
+          cancel_at_period_end: sub.cancel_at_period_end,
+          current_period_end: new Date(periodEnd * 1000).toISOString(),
+          reseller_id,
+          reseller_offer_id,
+          vendor_floor_snapshot_cents: Number(vendor_floor_snapshot_cents),
+          affiliate_id: null, // reseller takes priority (SPEC §4)
+        },
+        { onConflict: "stripe_subscription_id" }
+      )
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(`reseller subscriptions upsert failed: ${error.message}`);
+
+    await writeAuditLog(admin, {
+      actor_id: null,
+      actor_role: "system",
+      action: "subscription.created.reseller",
+      entity_type: "subscriptions",
+      entity_id: sub.id,
+      metadata: { buyer_id, app_id, status, reseller_id, reseller_offer_id },
+    });
+    logAccessEvent({ action: "subscription.created.reseller", entity_id: sub.id, app_id, status });
+    return;
+  }
+
+  const { buyer_id, app_id, anon_user_id, affiliate_id, aff_code } = meta;
   if (!buyer_id || !app_id || !anon_user_id) {
     throw new Error(`Missing metadata in checkout session ${session.id}`);
   }
@@ -122,6 +213,50 @@ export async function handleSubscriptionUpdated(
   const status = stripeStatusToSubscriptionStatus(sub.status);
   const periodEnd = getSubPeriodEnd(sub);
 
+  // Check if this is a reseller platform $19/mo subscription.
+  const { data: resellerPlatformSub } = await admin
+    .from("reseller_subscriptions")
+    .select("*")
+    .eq("stripe_subscription_id", sub.id)
+    .maybeSingle();
+  if (resellerPlatformSub) {
+    const wasActive = isResellerActive(resellerPlatformSub.status);
+    const nowActive = isResellerActive(status);
+
+    await upsertResellerSubscription({
+      resellerId: resellerPlatformSub.reseller_id,
+      stripeSubId: sub.id,
+      status,
+      currentPeriodEnd: new Date(periodEnd * 1000).toISOString(),
+      cancelAtPeriodEnd: sub.cancel_at_period_end,
+      canceledAt: sub.canceled_at ? new Date(sub.canceled_at * 1000).toISOString() : null,
+    });
+
+    // If the reseller just lapsed, pause all their offers.
+    if (wasActive && !nowActive) {
+      await pauseOffersOnLapse(resellerPlatformSub.reseller_id);
+      await writeAuditLog(admin, {
+        actor_id: null,
+        actor_role: "system",
+        action: "reseller_subscription.lapsed.offers_paused",
+        entity_type: "reseller_subscriptions",
+        entity_id: sub.id,
+        metadata: { reseller_id: resellerPlatformSub.reseller_id, status },
+      });
+    }
+
+    await writeAuditLog(admin, {
+      actor_id: null,
+      actor_role: "system",
+      action: "reseller_subscription.updated",
+      entity_type: "reseller_subscriptions",
+      entity_id: sub.id,
+      metadata: { reseller_id: resellerPlatformSub.reseller_id, status },
+    });
+    return;
+  }
+
+  // Regular buyer subscription update.
   const { error } = await admin
     .from("subscriptions")
     .update({
@@ -163,6 +298,32 @@ export async function handleInvoicePaid(
 
   if (!subscriptionId) return; // Non-subscription invoice — skip
 
+  // Check if this is a reseller platform $19/mo invoice — just update status, no app transfer.
+  const { data: resellerPlatformSub } = await admin
+    .from("reseller_subscriptions")
+    .select("*")
+    .eq("stripe_subscription_id", subscriptionId)
+    .maybeSingle();
+  if (resellerPlatformSub) {
+    await upsertResellerSubscription({
+      resellerId: resellerPlatformSub.reseller_id,
+      stripeSubId: subscriptionId,
+      status: "active",
+      currentPeriodEnd: resellerPlatformSub.current_period_end,
+      cancelAtPeriodEnd: resellerPlatformSub.cancel_at_period_end,
+      canceledAt: resellerPlatformSub.canceled_at,
+    });
+    await writeAuditLog(admin, {
+      actor_id: null,
+      actor_role: "system",
+      action: "reseller_subscription.invoice.paid",
+      entity_type: "reseller_subscriptions",
+      entity_id: subscriptionId,
+      metadata: { reseller_id: resellerPlatformSub.reseller_id, amount_cents: invoice.amount_paid },
+    });
+    return;
+  }
+
   const invoiceId = invoice.id;
   const amountCents = invoice.amount_paid;
 
@@ -172,13 +333,15 @@ export async function handleInvoicePaid(
     .update({ status: "active" })
     .eq("stripe_subscription_id", subscriptionId);
 
-  // Resolve app_id + reseller_id + affiliate_id — DB first, Stripe metadata fallback for out-of-order events
+  // Resolve subscription row — DB first, Stripe metadata fallback for out-of-order events
   let appId: string | null = null;
   let isResellerSale = false;
   let affiliateIdForTransfer: string | null = null;
+  let resellerId: string | null = null;
+  let vendorFloorSnapshotCents: number | null = null;
   const { data: subRow } = await admin
     .from("subscriptions")
-    .select("app_id, reseller_id, affiliate_id")
+    .select("app_id, reseller_id, affiliate_id, vendor_floor_snapshot_cents")
     .eq("stripe_subscription_id", subscriptionId)
     .maybeSingle();
 
@@ -186,6 +349,8 @@ export async function handleInvoicePaid(
     appId = subRow.app_id;
     isResellerSale = !!subRow.reseller_id;
     affiliateIdForTransfer = subRow.affiliate_id ?? null;
+    resellerId = subRow.reseller_id ?? null;
+    vendorFloorSnapshotCents = subRow.vendor_floor_snapshot_cents ?? null;
   } else {
     const stripe = getStripe();
     const stripeSub = await stripe.subscriptions.retrieve(subscriptionId);
@@ -210,59 +375,120 @@ export async function handleInvoicePaid(
     throw new Error(`Vendor ${app.vendor_id} has no Stripe account — cannot transfer`);
   }
 
-  const cutBps = await getVendorCutBps(app.vendor_id);
-  const { transferId, vendorShareCents } = await transferVendorShare({
-    invoiceId,
-    amountCents,
-    vendorId: app.vendor_id,
-    stripeAccountId: vendorProfile.stripe_account_id,
-    cutBps,
-  });
-
-  // Affiliate transfer: 50% of the platform's cut (SPEC §4a, §11)
+  // ── Reseller-sold: fixed vendor floor + reseller markup + 5% platform (SPEC §4b, §11) ──
+  let vendorTransferId: string;
+  let vendorShareCents: number;
+  let resellerTransferId: string | null = null;
+  let resellerShareCents: number | null = null;
+  let cutBps: number | null = null;
   let affiliateShareCents: number | null = null;
   let affiliateTransferId: string | null = null;
-  if (affiliateIdForTransfer && !isResellerSale) {
-    const { data: affiliateProfile } = await admin
-      .from("profiles")
-      .select("stripe_account_id, charges_enabled")
-      .eq("id", affiliateIdForTransfer)
-      .single();
 
-    if (affiliateProfile?.stripe_account_id && affiliateProfile.charges_enabled) {
-      const result = await transferAffiliateShare({
-        invoiceId,
-        amountCents,
-        affiliateId: affiliateIdForTransfer,
-        stripeAccountId: affiliateProfile.stripe_account_id,
-        cutBps,
-      });
-      affiliateShareCents = result.affiliateShareCents;
-      affiliateTransferId = result.transferId;
+  if (isResellerSale && resellerId !== null && vendorFloorSnapshotCents !== null) {
+    const split = computeResellerSplit(amountCents, vendorFloorSnapshotCents);
+    vendorShareCents = split.vendorShareCents;
 
-      await writeAuditLog(admin, {
-        actor_id: null,
-        actor_role: "system",
-        action: "affiliate.transfer.created",
-        entity_type: "affiliate_attributions",
-        entity_id: subscriptionId,
-        metadata: {
+    const vendorResult = await transferResellerVendorFloor({
+      invoiceId,
+      vendorFloorCents: vendorFloorSnapshotCents,
+      vendorId: app.vendor_id,
+      stripeAccountId: vendorProfile.stripe_account_id,
+    });
+    vendorTransferId = vendorResult.transferId;
+
+    if (split.resellerShareCents > 0) {
+      const { data: resellerProfile } = await admin
+        .from("profiles")
+        .select("stripe_account_id, payouts_enabled")
+        .eq("id", resellerId)
+        .single();
+
+      if (resellerProfile?.stripe_account_id && resellerProfile.payouts_enabled) {
+        const resellerResult = await transferResellerShare({
+          invoiceId,
+          resellerShareCents: split.resellerShareCents,
+          resellerId,
+          stripeAccountId: resellerProfile.stripe_account_id,
+        });
+        resellerTransferId = resellerResult.transferId;
+        resellerShareCents = split.resellerShareCents;
+
+        await writeAuditLog(admin, {
+          actor_id: null,
+          actor_role: "system",
+          action: "reseller.transfer.created",
+          entity_type: "subscriptions",
+          entity_id: subscriptionId,
+          metadata: {
+            invoice_id: invoiceId,
+            reseller_id: resellerId,
+            reseller_share_cents: split.resellerShareCents,
+            transfer_id: resellerTransferId,
+          },
+        });
+        logMoneyFlow({
+          action: "reseller.transfer.created",
+          entity_id: subscriptionId,
           invoice_id: invoiceId,
-          affiliate_id: affiliateIdForTransfer,
-          affiliate_share_cents: affiliateShareCents,
+          amount_cents: split.resellerShareCents,
+          transfer_id: resellerTransferId,
+        });
+      }
+    }
+  } else {
+    // ── Direct / affiliate sale: tier-based vendor share ────────────────────
+    cutBps = await getVendorCutBps(app.vendor_id);
+    const result = await transferVendorShare({
+      invoiceId,
+      amountCents,
+      vendorId: app.vendor_id,
+      stripeAccountId: vendorProfile.stripe_account_id,
+      cutBps,
+    });
+    vendorTransferId = result.transferId;
+    vendorShareCents = result.vendorShareCents;
+
+    if (affiliateIdForTransfer) {
+      const { data: affiliateProfile } = await admin
+        .from("profiles")
+        .select("stripe_account_id, charges_enabled")
+        .eq("id", affiliateIdForTransfer)
+        .single();
+
+      if (affiliateProfile?.stripe_account_id && affiliateProfile.charges_enabled) {
+        const affResult = await transferAffiliateShare({
+          invoiceId,
+          amountCents,
+          affiliateId: affiliateIdForTransfer,
+          stripeAccountId: affiliateProfile.stripe_account_id,
+          cutBps,
+        });
+        affiliateShareCents = affResult.affiliateShareCents;
+        affiliateTransferId = affResult.transferId;
+
+        await writeAuditLog(admin, {
+          actor_id: null,
+          actor_role: "system",
+          action: "affiliate.transfer.created",
+          entity_type: "affiliate_attributions",
+          entity_id: subscriptionId,
+          metadata: {
+            invoice_id: invoiceId,
+            affiliate_id: affiliateIdForTransfer,
+            affiliate_share_cents: affiliateShareCents,
+            transfer_id: affiliateTransferId,
+            cut_bps: cutBps,
+          },
+        });
+        logMoneyFlow({
+          action: "affiliate.transfer.created",
+          entity_id: subscriptionId,
+          invoice_id: invoiceId,
+          amount_cents: affiliateShareCents,
           transfer_id: affiliateTransferId,
           cut_bps: cutBps,
-        },
-      });
-
-      logMoneyFlow({
-        action: "affiliate.transfer.created",
-        entity_id: subscriptionId,
-        invoice_id: invoiceId,
-        amount_cents: affiliateShareCents,
-        transfer_id: affiliateTransferId,
-        cut_bps: cutBps,
-      });
+        });
+      }
     }
   }
 
@@ -307,15 +533,24 @@ export async function handleInvoicePaid(
       invoice_id: invoiceId,
       amount_cents: amountCents,
       vendor_share_cents: vendorShareCents,
-      transfer_id: transferId,
-      cut_bps: cutBps,
-      ...(affiliateIdForTransfer
+      transfer_id: vendorTransferId,
+      ...(isResellerSale
         ? {
-            affiliate_id: affiliateIdForTransfer,
-            affiliate_share_cents: affiliateShareCents,
-            affiliate_transfer_id: affiliateTransferId,
+            reseller_id: resellerId,
+            reseller_share_cents: resellerShareCents,
+            reseller_transfer_id: resellerTransferId,
+            vendor_floor_cents: vendorFloorSnapshotCents,
           }
-        : {}),
+        : {
+            cut_bps: cutBps,
+            ...(affiliateIdForTransfer
+              ? {
+                  affiliate_id: affiliateIdForTransfer,
+                  affiliate_share_cents: affiliateShareCents,
+                  affiliate_transfer_id: affiliateTransferId,
+                }
+              : {}),
+          }),
     },
   });
 
@@ -325,8 +560,8 @@ export async function handleInvoicePaid(
     invoice_id: invoiceId,
     amount_cents: amountCents,
     vendor_id: app.vendor_id,
-    transfer_id: transferId,
-    cut_bps: cutBps,
+    transfer_id: vendorTransferId,
+    cut_bps: cutBps ?? undefined,
     is_reseller_sale: isResellerSale,
   });
 

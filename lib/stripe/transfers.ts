@@ -75,6 +75,74 @@ export async function transferAffiliateShare({
   return { transferId: transfer.id, affiliateShareCents };
 }
 
+// ── Reseller money split (SPEC §4b, §11) ────────────────────────────────────
+// buyer pays sell_price; vendor gets fixed floor; platform takes 5%; reseller keeps the rest.
+// Integer-safe. Throws if resellerShareCents ≤ 0 (offer should have been rejected at creation).
+export function computeResellerSplit(
+  amountCents: number,
+  vendorFloorCents: number
+): { vendorShareCents: number; platformFeeCents: number; resellerShareCents: number } {
+  const platformFeeCents = Math.floor((amountCents * 500) / 10_000);
+  const resellerShareCents = amountCents - vendorFloorCents - platformFeeCents;
+  if (resellerShareCents < 0)
+    throw new Error(
+      `computeResellerSplit: negative reseller share (amount=${amountCents}, floor=${vendorFloorCents})`
+    );
+  return { vendorShareCents: vendorFloorCents, platformFeeCents, resellerShareCents };
+}
+
+// Transfer the vendor's fixed floor amount for a reseller-sold invoice.
+export async function transferResellerVendorFloor({
+  invoiceId,
+  vendorFloorCents,
+  vendorId,
+  stripeAccountId,
+}: {
+  invoiceId: string;
+  vendorFloorCents: number;
+  vendorId: string;
+  stripeAccountId: string;
+}): Promise<{ transferId: string }> {
+  const stripe = getStripe();
+  const transfer = await stripe.transfers.create(
+    {
+      amount: vendorFloorCents,
+      currency: "usd",
+      destination: stripeAccountId,
+      transfer_group: `invoice_${invoiceId}`,
+      metadata: { invoice_id: invoiceId, vendor_id: vendorId, type: "vendor_floor" },
+    },
+    { idempotencyKey: `transfer:invoice_${invoiceId}:vendor_floor:${vendorId}` }
+  );
+  return { transferId: transfer.id };
+}
+
+// Transfer the reseller's markup share for a reseller-sold invoice.
+export async function transferResellerShare({
+  invoiceId,
+  resellerShareCents,
+  resellerId,
+  stripeAccountId,
+}: {
+  invoiceId: string;
+  resellerShareCents: number;
+  resellerId: string;
+  stripeAccountId: string;
+}): Promise<{ transferId: string }> {
+  const stripe = getStripe();
+  const transfer = await stripe.transfers.create(
+    {
+      amount: resellerShareCents,
+      currency: "usd",
+      destination: stripeAccountId,
+      transfer_group: `invoice_${invoiceId}`,
+      metadata: { invoice_id: invoiceId, reseller_id: resellerId, type: "reseller_markup" },
+    },
+    { idempotencyKey: `transfer:invoice_${invoiceId}:reseller:${resellerId}` }
+  );
+  return { transferId: transfer.id };
+}
+
 // Reverse all transfers in the transfer_group for this invoice.
 // Idempotent: skips already-reversed transfers.
 export async function reverseTransfers({

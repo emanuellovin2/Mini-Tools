@@ -31,27 +31,27 @@ stripe listen --forward-to localhost:3000/api/webhooks   # forward webhooks in d
 2. **`BUILD_PROMPTS.md`** — index of the ordered build plan (#1–#14). Each prompt lives as its own file in `build_prompts/`. Build in order; run each prompt's **Verify** step before moving on.
 3. **`ENGINEERING.md`** — engineering principles. Every prompt must follow them (money as cents + bps, Separate Charges & Transfers, idempotent webhooks, RLS + RLS tests, strict TS, tests on critical paths). Read before writing code.
 
-## Folder structure (established in #1–#13)
+## Folder structure (established in #1–#14)
 ```
 lib/
   logger.ts          # structured JSON logger — logWebhookEvent, logMoneyFlow, logAccessEvent, logEmail (no PII/secrets)
   services/
     apps.ts          # app CRUD + listing queries
     vendor.ts        # vendor-scoped data access
-    marketplace.ts   # public browse + search
     buyer.ts         # getBuyerSubscriptions() — joins subscriptions + apps for the dashboard
     admin.ts         # getPlatformStats, getPendingApps, getVendors, getAllSubscriptions, getAuditLog, getChurnAlerts, dispatchChurnAlerts
     affiliate.ts     # createAffiliateLink, getAffiliateLinks, validateAffiliateCode, getAffiliateStats, recordAttribution
+    reseller.ts      # createOffer, getOffers, getStorefrontOffer, upsertResellerSubscription, pauseOffersOnLapse, getResellerDashboard
     reconciliation.ts  # runReconciliation(), getReconciliationRuns() — Stripe↔DB drift detection
   stripe/
-    __tests__/       # Stripe helper tests (incl. affiliate.test.ts — money math for all 3 tiers)
+    __tests__/       # Stripe helper tests (incl. affiliate.test.ts, reseller.test.ts — money math)
     billing.ts       # computeTier() pure function (SPEC §3 tier boundaries)
     client.ts        # Stripe SDK singleton
-    connect.ts       # Connect onboarding helpers (used by vendor + affiliate + reseller)
+    connect.ts       # Connect onboarding helpers (vendor + affiliate + reseller)
     customers.ts     # Stripe Customer helpers
     entitlements.ts  # stripeStatusToSubscriptionStatus()
     products.ts      # product/price helpers
-    transfers.ts     # transferVendorShare(), transferAffiliateShare(), reverseTransfers(), getVendorCutBps()
+    transfers.ts     # transferVendorShare(), transferAffiliateShare(), computeResellerSplit(), transferResellerVendorFloor(), transferResellerShare(), reverseTransfers(), getVendorCutBps()
     webhook-handlers.ts  # all Stripe event handlers (+ structured logging, receipt/dunning emails)
   email/
     resend.ts        # sendSubscriptionReceipt, sendPaymentFailedNotice, sendChurnAlert, sendReconciliationDigest — all degrade gracefully on Resend outage
@@ -59,9 +59,10 @@ lib/
   validation/
     env.ts           # boot-time Zod env validation
     vendor.ts        # vendor input schemas
+    reseller.ts      # reseller slug + offer schemas
   utils/             # shared pure helpers
 app/
-  vendor/            # vendor dashboard pages + actions
+  vendor/            # vendor dashboard pages + actions (incl. min_price_cents toggle per app)
   marketplace/       # public browse pages
   api/
     webhooks/        # Stripe webhook endpoint (raw body, signature-verified, structured logging)
@@ -70,6 +71,10 @@ app/
     affiliate/
       links/         # POST /api/affiliate/links — generates 8-char base62 code
       onboard/       # GET /api/affiliate/onboard — redirects to Stripe Connect Express onboarding
+    reseller/
+      setup/         # POST /api/reseller/setup — create Stripe Checkout for $19/mo plan
+      checkout/      # POST /api/reseller/checkout — create Checkout for buyer buying via reseller offer
+      connect/       # GET /api/reseller/connect — redirect to Stripe Connect Express onboarding
     well-known/      # JWKS endpoint
   buyer/
     page.tsx             # buyer dashboard: subscription list, Launch, cancel-at-period-end
@@ -82,6 +87,19 @@ app/
     _components/
       GenerateLinkForm.tsx
       LinksList.tsx
+  reseller/
+    setup/
+      page.tsx         # slug entry + Start $19/mo subscription CTA
+    offers/
+      page.tsx         # list existing offers + create-offer form
+      _components/
+        CreateOfferForm.tsx
+    page.tsx           # reseller dashboard: billing status, Connect status, MRR by offer, lifetime payouts
+    actions.ts         # createOfferAction, updateOfferStatusAction
+  r/
+    [reseller-slug]/
+      [offer-slug]/
+        page.tsx       # public storefront: app info + offer price + Subscribe button
   admin/
     page.tsx             # admin dashboard: stats, approvals, vendors, subscriptions, audit log, churn
     actions.ts           # approveAppAction, rejectAppAction, syncVendorStripeAction
@@ -94,7 +112,7 @@ proxy.ts             # Next.js middleware: auth enforcement, role routing, ?aff=
 supabase/
   migrations/        # all schema changes — never manual dashboard edits
   functions/
-    monthly-billing-cron/     # Edge Function: 0 1 1 * * — writes vendor_billing rows
+    monthly-billing-cron/     # Edge Function: 0 1 1 * * — writes vendor_billing rows (excludes reseller-sold via is_reseller_sale flag)
     daily-reconciliation-cron/ # Edge Function: 0 2 * * * — Stripe↔DB checks + Resend digest
 types/
   supabase.ts        # auto-generated from `npm run types` — never hand-edit
@@ -153,7 +171,7 @@ All required vars are validated at boot (Zod) — a missing/malformed required v
 
 **Phase 2**
 - [x] #13 Affiliate role + referral links + 50% split of platform cut
-- [ ] #14 Reseller role + $19/mo subscription + storefront offers + 5% platform fee
+- [x] #14 Reseller role + $19/mo subscription + storefront offers + 5% platform fee
 
 ## Guardrails
 - Never expose buyer email, name, or card data to vendors, resellers, or affiliates — the anonymous token model (SPEC §6) and the `vendor_subscription_stats` / `reseller_sale_stats` / `affiliate_stats` boundaries (SPEC §7) are non-negotiable. None of these roles gets a read path to `subscriptions.buyer_id`.
