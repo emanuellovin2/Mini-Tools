@@ -1,8 +1,33 @@
 import { getStripe } from "./client";
 import { createAdminClient } from "@/lib/services/supabase";
 
+// ── Affiliate split (SPEC §4a, #18) ─────────────────────────────────────────
+// Platform takes 5% flat; affiliate gets their commission %; vendor keeps the rest.
+// affiliateCommissionBps must be in [2000, 8000] (enforced by DB CHECK).
+export function computeAffiliateSplit(
+  netAmountCents: number,
+  affiliateCommissionBps: number
+): { vendorShareCents: number; platformFeeCents: number; affiliateShareCents: number } {
+  const platformFeeCents = Math.floor((netAmountCents * 500) / 10_000);
+  const affiliateShareCents = Math.floor((netAmountCents * affiliateCommissionBps) / 10_000);
+  const vendorShareCents = netAmountCents - platformFeeCents - affiliateShareCents;
+  if (vendorShareCents < 0)
+    throw new Error(
+      `computeAffiliateSplit: negative vendor share (net=${netAmountCents}, affiliateBps=${affiliateCommissionBps})`
+    );
+  return { vendorShareCents, platformFeeCents, affiliateShareCents };
+}
+
+// Affiliate commission tier based on current active MRR they have generated.
+// Tier boundaries: <$5k → 20%, $5k–$20k → 25%, $20k+ → 30%.
+export function getAffiliateCommissionBps(affiliateActiveMrrCents: number): number {
+  if (affiliateActiveMrrCents >= 2_000_000) return 3000; // $20k+ → 30%
+  if (affiliateActiveMrrCents >= 500_000) return 2500;   // $5k+  → 25%
+  return 2000;                                            // standard → 20%
+}
+
 // Returns the active cut_bps for a vendor.
-// Defaults to Tier 1 (2000 bps = 20%) when no vendor_billing row exists — SPEC §8.
+// Defaults to Tier 1 (1200 bps = 12%) when no vendor_billing row exists — SPEC §8.
 export async function getVendorCutBps(vendorId: string): Promise<number> {
   const admin = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
@@ -14,24 +39,27 @@ export async function getVendorCutBps(vendorId: string): Promise<number> {
     .order("period_start", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return data?.cut_bps ?? 2000;
+  return data?.cut_bps ?? 1_200;
 }
 
-// Integer-safe vendor share: floor(amount * (10000 - cutBps) / 10000)
+// Integer-safe vendor share. For direct sales, computes floor(amount * (10000 - cutBps) / 10000).
+// For affiliate sales, pass overrideVendorShareCents (from computeAffiliateSplit) to skip computation.
 export async function transferVendorShare({
   invoiceId,
   amountCents,
   vendorId,
   stripeAccountId,
   cutBps,
+  overrideVendorShareCents,
 }: {
   invoiceId: string;
   amountCents: number;
   vendorId: string;
   stripeAccountId: string;
   cutBps: number;
+  overrideVendorShareCents?: number;
 }): Promise<{ transferId: string; vendorShareCents: number }> {
-  const vendorShareCents = Math.floor((amountCents * (10_000 - cutBps)) / 10_000);
+  const vendorShareCents = overrideVendorShareCents ?? Math.floor((amountCents * (10_000 - cutBps)) / 10_000);
   const stripe = getStripe();
   const transfer = await stripe.transfers.create(
     {
@@ -46,21 +74,18 @@ export async function transferVendorShare({
   return { transferId: transfer.id, vendorShareCents };
 }
 
-// Affiliate earns 50% of the platform's tier cut: amount × cutBps / 20_000
+// Transfer the affiliate's pre-computed share (from computeAffiliateSplit).
 export async function transferAffiliateShare({
   invoiceId,
-  amountCents,
+  affiliateShareCents,
   affiliateId,
   stripeAccountId,
-  cutBps,
 }: {
   invoiceId: string;
-  amountCents: number;
+  affiliateShareCents: number;
   affiliateId: string;
   stripeAccountId: string;
-  cutBps: number;
 }): Promise<{ transferId: string; affiliateShareCents: number }> {
-  const affiliateShareCents = Math.floor((amountCents * cutBps) / 20_000);
   const stripe = getStripe();
   const transfer = await stripe.transfers.create(
     {
@@ -76,18 +101,19 @@ export async function transferAffiliateShare({
 }
 
 // ── Reseller money split (SPEC §4b, §11) ────────────────────────────────────
-// buyer pays sell_price; vendor gets fixed floor; platform takes 5%; reseller keeps the rest.
-// Integer-safe. Throws if resellerShareCents ≤ 0 (offer should have been rejected at creation).
+// buyer pays sell_price; vendor gets fixed floor; platform takes 5% of markup; reseller keeps 95% of markup.
+// Integer-safe. Throws if sell_price < vendor floor (invalid offer).
 export function computeResellerSplit(
   amountCents: number,
   vendorFloorCents: number
 ): { vendorShareCents: number; platformFeeCents: number; resellerShareCents: number } {
-  const platformFeeCents = Math.floor((amountCents * 500) / 10_000);
-  const resellerShareCents = amountCents - vendorFloorCents - platformFeeCents;
-  if (resellerShareCents < 0)
+  const markup = amountCents - vendorFloorCents;
+  if (markup < 0)
     throw new Error(
-      `computeResellerSplit: negative reseller share (amount=${amountCents}, floor=${vendorFloorCents})`
+      `computeResellerSplit: sell_price below vendor floor (amount=${amountCents}, floor=${vendorFloorCents})`
     );
+  const platformFeeCents = Math.floor((markup * 500) / 10_000);
+  const resellerShareCents = markup - platformFeeCents;
   return { vendorShareCents: vendorFloorCents, platformFeeCents, resellerShareCents };
 }
 

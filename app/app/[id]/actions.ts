@@ -47,7 +47,7 @@ export async function subscribeAction(appId: string): Promise<SubscribeResult> {
   const admin = createAdminClient();
   const { data: app } = await admin
     .from("apps")
-    .select("id, name, stripe_price_id, status, vendor_id")
+    .select("id, name, stripe_price_id, status, vendor_id, affiliate_commission_bps")
     .eq("id", appId)
     .single();
 
@@ -72,11 +72,12 @@ export async function subscribeAction(appId: string): Promise<SubscribeResult> {
   // Stable anon_user_id across resubscriptions — SPEC §6
   const anonUserId = await lookupOrGenerateAnonUserId(user.id, appId);
 
-  // Resolve affiliate attribution from aff_code cookie
+  // Resolve affiliate attribution from aff_code cookie.
+  // Only attribute if the app has affiliate_commission_bps set (vendor opted in).
   const cookieStore = await cookies();
   const affCode = cookieStore.get("aff_code")?.value ?? null;
   let resolvedAffiliateId: string | null = null;
-  if (affCode) {
+  if (affCode && app.affiliate_commission_bps !== null) {
     const link = await validateAffiliateCode(affCode);
     // Self-referral guard: drop attribution if the affiliate is the buyer
     if (link && link.affiliate_id !== user.id) {
@@ -94,9 +95,10 @@ export async function subscribeAction(appId: string): Promise<SubscribeResult> {
     app_id: appId,
     anon_user_id: anonUserId,
   };
-  if (resolvedAffiliateId) {
+  if (resolvedAffiliateId && app.affiliate_commission_bps !== null) {
     baseMeta.affiliate_id = resolvedAffiliateId;
     baseMeta.aff_code = affCode!;
+    baseMeta.affiliate_commission_snapshot_bps = String(app.affiliate_commission_bps);
   }
 
   const session = await stripe.checkout.sessions.create({

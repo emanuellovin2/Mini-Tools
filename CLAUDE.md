@@ -9,9 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A multi-sided marketplace where developers list SaaS apps and sell them on subscription; affiliates bring users via referral links; resellers run their own storefronts with markup over a vendor-set floor. The platform owns billing, access, and distribution.
 
 **Economics at a glance:**
-- **Vendor (direct sale):** platform takes 20%/10%/5% by monthly gross tier ($0–$1k / $1k–$2k / $2k+). **No flat fee.**
-- **Affiliate (referral):** earns **50% of the platform's tier cut** on attributed transactions. Vendor unaffected.
-- **Reseller (storefront):** pays **$19/month** for platform access. On each sale: vendor gets `min_price` floor, platform takes **5%** of gross, reseller keeps the rest of the markup.
+- **Vendor (direct sale):** platform takes 12%/8%/5%/3% by trailing monthly net tier ($0–$1k / $1k–$3k / $3k–$10k / $10k+). Computed on net amount (after Stripe fees). **No flat fee.**
+- **Affiliate (referral):** vendor sets `affiliate_commission_bps` per app (20–80%). On affiliate sales: platform takes **5% of net**, affiliate gets their set %, vendor keeps the rest. Affiliate tier: 20%/25%/30% at $0/$5k/$20k active MRR generated. Commission snapshotted at subscribe time — tier changes only affect new subs.
+- **Reseller (storefront):** pays **$19/month** for platform access (30-day free trial). On each sale: vendor gets `min_price` floor, platform takes **5% of the markup** (not gross), reseller keeps the rest.
 
 ## Commands (available after #1 bootstraps the project)
 ```bash
@@ -28,14 +28,15 @@ stripe listen --forward-to localhost:3000/api/webhooks   # forward webhooks in d
 
 ## Read these first
 1. **`SPEC.md`** — the source of truth. Architecture, roles, pricing, schema, business rules. Read it in full before writing any code.
-2. **`BUILD_PROMPTS.md`** — index of the ordered build plan (#1–#14). Each prompt lives as its own file in `build_prompts/`. Build in order; run each prompt's **Verify** step before moving on.
+2. **`BUILD_PROMPTS.md`** — index of the ordered build plan. Each prompt lives as its own file in `build_prompts/`. For tasks #15–#26 read `build_prompts/00-EXECUTION-ORDER.md` first — execution is by wave, not by task number.
 3. **`ENGINEERING.md`** — engineering principles. Every prompt must follow them (money as cents + bps, Separate Charges & Transfers, idempotent webhooks, RLS + RLS tests, strict TS, tests on critical paths). Read before writing code.
 
-## Folder structure (established in #1–#14)
+## Folder structure (established in #1–#26)
 ```
 lib/
   logger.ts          # structured JSON logger — logWebhookEvent, logMoneyFlow, logAccessEvent, logEmail (no PII/secrets)
   services/
+    __tests__/       # RLS policy tests (rls.test.ts, rls-extra.test.ts) + vendor.test.ts
     apps.ts          # app CRUD + listing queries
     vendor.ts        # vendor-scoped data access
     buyer.ts         # getBuyerSubscriptions() — joins subscriptions + apps for the dashboard
@@ -43,9 +44,13 @@ lib/
     affiliate.ts     # createAffiliateLink, getAffiliateLinks, validateAffiliateCode, getAffiliateStats, recordAttribution
     reseller.ts      # createOffer, getOffers, getStorefrontOffer, upsertResellerSubscription, pauseOffersOnLapse, getResellerDashboard
     reconciliation.ts  # runReconciliation(), getReconciliationRuns() — Stripe↔DB drift detection
+    supabase.ts      # Supabase admin client (service role)
+    supabase-server.ts  # Supabase server client (cookie-based session)
+    supabase-browser.ts # Supabase browser client
   stripe/
     __tests__/       # Stripe helper tests (incl. affiliate.test.ts, reseller.test.ts — money math)
-    billing.ts       # computeTier() pure function (SPEC §3 tier boundaries)
+    anon-user.ts     # anonymous user token helpers
+    billing.ts       # computeTier() pure function — 4 tiers: 1200/800/500/300 bps at $0/$1k/$3k/$10k net
     client.ts        # Stripe SDK singleton
     connect.ts       # Connect onboarding helpers (vendor + affiliate + reseller)
     customers.ts     # Stripe Customer helpers
@@ -60,7 +65,9 @@ lib/
     env.ts           # boot-time Zod env validation
     vendor.ts        # vendor input schemas
     reseller.ts      # reseller slug + offer schemas
-  utils/             # shared pure helpers
+  utils/
+    magic-bytes.ts   # file type detection by magic bytes (upload validation)
+    rate-limit.ts    # simple in-memory rate limiter for API routes
 app/
   vendor/            # vendor dashboard pages + actions (incl. min_price_cents toggle per app)
   marketplace/       # public browse pages
@@ -108,6 +115,9 @@ app/
     _components/
       ApproveRejectButtons.tsx
       SyncStripeButton.tsx
+components/
+  ui/               # shadcn-style primitives: Button, Card, Input, Select, Label, Badge, Modal, Toast, Table, Skeleton
+  layout/           # DashboardShell, Sidebar, Topbar, PageHeader — opt-in wrapper for dashboard pages
 proxy.ts             # Next.js middleware: auth enforcement, role routing, ?aff= cookie capture (30d HTTP-only)
 supabase/
   migrations/        # all schema changes — never manual dashboard edits
@@ -172,6 +182,32 @@ All required vars are validated at boot (Zod) — a missing/malformed required v
 **Phase 2**
 - [x] #13 Affiliate role + referral links + 50% split of platform cut
 - [x] #14 Reseller role + $19/mo subscription + storefront offers + 5% platform fee
+
+**Phase 3** (execute by wave — see `build_prompts/00-EXECUTION-ORDER.md`)
+
+Wave 1 — quick wins (parallel-able):
+- [x] #20 Weekly Friday payouts (Stripe Connect payout schedule)
+- [x] #22 Reseller 30-day free trial
+
+Wave 2 — backend pricing (sequential: #15 → #16 → #17):
+- [x] #15 Vendor 4-tier pricing (12/8/5/3%)
+- [x] #16 Reseller fee from markup (not gross)
+- [x] #17 Net amount basis (after Stripe fees) — **blocks #18 and #24**
+
+Wave 3 — design system:
+- [x] #26 Tokens + 10 primitives + reference page (`/buyer`) — **blocks Wave 4–5 UI**
+
+Wave 4 — affiliate redesign + refund policy (sequential: #18 → #19):
+- [x] #18 Affiliate model redesign (vendor-funded, active-MRR-tiered) — **blocks #19 and #25**
+- [ ] #19 Refund vendor-only / dispute all-reverse split policy
+
+Wave 5 — sticky features (parallel-able within wave):
+- [ ] #23 Subscription pause (`paused_until`, Stripe `pause_collection`)
+- [ ] #24 Vendor analytics (MRR, churn, cohort, LTV)
+- [ ] #25 Affiliate leaderboard + badges + public profiles
+
+Wave 6 — docs:
+- [ ] #21 Final docs sync (SPEC.md §3/§4/§8/§11, CLAUDE.md, BUILD_PROMPTS.md)
 
 ## Guardrails
 - Never expose buyer email, name, or card data to vendors, resellers, or affiliates — the anonymous token model (SPEC §6) and the `vendor_subscription_stats` / `reseller_sale_stats` / `affiliate_stats` boundaries (SPEC §7) are non-negotiable. None of these roles gets a read path to `subscriptions.buyer_id`.

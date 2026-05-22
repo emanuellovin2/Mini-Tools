@@ -7,6 +7,7 @@ import {
   getVendorCutBps,
   transferVendorShare,
   transferAffiliateShare,
+  computeAffiliateSplit,
   computeResellerSplit,
   transferResellerVendorFloor,
   transferResellerShare,
@@ -45,6 +46,18 @@ async function writeAuditLog(
     entity_id: entry.entity_id ?? null,
     metadata: (entry.metadata ?? null) as unknown as Json,
   });
+}
+
+// Recompute affiliate_active_mrr_cents as sum of price_cents of active/trialing subs attributed to this affiliate.
+// Called on subscription status changes to keep the column accurate for tier computation.
+async function recomputeAffiliateMrr(affiliateId: string, admin: AdminClient): Promise<void> {
+  const { data } = await admin
+    .from("subscriptions")
+    .select("price_cents")
+    .eq("affiliate_id", affiliateId)
+    .in("status", ["active", "trialing"]);
+  const mrrCents = (data ?? []).reduce((sum, s) => sum + s.price_cents, 0);
+  await admin.from("profiles").update({ affiliate_active_mrr_cents: mrrCents }).eq("id", affiliateId);
 }
 
 // In Stripe v22, current_period_end moved from Subscription to SubscriptionItem.
@@ -138,7 +151,7 @@ export async function handleCheckoutSessionCompleted(
     return;
   }
 
-  const { buyer_id, app_id, anon_user_id, affiliate_id, aff_code } = meta;
+  const { buyer_id, app_id, anon_user_id, affiliate_id, aff_code, affiliate_commission_snapshot_bps: rawSnapshotBps } = meta;
   if (!buyer_id || !app_id || !anon_user_id) {
     throw new Error(`Missing metadata in checkout session ${session.id}`);
   }
@@ -154,6 +167,8 @@ export async function handleCheckoutSessionCompleted(
   const resolvedAffiliateId =
     affiliate_id && affiliate_id !== buyer_id ? affiliate_id : null;
   const resolvedAffCode = resolvedAffiliateId ? aff_code : null;
+  const affiliateCommissionSnapshotBps =
+    resolvedAffiliateId && rawSnapshotBps ? parseInt(rawSnapshotBps, 10) : null;
 
   const { error, data: upsertedRows } = await admin
     .from("subscriptions")
@@ -170,6 +185,7 @@ export async function handleCheckoutSessionCompleted(
         cancel_at_period_end: sub.cancel_at_period_end,
         current_period_end: new Date(periodEnd * 1000).toISOString(),
         affiliate_id: resolvedAffiliateId,
+        affiliate_commission_snapshot_bps: affiliateCommissionSnapshotBps,
       },
       { onConflict: "stripe_subscription_id" }
     )
@@ -192,6 +208,11 @@ export async function handleCheckoutSessionCompleted(
       entity_id: upsertedRows.id,
       metadata: { affiliate_id: resolvedAffiliateId, code: resolvedAffCode, app_id },
     });
+  }
+
+  // Recompute affiliate active MRR for newly attributed subscription.
+  if (resolvedAffiliateId) {
+    await recomputeAffiliateMrr(resolvedAffiliateId, admin);
   }
 
   await writeAuditLog(admin, {
@@ -270,6 +291,16 @@ export async function handleSubscriptionUpdated(
     .eq("stripe_subscription_id", sub.id);
   if (error) throw new Error(`subscription update failed: ${error.message}`);
 
+  // Recompute affiliate active MRR when an affiliate-attributed sub changes status.
+  const { data: subForMrr } = await admin
+    .from("subscriptions")
+    .select("affiliate_id")
+    .eq("stripe_subscription_id", sub.id)
+    .maybeSingle();
+  if (subForMrr?.affiliate_id) {
+    await recomputeAffiliateMrr(subForMrr.affiliate_id, admin);
+  }
+
   await writeAuditLog(admin, {
     actor_id: null,
     actor_role: "system",
@@ -325,7 +356,10 @@ export async function handleInvoicePaid(
   }
 
   const invoiceId = invoice.id;
-  const amountCents = invoice.amount_paid;
+  const grossAmountCents = invoice.amount_paid;
+
+  const stripe = getStripe();
+  let netAmountCents = grossAmountCents; // resolved below after invoice expand
 
   // Mark subscription active on successful payment
   await admin
@@ -337,11 +371,12 @@ export async function handleInvoicePaid(
   let appId: string | null = null;
   let isResellerSale = false;
   let affiliateIdForTransfer: string | null = null;
+  let affiliateCommissionSnapshotBps: number | null = null;
   let resellerId: string | null = null;
   let vendorFloorSnapshotCents: number | null = null;
   const { data: subRow } = await admin
     .from("subscriptions")
-    .select("app_id, reseller_id, affiliate_id, vendor_floor_snapshot_cents")
+    .select("app_id, reseller_id, affiliate_id, vendor_floor_snapshot_cents, affiliate_commission_snapshot_bps")
     .eq("stripe_subscription_id", subscriptionId)
     .maybeSingle();
 
@@ -349,10 +384,10 @@ export async function handleInvoicePaid(
     appId = subRow.app_id;
     isResellerSale = !!subRow.reseller_id;
     affiliateIdForTransfer = subRow.affiliate_id ?? null;
+    affiliateCommissionSnapshotBps = subRow.affiliate_commission_snapshot_bps ?? null;
     resellerId = subRow.reseller_id ?? null;
     vendorFloorSnapshotCents = subRow.vendor_floor_snapshot_cents ?? null;
   } else {
-    const stripe = getStripe();
     const stripeSub = await stripe.subscriptions.retrieve(subscriptionId);
     appId = stripeSub.metadata?.app_id ?? null;
   }
@@ -375,6 +410,28 @@ export async function handleInvoicePaid(
     throw new Error(`Vendor ${app.vendor_id} has no Stripe account — cannot transfer`);
   }
 
+  // Expand invoice once: (1) payment_intent for transfer_group linking, (2) latest_charge
+  // balance_transaction to get the net amount after Stripe processing fees (#17).
+  const expandedInvoice = await stripe.invoices.retrieve(invoiceId, {
+    expand: ["payments.data.payment.payment_intent.latest_charge.balance_transaction"],
+  });
+  const paymentObj = expandedInvoice.payments?.data?.[0]?.payment;
+  const piField = paymentObj?.payment_intent;
+  const paymentIntentId =
+    typeof piField === "string" ? piField : (piField as { id?: string } | null)?.id ?? null;
+  if (grossAmountCents > 0 && piField && typeof piField === "object") {
+    const pi = piField as Stripe.PaymentIntent;
+    const chargeField = pi.latest_charge;
+    const chargeObj =
+      chargeField && typeof chargeField === "object"
+        ? (chargeField as Stripe.Charge)
+        : null;
+    const btField = chargeObj?.balance_transaction;
+    if (btField && typeof btField === "object" && btField.object === "balance_transaction") {
+      netAmountCents = (btField as Stripe.BalanceTransaction).net;
+    }
+  }
+
   // ── Reseller-sold: fixed vendor floor + reseller markup + 5% platform (SPEC §4b, §11) ──
   let vendorTransferId: string;
   let vendorShareCents: number;
@@ -385,7 +442,7 @@ export async function handleInvoicePaid(
   let affiliateTransferId: string | null = null;
 
   if (isResellerSale && resellerId !== null && vendorFloorSnapshotCents !== null) {
-    const split = computeResellerSplit(amountCents, vendorFloorSnapshotCents);
+    const split = computeResellerSplit(netAmountCents, vendorFloorSnapshotCents);
     vendorShareCents = split.vendorShareCents;
 
     const vendorResult = await transferResellerVendorFloor({
@@ -435,86 +492,88 @@ export async function handleInvoicePaid(
         });
       }
     }
+  } else if (affiliateIdForTransfer && affiliateCommissionSnapshotBps !== null) {
+    // ── Affiliate sale: vendor-funded model (SPEC §4a, #18) ─────────────────
+    // Platform takes 5% flat; affiliate gets snapshotted commission %; vendor keeps the rest.
+    const split = computeAffiliateSplit(netAmountCents, affiliateCommissionSnapshotBps);
+    vendorShareCents = split.vendorShareCents;
+
+    const vendorResult = await transferVendorShare({
+      invoiceId,
+      amountCents: netAmountCents,
+      vendorId: app.vendor_id,
+      stripeAccountId: vendorProfile.stripe_account_id,
+      cutBps: 0, // computation overridden by vendorShareCents below
+      overrideVendorShareCents: split.vendorShareCents,
+    });
+    vendorTransferId = vendorResult.transferId;
+
+    const { data: affiliateProfile } = await admin
+      .from("profiles")
+      .select("stripe_account_id, charges_enabled, affiliate_active_mrr_cents")
+      .eq("id", affiliateIdForTransfer)
+      .single();
+
+    if (affiliateProfile?.stripe_account_id && affiliateProfile.charges_enabled) {
+      const affResult = await transferAffiliateShare({
+        invoiceId,
+        affiliateShareCents: split.affiliateShareCents,
+        affiliateId: affiliateIdForTransfer,
+        stripeAccountId: affiliateProfile.stripe_account_id,
+      });
+      affiliateShareCents = affResult.affiliateShareCents;
+      affiliateTransferId = affResult.transferId;
+
+      await writeAuditLog(admin, {
+        actor_id: null,
+        actor_role: "system",
+        action: "affiliate.transfer.created",
+        entity_type: "affiliate_attributions",
+        entity_id: subscriptionId,
+        metadata: {
+          invoice_id: invoiceId,
+          affiliate_id: affiliateIdForTransfer,
+          affiliate_share_cents: affiliateShareCents,
+          affiliate_commission_bps: affiliateCommissionSnapshotBps,
+          transfer_id: affiliateTransferId,
+        },
+      });
+      logMoneyFlow({
+        action: "affiliate.transfer.created",
+        entity_id: subscriptionId,
+        invoice_id: invoiceId,
+        amount_cents: affiliateShareCents,
+        transfer_id: affiliateTransferId,
+      });
+    }
   } else {
-    // ── Direct / affiliate sale: tier-based vendor share ────────────────────
+    // ── Direct sale: tier-based vendor share ─────────────────────────────────
     cutBps = await getVendorCutBps(app.vendor_id);
     const result = await transferVendorShare({
       invoiceId,
-      amountCents,
+      amountCents: netAmountCents,
       vendorId: app.vendor_id,
       stripeAccountId: vendorProfile.stripe_account_id,
       cutBps,
     });
     vendorTransferId = result.transferId;
     vendorShareCents = result.vendorShareCents;
-
-    if (affiliateIdForTransfer) {
-      const { data: affiliateProfile } = await admin
-        .from("profiles")
-        .select("stripe_account_id, charges_enabled")
-        .eq("id", affiliateIdForTransfer)
-        .single();
-
-      if (affiliateProfile?.stripe_account_id && affiliateProfile.charges_enabled) {
-        const affResult = await transferAffiliateShare({
-          invoiceId,
-          amountCents,
-          affiliateId: affiliateIdForTransfer,
-          stripeAccountId: affiliateProfile.stripe_account_id,
-          cutBps,
-        });
-        affiliateShareCents = affResult.affiliateShareCents;
-        affiliateTransferId = affResult.transferId;
-
-        await writeAuditLog(admin, {
-          actor_id: null,
-          actor_role: "system",
-          action: "affiliate.transfer.created",
-          entity_type: "affiliate_attributions",
-          entity_id: subscriptionId,
-          metadata: {
-            invoice_id: invoiceId,
-            affiliate_id: affiliateIdForTransfer,
-            affiliate_share_cents: affiliateShareCents,
-            transfer_id: affiliateTransferId,
-            cut_bps: cutBps,
-          },
-        });
-        logMoneyFlow({
-          action: "affiliate.transfer.created",
-          entity_id: subscriptionId,
-          invoice_id: invoiceId,
-          amount_cents: affiliateShareCents,
-          transfer_id: affiliateTransferId,
-          cut_bps: cutBps,
-        });
-      }
-    }
   }
 
   // Link PaymentIntent → transfer_group so charge.refunded can find the invoice
-  const stripe = getStripe();
-  const expandedInvoice = await stripe.invoices.retrieve(invoiceId, {
-    expand: ["payments.data.payment.payment_intent"],
-  });
-  const paymentIntentId = (() => {
-    const payment = expandedInvoice.payments?.data?.[0]?.payment;
-    if (!payment) return null;
-    const pi = payment.payment_intent;
-    return typeof pi === "string" ? pi : pi?.id ?? null;
-  })();
-
   if (paymentIntentId) {
     await stripe.paymentIntents.update(paymentIntentId, {
       transfer_group: `invoice_${invoiceId}`,
     });
   }
 
-  // Record revenue event for monthly tier cron (idempotent via stripe_event_id UNIQUE)
+  // Record revenue event for monthly tier cron (idempotent via stripe_event_id UNIQUE).
+  // amount_cents = gross (drives tier thresholds). net_amount_cents = after Stripe fees (#17).
   await admin.from("vendor_revenue_events").upsert(
     {
       vendor_id: app.vendor_id,
-      amount_cents: amountCents,
+      amount_cents: grossAmountCents,
+      net_amount_cents: netAmountCents,
       is_reseller_sale: isResellerSale,
       stripe_invoice_id: invoiceId,
       stripe_event_id: eventId,
@@ -531,7 +590,8 @@ export async function handleInvoicePaid(
     entity_id: subscriptionId,
     metadata: {
       invoice_id: invoiceId,
-      amount_cents: amountCents,
+      amount_paid_gross: grossAmountCents,
+      net_amount_cents: netAmountCents,
       vendor_share_cents: vendorShareCents,
       transfer_id: vendorTransferId,
       ...(isResellerSale
@@ -558,7 +618,8 @@ export async function handleInvoicePaid(
     action: "invoice.paid",
     entity_id: subscriptionId,
     invoice_id: invoiceId,
-    amount_cents: amountCents,
+    amount_cents: grossAmountCents,
+    net_amount_cents: netAmountCents,
     vendor_id: app.vendor_id,
     transfer_id: vendorTransferId,
     cut_bps: cutBps ?? undefined,
@@ -590,7 +651,7 @@ export async function handleInvoicePaid(
         await sendSubscriptionReceipt({
           buyerEmail,
           appName: appRow?.name ?? "your app",
-          amountCents,
+          amountCents: grossAmountCents,
           invoiceId,
           currency: invoice.currency,
         });
@@ -715,6 +776,7 @@ export async function handleChargeRefunded(
       {
         vendor_id: revenueRow.vendor_id,
         amount_cents: -refundAmountCents,
+        net_amount_cents: -refundAmountCents, // refund events: no fee adjustment available
         is_reseller_sale: revenueRow.is_reseller_sale,
         stripe_invoice_id: invoiceId,
         stripe_charge_id: charge.id,
@@ -781,6 +843,12 @@ export async function handleAccountUpdated(
   account: Stripe.Account,
   admin: AdminClient
 ): Promise<void> {
+  const { data: existing } = await admin
+    .from("profiles")
+    .select("charges_enabled")
+    .eq("stripe_account_id", account.id)
+    .maybeSingle();
+
   await admin
     .from("profiles")
     .update({
@@ -788,6 +856,19 @@ export async function handleAccountUpdated(
       payouts_enabled: account.payouts_enabled ?? false,
     })
     .eq("stripe_account_id", account.id);
+
+  // Set weekly Friday payout schedule the first time charges become enabled
+  if (account.charges_enabled && !existing?.charges_enabled) {
+    const stripe = getStripe();
+    await stripe.accounts.update(account.id, {
+      settings: {
+        payouts: {
+          schedule: { interval: "weekly", weekly_anchor: "friday" },
+          debit_negative_balances: true,
+        },
+      },
+    });
+  }
 }
 
 export async function handleAccountDeauthorized(
