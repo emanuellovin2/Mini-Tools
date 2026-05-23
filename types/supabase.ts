@@ -351,6 +351,62 @@ export type Database = {
           },
         ]
       }
+      pending_transfers: {
+        Row: {
+          amount_cents: number
+          attempts: number
+          created_at: string
+          id: string
+          invoice_id: string
+          last_error: string | null
+          processed_at: string | null
+          reason: string
+          recipient_id: string
+          recipient_kind: string
+          status: string
+          transfer_group: string
+          transfer_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          attempts?: number
+          created_at?: string
+          id?: string
+          invoice_id: string
+          last_error?: string | null
+          processed_at?: string | null
+          reason: string
+          recipient_id: string
+          recipient_kind: string
+          status?: string
+          transfer_group: string
+          transfer_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          attempts?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          last_error?: string | null
+          processed_at?: string | null
+          reason?: string
+          recipient_id?: string
+          recipient_kind?: string
+          status?: string
+          transfer_group?: string
+          transfer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_transfers_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reseller_subscriptions: {
         Row: {
           cancel_at_period_end: boolean

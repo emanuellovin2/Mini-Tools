@@ -8,6 +8,7 @@ import { getStripe } from "@/lib/stripe/client";
 import { getOrCreateStripeCustomer } from "@/lib/stripe/customers";
 import { lookupOrGenerateAnonUserId } from "@/lib/stripe/anon-user";
 import { validateAffiliateCode } from "@/lib/services/affiliate";
+import { getAffiliateCommissionBps } from "@/lib/stripe/transfers";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 const uuidParam = z.string().uuid("Invalid app ID");
@@ -77,11 +78,24 @@ export async function subscribeAction(appId: string): Promise<SubscribeResult> {
   const cookieStore = await cookies();
   const affCode = cookieStore.get("aff_code")?.value ?? null;
   let resolvedAffiliateId: string | null = null;
+  let clampedCommissionBps: number | null = null;
   if (affCode && app.affiliate_commission_bps !== null) {
     const link = await validateAffiliateCode(affCode);
     // Self-referral guard: drop attribution if the affiliate is the buyer
     if (link && link.affiliate_id !== user.id) {
       resolvedAffiliateId = link.affiliate_id;
+      // SPEC §4a r42: clamp vendor's affiliate_commission_bps to the affiliate's
+      // current MRR-tier cap and snapshot. Tier cap is read from the affiliate's
+      // current active MRR — tier changes only affect new subs (immutable thereafter).
+      const { data: affiliateProfile } = await admin
+        .from("profiles")
+        .select("affiliate_active_mrr_cents")
+        .eq("id", resolvedAffiliateId)
+        .single();
+      const tierCapBps = getAffiliateCommissionBps(
+        affiliateProfile?.affiliate_active_mrr_cents ?? 0
+      );
+      clampedCommissionBps = Math.min(app.affiliate_commission_bps, tierCapBps);
     }
     // Clear the cookie now that attribution has been captured in session metadata
     cookieStore.delete("aff_code");
@@ -95,10 +109,10 @@ export async function subscribeAction(appId: string): Promise<SubscribeResult> {
     app_id: appId,
     anon_user_id: anonUserId,
   };
-  if (resolvedAffiliateId && app.affiliate_commission_bps !== null) {
+  if (resolvedAffiliateId && clampedCommissionBps !== null) {
     baseMeta.affiliate_id = resolvedAffiliateId;
     baseMeta.aff_code = affCode!;
-    baseMeta.affiliate_commission_snapshot_bps = String(app.affiliate_commission_bps);
+    baseMeta.affiliate_commission_snapshot_bps = String(clampedCommissionBps);
   }
 
   const session = await stripe.checkout.sessions.create({

@@ -68,6 +68,112 @@ function getSubPeriodEnd(sub: Stripe.Subscription): number {
   return item.current_period_end;
 }
 
+// Queue a transfer we couldn't make because the recipient's Connect account
+// isn't payout-ready yet. Idempotent via UNIQUE(invoice_id, recipient_id, recipient_kind).
+async function enqueuePendingTransfer(
+  admin: AdminClient,
+  args: {
+    recipientId: string;
+    recipientKind: "affiliate" | "reseller";
+    invoiceId: string;
+    amountCents: number;
+    reason: "no_stripe_account" | "capability_disabled";
+  }
+): Promise<void> {
+  await admin.from("pending_transfers").upsert(
+    {
+      recipient_id: args.recipientId,
+      recipient_kind: args.recipientKind,
+      invoice_id: args.invoiceId,
+      amount_cents: args.amountCents,
+      transfer_group: `invoice_${args.invoiceId}`,
+      reason: args.reason,
+      status: "pending",
+    },
+    { onConflict: "invoice_id,recipient_id,recipient_kind", ignoreDuplicates: true }
+  );
+  await writeAuditLog(admin, {
+    actor_id: null,
+    actor_role: "system",
+    action: "transfer.deferred",
+    entity_type: args.recipientKind === "affiliate" ? "affiliate_attributions" : "reseller_subscriptions",
+    entity_id: args.recipientId,
+    metadata: {
+      invoice_id: args.invoiceId,
+      amount_cents: args.amountCents,
+      reason: args.reason,
+    },
+  });
+  logMoneyFlow({
+    action: "transfer.deferred",
+    entity_id: args.recipientId,
+    invoice_id: args.invoiceId,
+    amount_cents: args.amountCents,
+  });
+}
+
+// Drain pending transfers for a profile whose Connect account just became
+// payout-ready. Called from handleAccountUpdated. Errors per-row are recorded
+// in last_error; failures do not abort other rows.
+async function processPendingTransfersForProfile(
+  admin: AdminClient,
+  profileId: string,
+  stripeAccountId: string
+): Promise<void> {
+  const { data: rows } = await admin
+    .from("pending_transfers")
+    .select("id, recipient_kind, invoice_id, amount_cents, attempts")
+    .eq("recipient_id", profileId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+
+  if (!rows || rows.length === 0) return;
+
+  const { transferAffiliateShare, transferResellerShare } = await import("./transfers");
+
+  for (const row of rows) {
+    try {
+      const result =
+        row.recipient_kind === "affiliate"
+          ? await transferAffiliateShare({
+              invoiceId: row.invoice_id,
+              affiliateShareCents: row.amount_cents,
+              affiliateId: profileId,
+              stripeAccountId,
+            })
+          : await transferResellerShare({
+              invoiceId: row.invoice_id,
+              resellerShareCents: row.amount_cents,
+              resellerId: profileId,
+              stripeAccountId,
+            });
+      await admin
+        .from("pending_transfers")
+        .update({
+          status: "completed",
+          transfer_id: result.transferId,
+          processed_at: new Date().toISOString(),
+          attempts: (row.attempts ?? 0) + 1,
+          last_error: null,
+        })
+        .eq("id", row.id);
+      logMoneyFlow({
+        action: "transfer.deferred.completed",
+        entity_id: profileId,
+        invoice_id: row.invoice_id,
+        amount_cents: row.amount_cents,
+        transfer_id: result.transferId,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await admin
+        .from("pending_transfers")
+        .update({ attempts: (row.attempts ?? 0) + 1, last_error: msg })
+        .eq("id", row.id);
+    }
+  }
+}
+
 export async function handleCheckoutSessionCompleted(
   session: Stripe.Checkout.Session,
   admin: AdminClient
@@ -508,6 +614,17 @@ export async function handleInvoicePaid(
           amount_cents: split.resellerShareCents,
           transfer_id: resellerTransferId,
         });
+      } else {
+        // Connect not payout-ready: queue and retry from handleAccountUpdated.
+        await enqueuePendingTransfer(admin, {
+          recipientId: resellerId,
+          recipientKind: "reseller",
+          invoiceId,
+          amountCents: split.resellerShareCents,
+          reason: resellerProfile?.stripe_account_id
+            ? "capability_disabled"
+            : "no_stripe_account",
+        });
       }
     }
   } else if (affiliateIdForTransfer && affiliateCommissionSnapshotBps !== null) {
@@ -562,6 +679,17 @@ export async function handleInvoicePaid(
         invoice_id: invoiceId,
         amount_cents: affiliateShareCents,
         transfer_id: affiliateTransferId,
+      });
+    } else if (split.affiliateShareCents > 0) {
+      // Connect not payout-ready: queue and retry from handleAccountUpdated.
+      await enqueuePendingTransfer(admin, {
+        recipientId: affiliateIdForTransfer,
+        recipientKind: "affiliate",
+        invoiceId,
+        amountCents: split.affiliateShareCents,
+        reason: affiliateProfile?.stripe_account_id
+          ? "capability_disabled"
+          : "no_stripe_account",
       });
     }
 
@@ -917,7 +1045,7 @@ export async function handleAccountUpdated(
 ): Promise<void> {
   const { data: existing } = await admin
     .from("profiles")
-    .select("charges_enabled")
+    .select("id, charges_enabled, payouts_enabled")
     .eq("stripe_account_id", account.id)
     .maybeSingle();
 
@@ -940,6 +1068,17 @@ export async function handleAccountUpdated(
         },
       },
     });
+  }
+
+  // Drain any transfers that were deferred while Connect wasn't payout-ready.
+  // Affiliate transfers require charges_enabled; reseller transfers require payouts_enabled
+  // (see invoice.paid branches). Trigger on the transition from off→on for either.
+  if (
+    existing?.id &&
+    ((account.charges_enabled && !existing.charges_enabled) ||
+      (account.payouts_enabled && !existing.payouts_enabled))
+  ) {
+    await processPendingTransfersForProfile(admin, existing.id, account.id);
   }
 }
 
