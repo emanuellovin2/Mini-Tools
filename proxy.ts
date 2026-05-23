@@ -4,7 +4,7 @@ import type { Database } from "@/types/supabase";
 import { ROLE_DASHBOARDS, type UserRole } from "@/lib/auth/roles";
 
 // Paths accessible without authentication
-const PUBLIC_PATHS = ["/login", "/signup", "/api/auth", "/api/webhooks", "/api/verify", "/.well-known", "/marketplace", "/app", "/r"];
+const PUBLIC_PATHS = ["/login", "/signup", "/api/auth", "/api/webhooks", "/api/verify", "/.well-known", "/marketplace", "/app", "/r", "/affiliates"];
 const AUTH_ONLY_PUBLIC = ["/login", "/signup"];
 
 // Capture ?aff=<code> on any public page visit and set an HTTP-only attribution cookie.

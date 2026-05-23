@@ -41,7 +41,7 @@ lib/
     vendor.ts        # vendor-scoped data access
     buyer.ts         # getBuyerSubscriptions() — joins subscriptions + apps for the dashboard
     admin.ts         # getPlatformStats, getPendingApps, getVendors, getAllSubscriptions, getAuditLog, getChurnAlerts, dispatchChurnAlerts
-    affiliate.ts     # createAffiliateLink, getAffiliateLinks, validateAffiliateCode, getAffiliateStats, recordAttribution
+    affiliate.ts     # createAffiliateLink, getAffiliateLinks, validateAffiliateCode, getAffiliateStats, recordAttribution; getLeaderboard, getAffiliatePublicProfile, getEarnedBadges, getBadgeProgress, updateAffiliateProfile, computeEarnedBadgeIds (pure)
     reseller.ts      # createOffer, getOffers, getStorefrontOffer, upsertResellerSubscription, pauseOffersOnLapse, getResellerDashboard
     reconciliation.ts  # runReconciliation(), getReconciliationRuns() — Stripe↔DB drift detection
     supabase.ts      # Supabase admin client (service role)
@@ -69,7 +69,7 @@ lib/
     magic-bytes.ts   # file type detection by magic bytes (upload validation)
     rate-limit.ts    # simple in-memory rate limiter for API routes
 app/
-  vendor/            # vendor dashboard pages + actions (incl. min_price_cents toggle per app)
+  vendor/            # vendor dashboard pages + actions (incl. min_price_cents toggle, analytics: MRR, churn, cohort, LTV)
   marketplace/       # public browse pages
   api/
     webhooks/        # Stripe webhook endpoint (raw body, signature-verified, structured logging)
@@ -84,16 +84,22 @@ app/
       connect/       # GET /api/reseller/connect — redirect to Stripe Connect Express onboarding
     well-known/      # JWKS endpoint
   buyer/
-    page.tsx             # buyer dashboard: subscription list, Launch, cancel-at-period-end
-    actions.ts           # cancelSubscriptionAction (Server Action)
+    page.tsx             # buyer dashboard: subscription list, Launch, cancel-at-period-end, pause
+    actions.ts           # cancelSubscriptionAction, pauseSubscriptionAction (Server Actions)
     _components/
       CancelButton.tsx   # client component — confirm dialog + useTransition
+      PauseButton.tsx    # pause/resume toggle — Stripe pause_collection + paused_until
   affiliate/
-    page.tsx             # affiliate dashboard: Connect onboarding, generate links, aggregate stats (no buyer PII)
+    page.tsx             # affiliate dashboard: Connect onboarding, generate links, aggregate stats, rank, badge progress (no buyer PII)
     actions.ts           # createAffiliateLinkAction (Server Action)
     _components/
       GenerateLinkForm.tsx
       LinksList.tsx
+  affiliates/            # public-facing (no auth required)
+    top/
+      page.tsx           # public leaderboard — top 50 affiliates by active/lifetime MRR (rounded)
+    [slug]/
+      page.tsx           # public affiliate profile — badges, rounded stats, top apps, no PII
   reseller/
     setup/
       page.tsx         # slug entry + Start $19/mo subscription CTA
@@ -126,7 +132,17 @@ supabase/
     daily-reconciliation-cron/ # Edge Function: 0 2 * * * — Stripe↔DB checks + Resend digest
 types/
   supabase.ts        # auto-generated from `npm run types` — never hand-edit
+scripts/
+  set-weekly-payouts.ts   # one-shot: configure weekly Friday payout schedule on all connected accounts
 ```
+
+## Affiliate data model (as of #25)
+- `profiles.affiliate_active_mrr_cents` — current active MRR (drives commission tier + leaderboard rank). Set by `increment_affiliate_mrr` RPC on `invoice.paid`; decremented on refund.
+- `profiles.affiliate_lifetime_mrr_cents` — monotonic cumulative MRR (drives lifetime badges). Decremented on refund to keep badges honest.
+- `profiles.slug` — shared between affiliates and resellers; UNIQUE globally. NULL = opted out of public profile (affiliate hides from `/affiliates/top` and their `/affiliates/<slug>` returns 404).
+- `affiliate_badges` — static lookup table; badges are **derived** via `affiliate_earned_badges(p_affiliate_id)` RPC, not stored per-affiliate.
+- `affiliate_leaderboard` — public view; excludes profiles where `slug IS NULL` or `affiliate_lifetime_mrr_cents = 0`.
+- Public MRR display must be **rounded** (to nearest $100 or banded) — exact figures let competitors back-calculate subscriber counts.
 
 ## How to work in this repo
 - Build one numbered prompt at a time. Do not jump ahead.
@@ -204,7 +220,7 @@ Wave 4 — affiliate redesign + refund policy (sequential: #18 → #19):
 Wave 5 — sticky features (parallel-able within wave):
 - [x] #23 Subscription pause (`paused_until`, Stripe `pause_collection`)
 - [x] #24 Vendor analytics (MRR, churn, cohort, LTV)
-- [ ] #25 Affiliate leaderboard + badges + public profiles
+- [x] #25 Affiliate leaderboard + badges + public profiles
 
 Wave 6 — docs:
 - [ ] #21 Final docs sync (SPEC.md §3/§4/§8/§11, CLAUDE.md, BUILD_PROMPTS.md)

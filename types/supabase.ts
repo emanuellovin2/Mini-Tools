@@ -76,6 +76,36 @@ export type Database = {
           },
         ]
       }
+      affiliate_badges: {
+        Row: {
+          description: string
+          display_name: string
+          icon_emoji: string | null
+          id: string
+          sort_order: number
+          threshold_kind: string
+          threshold_value: number
+        }
+        Insert: {
+          description: string
+          display_name: string
+          icon_emoji?: string | null
+          id: string
+          sort_order: number
+          threshold_kind: string
+          threshold_value: number
+        }
+        Update: {
+          description?: string
+          display_name?: string
+          icon_emoji?: string | null
+          id?: string
+          sort_order?: number
+          threshold_kind?: string
+          threshold_value?: number
+        }
+        Relationships: []
+      }
       affiliate_links: {
         Row: {
           affiliate_id: string
@@ -219,6 +249,9 @@ export type Database = {
       profiles: {
         Row: {
           affiliate_active_mrr_cents: number
+          affiliate_avatar_url: string | null
+          affiliate_bio: string | null
+          affiliate_lifetime_mrr_cents: number
           charges_enabled: boolean
           created_at: string
           display_name: string | null
@@ -232,6 +265,9 @@ export type Database = {
         }
         Insert: {
           affiliate_active_mrr_cents?: number
+          affiliate_avatar_url?: string | null
+          affiliate_bio?: string | null
+          affiliate_lifetime_mrr_cents?: number
           charges_enabled?: boolean
           created_at?: string
           display_name?: string | null
@@ -245,6 +281,9 @@ export type Database = {
         }
         Update: {
           affiliate_active_mrr_cents?: number
+          affiliate_avatar_url?: string | null
+          affiliate_bio?: string | null
+          affiliate_lifetime_mrr_cents?: number
           charges_enabled?: boolean
           created_at?: string
           display_name?: string | null
@@ -610,9 +649,38 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      affiliate_leaderboard: {
+        Row: {
+          id: string
+          slug: string
+          display_name: string | null
+          affiliate_avatar_url: string | null
+          affiliate_active_mrr_cents: number
+          affiliate_lifetime_mrr_cents: number
+          tenure_days: number
+          active_rank: number
+          lifetime_rank: number
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      affiliate_earned_badges: {
+        Args: { p_affiliate_id: string }
+        Returns: {
+          id: string
+          display_name: string
+          description: string
+          threshold_kind: string
+          threshold_value: number
+          icon_emoji: string | null
+          sort_order: number
+        }[]
+      }
+      increment_affiliate_lifetime_mrr: {
+        Args: { p_affiliate_id: string; p_amount_cents: number }
+        Returns: undefined
+      }
       vendor_cohort_retention: {
         Args: { p_vendor_id: string }
         Returns: {

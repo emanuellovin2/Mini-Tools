@@ -564,6 +564,12 @@ export async function handleInvoicePaid(
         transfer_id: affiliateTransferId,
       });
     }
+
+    // Increment lifetime MRR (monotonic; decremented on refund via handleChargeRefunded).
+    await admin.rpc("increment_affiliate_lifetime_mrr", {
+      p_affiliate_id: affiliateIdForTransfer,
+      p_amount_cents: netAmountCents,
+    });
   } else {
     // ── Direct sale: tier-based vendor share ─────────────────────────────────
     cutBps = await getVendorCutBps(app.vendor_id);
@@ -783,6 +789,31 @@ export async function handleChargeRefunded(
   // when a charge has multiple partial refunds.
   const refundAmountCents = (charge.refunds as { data?: Array<{ amount: number }> } | null)
     ?.data?.[0]?.amount ?? charge.amount_refunded;
+
+  // Decrement affiliate lifetime MRR to keep the badge counter honest (build prompt #25 caution).
+  try {
+    const stripeInvoice = await stripe.invoices.retrieve(invoiceId);
+    const invoiceParent = stripeInvoice.parent as Stripe.Invoice.Parent | null;
+    const stripeSubId =
+      invoiceParent?.type === "subscription_details"
+        ? (invoiceParent.subscription_details?.subscription as string | null)
+        : null;
+    if (stripeSubId) {
+      const { data: subForAffiliate } = await admin
+        .from("subscriptions")
+        .select("affiliate_id")
+        .eq("stripe_subscription_id", stripeSubId)
+        .maybeSingle();
+      if (subForAffiliate?.affiliate_id) {
+        await admin.rpc("increment_affiliate_lifetime_mrr", {
+          p_affiliate_id: subForAffiliate.affiliate_id,
+          p_amount_cents: -refundAmountCents,
+        });
+      }
+    }
+  } catch {
+    // MRR decrement failure must not break the refund handler
+  }
 
   // Look up vendor context from the invoice.paid revenue event (already recorded).
   // If not found (edge: refund arrived before invoice.paid was processed), skip the event.
