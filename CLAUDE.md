@@ -223,12 +223,12 @@ Wave 5 — sticky features (parallel-able within wave):
 - [x] #25 Affiliate leaderboard + badges + public profiles
 
 Wave 6 — docs:
-- [ ] #21 Final docs sync (SPEC.md §3/§4/§8/§11, CLAUDE.md, BUILD_PROMPTS.md)
+- [x] #21 Final docs sync (SPEC.md §3/§4/§8/§11, CLAUDE.md, BUILD_PROMPTS.md)
 
 ## Guardrails
 - Never expose buyer email, name, or card data to vendors, resellers, or affiliates — the anonymous token model (SPEC §6) and the `vendor_subscription_stats` / `reseller_sale_stats` / `affiliate_stats` boundaries (SPEC §7) are non-negotiable. None of these roles gets a read path to `subscriptions.buyer_id`.
 - A user can never change their own `role` (privilege-escalation guard, RLS — SPEC §8).
-- All money moves through Stripe Connect via **Separate Charges & Transfers** (SPEC §11); the platform never holds funds manually. Refunds/disputes must reverse **all** transfers tied to that invoice (vendor + affiliate, or vendor + reseller).
+- All money moves through Stripe Connect via **Separate Charges & Transfers** (SPEC §11); the platform never holds funds manually. **Voluntary refunds** (`charge.refunded`) reverse the vendor transfer only — platform and affiliate/reseller keep their cuts. **Disputes** (`charge.dispute.closed` outcome=lost) reverse ALL transfers for that invoice (vendor + affiliate or vendor + reseller).
 - A `subscriptions` row may have AT MOST ONE of `affiliate_id` / `reseller_id` set (CHECK constraint). Reseller-sold takes priority — if both a `?aff=` cookie and a reseller-offer checkout collide, clear the affiliate cookie and record only the reseller attribution.
 - Reseller-sold revenue does NOT count toward `vendor_billing.gross_revenue_cents` (vendor's tier is computed only from direct + affiliate sales; the vendor receives their fixed `min_price` floor on reseller sales, not a percentage).
 - The reseller's $19/mo Stripe subscription is on the **platform account** (not Connect). Lapse → existing reseller commissions continue, but **new** offers and **new** sales are blocked (`reseller_offers.status` is forced to `paused`).
