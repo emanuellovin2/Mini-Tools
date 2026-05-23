@@ -9,6 +9,19 @@
 import { Resend } from "resend";
 import { logEmail } from "@/lib/logger";
 
+// Escape user-controlled strings before interpolating into the HTML body.
+// Vendor-set fields (app names, etc.) reach buyers via these templates; without
+// escaping, a vendor could inject markup into receipts and dunning notices.
+function escapeHtml(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "";
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 let _client: Resend | null = null;
 
 function getResend(): Resend | null {
@@ -66,15 +79,19 @@ export async function sendSubscriptionReceipt(opts: {
     currency: currency.toUpperCase(),
   }).format(opts.amountCents / 100);
 
+  const appName = escapeHtml(opts.appName);
+  const invoiceId = escapeHtml(opts.invoiceId);
+  const formattedAmount = escapeHtml(formatted);
+
   return safeSend("subscription_receipt", (resend) =>
     resend.emails.send({
       from: fromAddress(),
       to: opts.buyerEmail,
       subject: `Receipt — ${opts.appName} subscription`,
       html: `
-        <p>Thanks for subscribing to <strong>${opts.appName}</strong>.</p>
-        <p>Payment of <strong>${formatted}</strong> received.</p>
-        <p style="color:#888;font-size:12px">Invoice ID: ${opts.invoiceId}</p>
+        <p>Thanks for subscribing to <strong>${appName}</strong>.</p>
+        <p>Payment of <strong>${formattedAmount}</strong> received.</p>
+        <p style="color:#888;font-size:12px">Invoice ID: ${invoiceId}</p>
       `,
     })
   );
@@ -92,14 +109,17 @@ export async function sendPaymentFailedNotice(opts: {
     currency: currency.toUpperCase(),
   }).format(opts.amountDueCents / 100);
 
+  const appName = escapeHtml(opts.appName);
+  const formattedAmount = escapeHtml(formatted);
+
   return safeSend("payment_failed", (resend) =>
     resend.emails.send({
       from: fromAddress(),
       to: opts.buyerEmail,
       subject: `Action required — payment failed for ${opts.appName}`,
       html: `
-        <p>We couldn't process your payment of <strong>${formatted}</strong> for
-        <strong>${opts.appName}</strong>.</p>
+        <p>We couldn't process your payment of <strong>${formattedAmount}</strong> for
+        <strong>${appName}</strong>.</p>
         <p>Please update your payment method to keep access to the app.</p>
         <p>Your access has been suspended until the payment is resolved.</p>
       `,
@@ -127,6 +147,8 @@ export async function sendChurnAlert(opts: {
 
   const ratePercent = (opts.rateBps / 100).toFixed(1);
   const vendorLabel = opts.vendorName ?? opts.vendorId;
+  const vendorLabelSafe = escapeHtml(vendorLabel);
+  const monthSafe = escapeHtml(opts.month);
 
   return safeSend("churn_alert", (resend) =>
     resend.emails.send({
@@ -134,11 +156,11 @@ export async function sendChurnAlert(opts: {
       to,
       subject: `[PLATFORM] Churn alert — ${vendorLabel} (${ratePercent}% in ${opts.month})`,
       html: `
-        <p>Vendor <strong>${vendorLabel}</strong> exceeded the churn threshold in
-        <strong>${opts.month}</strong>.</p>
+        <p>Vendor <strong>${vendorLabelSafe}</strong> exceeded the churn threshold in
+        <strong>${monthSafe}</strong>.</p>
         <ul>
-          <li>Cancellations: ${opts.canceled}</li>
-          <li>Active at period start: ${opts.activeAtStart}</li>
+          <li>Cancellations: ${escapeHtml(opts.canceled)}</li>
+          <li>Active at period start: ${escapeHtml(opts.activeAtStart)}</li>
           <li>Cancellation rate: ${ratePercent}%</li>
         </ul>
         <p>Review the admin dashboard for details.</p>
@@ -166,7 +188,9 @@ export async function sendReconciliationDigest(opts: {
     .slice(0, 20) // cap HTML size
     .map(
       (d) =>
-        `<li><strong>${d.type}</strong> — ${d.message}${d.stripe_id ? ` (${d.stripe_id})` : ""}</li>`
+        `<li><strong>${escapeHtml(d.type)}</strong> — ${escapeHtml(d.message)}${
+          d.stripe_id ? ` (${escapeHtml(d.stripe_id)})` : ""
+        }</li>`
     )
     .join("\n");
 
@@ -180,6 +204,11 @@ export async function sendReconciliationDigest(opts: {
       ? `[PLATFORM] Reconciliation OK — ${opts.runAt.slice(0, 10)}`
       : `[PLATFORM] Reconciliation drift — ${opts.driftCount} item(s) — ${opts.runAt.slice(0, 10)}`;
 
+  const runAtSafe = escapeHtml(opts.runAt);
+  const dashboardUrl = encodeURI(
+    `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/admin/reconciliation`
+  );
+
   return safeSend("reconciliation_digest", (resend) =>
     resend.emails.send({
       from: fromAddress(),
@@ -187,13 +216,13 @@ export async function sendReconciliationDigest(opts: {
       subject,
       html:
         opts.driftCount === 0
-          ? `<p>Daily reconciliation run at ${opts.runAt} found no drift. ✅</p>`
+          ? `<p>Daily reconciliation run at ${runAtSafe} found no drift. ✅</p>`
           : `
-        <p>Daily reconciliation run at <strong>${opts.runAt}</strong> found
+        <p>Daily reconciliation run at <strong>${runAtSafe}</strong> found
         <strong>${opts.driftCount}</strong> drift item(s).</p>
         <ul>${itemRows}</ul>
         ${overflowNote}
-        <p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? ""}/admin/reconciliation">
+        <p><a href="${dashboardUrl}">
           View reconciliation dashboard →</a></p>
       `,
     })

@@ -101,17 +101,24 @@ export async function transferAffiliateShare({
 }
 
 // ── Reseller money split (SPEC §4b, §11) ────────────────────────────────────
-// buyer pays sell_price; vendor gets fixed floor; platform takes 5% of markup; reseller keeps 95% of markup.
-// Integer-safe. Throws if sell_price < vendor floor (invalid offer).
+// `availableCents` is the amount actually distributable (net of Stripe fees at webhook time,
+// or gross sell-price at modelling time — same math). Vendor always gets their full floor;
+// platform takes 5% of the remaining markup; reseller keeps the other 95%.
+//
+// Offer validity (sell_price >= vendor_floor) is enforced at offer creation in
+// services/reseller.ts. At webhook time, however, Stripe processing fees can push the
+// distributable net below the gross floor — when that happens, the vendor still receives
+// their full floor and the platform absorbs the deficit (markup share = 0 for both
+// platform and reseller). Stripe Connect settles transfers against the platform's
+// global balance, so a single thin charge is covered by accumulated balance.
 export function computeResellerSplit(
-  amountCents: number,
+  availableCents: number,
   vendorFloorCents: number
 ): { vendorShareCents: number; platformFeeCents: number; resellerShareCents: number } {
-  const markup = amountCents - vendorFloorCents;
-  if (markup < 0)
-    throw new Error(
-      `computeResellerSplit: sell_price below vendor floor (amount=${amountCents}, floor=${vendorFloorCents})`
-    );
+  const markup = availableCents - vendorFloorCents;
+  if (markup <= 0) {
+    return { vendorShareCents: vendorFloorCents, platformFeeCents: 0, resellerShareCents: 0 };
+  }
   const platformFeeCents = Math.floor((markup * 500) / 10_000);
   const resellerShareCents = markup - platformFeeCents;
   return { vendorShareCents: vendorFloorCents, platformFeeCents, resellerShareCents };

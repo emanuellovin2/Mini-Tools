@@ -39,8 +39,29 @@ describe("computeResellerSplit — reseller money math (SPEC §4b, #16: 5% of ma
     expect(resellerShareCents).toBe(0);
   });
 
-  it("throws when sell_price < vendor floor", () => {
-    expect(() => computeResellerSplit(4000, 5000)).toThrow();
+  it("clamps gracefully when available < floor (Stripe fees ate margin)", () => {
+    // At webhook time, net (after Stripe fees) can dip below the gross floor.
+    // Vendor still gets full floor; platform absorbs the deficit; reseller/platform share = 0.
+    const { vendorShareCents, platformFeeCents, resellerShareCents } =
+      computeResellerSplit(4000, 5000);
+    expect(vendorShareCents).toBe(5000);
+    expect(platformFeeCents).toBe(0);
+    expect(resellerShareCents).toBe(0);
+  });
+
+  it("thin markup with Stripe fee: vendor full floor, smaller reseller share, platform proportional", () => {
+    // sell $10 (1000¢), floor $9.50 (950¢), Stripe fee ~59¢ → net ≈ 941¢
+    // markup on net = 941 - 950 = -9 → clamp; vendor still gets 950, others 0
+    const split1 = computeResellerSplit(941, 950);
+    expect(split1).toEqual({ vendorShareCents: 950, platformFeeCents: 0, resellerShareCents: 0 });
+
+    // sell $15, floor $10, fee ~74¢ → net = 1426
+    // markup on net = 426 → platform = floor(426*500/10000) = 21, reseller = 405
+    const split2 = computeResellerSplit(1426, 1000);
+    expect(split2.vendorShareCents).toBe(1000);
+    expect(split2.platformFeeCents).toBe(21);
+    expect(split2.resellerShareCents).toBe(405);
+    expect(split2.vendorShareCents + split2.platformFeeCents + split2.resellerShareCents).toBe(1426);
   });
 
   it("platform fee uses floor() — integer-safe", () => {

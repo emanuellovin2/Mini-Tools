@@ -3,8 +3,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/supabase";
 import { ROLE_DASHBOARDS, type UserRole } from "@/lib/auth/roles";
 
-// Paths accessible without authentication
-const PUBLIC_PATHS = ["/login", "/signup", "/api/auth", "/api/webhooks", "/api/verify", "/.well-known", "/marketplace", "/app", "/r", "/affiliates"];
+// Paths accessible without authentication.
+// Note: each prefix is matched with `startsWith`, so a bare "/r" would also match
+// "/reseller" (the reseller dashboard) and silently bypass auth. Storefront URLs are
+// always /r/<reseller-slug>/<offer-slug> so the trailing slash form is exact enough.
+const PUBLIC_PATHS = ["/login", "/signup", "/api/auth", "/api/webhooks", "/api/verify", "/.well-known", "/marketplace", "/app", "/r/", "/affiliates"];
 const AUTH_ONLY_PUBLIC = ["/login", "/signup"];
 
 // Capture ?aff=<code> on any public page visit and set an HTTP-only attribution cookie.
