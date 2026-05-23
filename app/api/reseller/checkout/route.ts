@@ -40,7 +40,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     .from("reseller_offers")
     .select(
       `id, reseller_id, app_id, slug, sell_price_cents, vendor_floor_snapshot_cents, stripe_price_id, status,
-       apps (id, name, auth_url, vendor_id)`
+       apps (id, name, auth_url, vendor_id),
+       reseller:profiles!reseller_offers_reseller_id_fkey (slug)`
     )
     .eq("id", offer_id)
     .eq("status", "active")
@@ -48,6 +49,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   if (!offer) {
     return NextResponse.json({ error: "Offer not found or not active" }, { status: 404 });
+  }
+
+  const resellerProfile = offer.reseller as { slug: string | null } | null;
+  const resellerSlug = resellerProfile?.slug;
+  if (!resellerSlug) {
+    return NextResponse.json({ error: "Reseller has no public slug" }, { status: 500 });
   }
 
   // Self-resell guard: buyer cannot be the reseller.
@@ -87,7 +94,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     customer: customerId,
     line_items: [{ price: offer.stripe_price_id, quantity: 1 }],
     success_url: `${appUrl}/buyer?subscribed=1`,
-    cancel_url: `${appUrl}/r/${encodeURIComponent(offer.reseller_id)}/${encodeURIComponent(offer.slug)}`,
+    cancel_url: `${appUrl}/r/${encodeURIComponent(resellerSlug)}/${encodeURIComponent(offer.slug)}`,
     metadata: {
       buyer_id: user.id,
       app_id: apps.id,

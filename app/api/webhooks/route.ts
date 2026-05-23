@@ -78,26 +78,62 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient();
 
-  // Idempotency gate — skip already-processed events
-  const { data: existing } = await admin
+  // Atomic claim: only the invocation that successfully INSERTs the row owns processing.
+  // Two simultaneous Stripe retries can both pass a "select first, then upsert" check
+  // before either commits — Postgres serializes the inserts via the PK, so only one wins.
+  const nowIso = new Date().toISOString();
+  const insertRes = await admin
     .from("webhook_events")
-    .select("status")
-    .eq("id", event.id)
+    .insert({
+      id: event.id,
+      type: event.type,
+      payload: event.data.object as unknown as Json,
+      status: "received",
+      received_at: nowIso,
+    })
+    .select("id")
     .maybeSingle();
 
-  if (existing?.status === "processed") {
-    logWebhookEvent({ event_id: event.id, event_type: event.type, outcome: "skipped", latency_ms: 0 });
-    return NextResponse.json({ ok: true });
-  }
+  const claimed = !!insertRes.data && !insertRes.error;
 
-  // Record the event before processing so Stripe retries find it
-  await admin.from("webhook_events").upsert({
-    id: event.id,
-    type: event.type,
-    payload: event.data.object as unknown as Json,
-    status: "received",
-    received_at: new Date().toISOString(),
-  });
+  if (!claimed) {
+    // Row already exists. Decide based on current state.
+    const { data: existing } = await admin
+      .from("webhook_events")
+      .select("status, received_at")
+      .eq("id", event.id)
+      .maybeSingle();
+
+    if (existing?.status === "processed") {
+      logWebhookEvent({ event_id: event.id, event_type: event.type, outcome: "skipped", latency_ms: 0 });
+      return NextResponse.json({ ok: true });
+    }
+
+    // "received" — another worker is processing this event. Don't double-fire handlers
+    // (their side effects, especially RPCs without per-event idempotency, will diverge).
+    // If the holding worker crashed mid-flight, the `received_at` will be old; reclaim then.
+    const STALE_MS = 2 * 60 * 1000;
+    const ageMs = existing?.received_at
+      ? Date.now() - new Date(existing.received_at).getTime()
+      : Number.POSITIVE_INFINITY;
+
+    if (existing?.status === "received" && ageMs < STALE_MS) {
+      logWebhookEvent({
+        event_id: event.id,
+        event_type: event.type,
+        outcome: "skipped",
+        latency_ms: 0,
+        error: "in_progress",
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    // status === "failed" or stale "received": reclaim and reprocess.
+    await admin
+      .from("webhook_events")
+      .update({ status: "received", received_at: nowIso, error: null })
+      .eq("id", event.id);
+  }
 
   const startMs = Date.now();
 

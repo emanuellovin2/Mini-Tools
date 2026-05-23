@@ -28,7 +28,9 @@ const serverEnvSchema = z.object({
   STRIPE_SECRET_KEY: z.string().min(1),
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().min(1),
   // Required from #6 — use `stripe listen --print-secret` in dev
-  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().min(1),
+  // Required from #14 — Stripe Price id for the reseller's $19/mo platform subscription
+  STRIPE_RESELLER_PLAN_PRICE_ID: z.string().min(1),
 });
 
 export type Env = z.infer<typeof serverEnvSchema>;

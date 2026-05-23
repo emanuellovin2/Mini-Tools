@@ -790,7 +790,20 @@ export async function handleChargeRefunded(
   const refundAmountCents = (charge.refunds as { data?: Array<{ amount: number }> } | null)
     ?.data?.[0]?.amount ?? charge.amount_refunded;
 
+  // Look up vendor context from the invoice.paid revenue event (already recorded).
+  // If not found (edge: refund arrived before invoice.paid was processed), skip the event.
+  // We also pull the original gross+net so we can decrement affiliate lifetime MRR
+  // proportionally to what was originally credited (it was credited in NET cents).
+  const { data: revenueRow } = await admin
+    .from("vendor_revenue_events")
+    .select("vendor_id, is_reseller_sale, amount_cents, net_amount_cents")
+    .eq("stripe_invoice_id", invoiceId)
+    .gt("amount_cents", 0)
+    .maybeSingle();
+
   // Decrement affiliate lifetime MRR to keep the badge counter honest (build prompt #25 caution).
+  // Credit at invoice.paid was net_amount_cents; here we proportionally subtract using
+  // (refundAmount / originalGross) * originalNet so partial refunds stay balanced.
   try {
     const stripeInvoice = await stripe.invoices.retrieve(invoiceId);
     const invoiceParent = stripeInvoice.parent as Stripe.Invoice.Parent | null;
@@ -805,9 +818,15 @@ export async function handleChargeRefunded(
         .eq("stripe_subscription_id", stripeSubId)
         .maybeSingle();
       if (subForAffiliate?.affiliate_id) {
+        let mrrDelta = refundAmountCents;
+        if (revenueRow && revenueRow.amount_cents > 0) {
+          mrrDelta = Math.floor(
+            (refundAmountCents * revenueRow.net_amount_cents) / revenueRow.amount_cents
+          );
+        }
         await admin.rpc("increment_affiliate_lifetime_mrr", {
           p_affiliate_id: subForAffiliate.affiliate_id,
-          p_amount_cents: -refundAmountCents,
+          p_amount_cents: -mrrDelta,
         });
       }
     }
@@ -815,21 +834,19 @@ export async function handleChargeRefunded(
     // MRR decrement failure must not break the refund handler
   }
 
-  // Look up vendor context from the invoice.paid revenue event (already recorded).
-  // If not found (edge: refund arrived before invoice.paid was processed), skip the event.
-  const { data: revenueRow } = await admin
-    .from("vendor_revenue_events")
-    .select("vendor_id, is_reseller_sale")
-    .eq("stripe_invoice_id", invoiceId)
-    .gt("amount_cents", 0)
-    .maybeSingle();
-
   if (revenueRow) {
+    // Mirror the proportional net-back-out used for affiliate MRR so monthly tier
+    // computation (which sums net_amount_cents) stays consistent across refunds.
+    const proportionalNetCents =
+      revenueRow.amount_cents > 0
+        ? Math.floor((refundAmountCents * revenueRow.net_amount_cents) / revenueRow.amount_cents)
+        : refundAmountCents;
+
     await admin.from("vendor_revenue_events").upsert(
       {
         vendor_id: revenueRow.vendor_id,
         amount_cents: -refundAmountCents,
-        net_amount_cents: -refundAmountCents, // refund events: no fee adjustment available
+        net_amount_cents: -proportionalNetCents,
         is_reseller_sale: revenueRow.is_reseller_sale,
         stripe_invoice_id: invoiceId,
         stripe_charge_id: charge.id,
