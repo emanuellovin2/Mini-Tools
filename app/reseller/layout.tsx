@@ -5,6 +5,7 @@ import { DashboardShell } from "@/components/layout/DashboardShell";
 
 const RESELLER_NAV = [
   { label: "Dashboard", href: "/reseller" },
+  { label: "Discover", href: "/reseller?tab=discover" },
   { label: "Offers", href: "/reseller/offers" },
   { label: "Brand", href: "/reseller/brand" },
   { label: "Setup", href: "/reseller/setup" },

@@ -667,3 +667,418 @@ export async function getResellableApps(resellerId: string) {
   if (error) throw new Error(error.message);
   return data ?? [];
 }
+
+// Catalog view — adds openness, screenshot, projected earnings, existing-offer flag
+export type ResellableAppCatalogItem = {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  price_cents: number;
+  min_price_cents: number;
+  logo_url: string | null;
+  screenshot_urls: string[];
+  vendor_display_name: string | null;
+  reseller_openness: "open_to_resellers" | "open_to_wl";
+  has_offer: boolean;
+  existing_offer_id: string | null;
+};
+
+export async function getResellableAppsCatalog(
+  resellerId: string
+): Promise<ResellableAppCatalogItem[]> {
+  const admin = createAdminClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: apps, error } = await (admin as any)
+    .from("apps")
+    .select(
+      `id, name, description, category, price_cents, min_price_cents, logo_url, screenshot_urls,
+       profiles!apps_vendor_id_fkey (display_name, reseller_openness)`
+    )
+    .eq("status", "approved")
+    .not("min_price_cents", "is", null)
+    .neq("vendor_id", resellerId)
+    .neq("profiles.reseller_openness", "closed") as {
+    data: Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      category: string | null;
+      price_cents: number;
+      min_price_cents: number;
+      logo_url: string | null;
+      screenshot_urls: string[];
+      profiles: { display_name: string | null; reseller_openness: string } | null;
+    }> | null;
+    error: { message: string } | null;
+  };
+
+  if (error) throw new Error(error.message);
+
+  // Load existing offers so we can mark already-offered apps
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: myOffers } = await (admin as any)
+    .from("reseller_offers")
+    .select("id, app_id")
+    .eq("reseller_id", resellerId) as { data: Array<{ id: string; app_id: string }> | null };
+
+  const offerByAppId = new Map((myOffers ?? []).map((o) => [o.app_id, o.id]));
+
+  return (apps ?? [])
+    .filter((a) => a.profiles?.reseller_openness !== "closed")
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      description: a.description,
+      category: a.category,
+      price_cents: a.price_cents,
+      min_price_cents: a.min_price_cents,
+      logo_url: a.logo_url,
+      screenshot_urls: a.screenshot_urls ?? [],
+      vendor_display_name: a.profiles?.display_name ?? null,
+      reseller_openness: (a.profiles?.reseller_openness ?? "open_to_resellers") as
+        | "open_to_resellers"
+        | "open_to_wl",
+      has_offer: offerByAppId.has(a.id),
+      existing_offer_id: offerByAppId.get(a.id) ?? null,
+    }));
+}
+
+// Per-offer analytics: funnel, cohort, refunds, MRR
+export type OfferAnalytics = {
+  offer_id: string;
+  total_subs: number;
+  active_subs: number;
+  churned_subs: number;
+  paused_subs: number;
+  mrr_cents: number;
+  churn_rate_pct: number;
+  refund_count: number;
+  refund_amount_cents: number;
+};
+
+export async function getOfferAnalytics(
+  resellerId: string,
+  offerId: string
+): Promise<OfferAnalytics> {
+  const admin = createAdminClient();
+
+  // Verify ownership (also serves as RLS guard at service layer)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: offerCheck } = await (admin as any)
+    .from("reseller_offers")
+    .select("id")
+    .eq("id", offerId)
+    .eq("reseller_id", resellerId)
+    .maybeSingle() as { data: { id: string } | null };
+
+  if (!offerCheck) {
+    return {
+      offer_id: offerId,
+      total_subs: 0,
+      active_subs: 0,
+      churned_subs: 0,
+      paused_subs: 0,
+      mrr_cents: 0,
+      churn_rate_pct: 0,
+      refund_count: 0,
+      refund_amount_cents: 0,
+    };
+  }
+
+  const { data: subs } = await admin
+    .from("subscriptions")
+    .select("id, status, price_cents, vendor_floor_snapshot_cents")
+    .eq("reseller_offer_id", offerId);
+
+  const rows = subs ?? [];
+  const active = rows.filter((s) => s.status === "active" || s.status === "trialing");
+  const churned = rows.filter((s) => s.status === "canceled");
+  const paused = rows.filter((s) => s.status === "paused");
+  const mrr = active.reduce((sum, s) => sum + s.price_cents, 0);
+  const churnRate = rows.length > 0 ? (churned.length / rows.length) * 100 : 0;
+
+  // Refunds: negative revenue events on subscriptions for this offer
+  const subIds = rows.map((s) => s.id);
+  let refundCount = 0;
+  let refundAmountCents = 0;
+  if (subIds.length > 0) {
+    const { data: refundEvents } = await admin
+      .from("vendor_revenue_events")
+      .select("amount_cents")
+      .in("subscription_id", subIds)
+      .lt("amount_cents", 0);
+    refundCount = (refundEvents ?? []).length;
+    refundAmountCents = (refundEvents ?? []).reduce(
+      (sum, e) => sum + Math.abs(e.amount_cents),
+      0
+    );
+  }
+
+  return {
+    offer_id: offerId,
+    total_subs: rows.length,
+    active_subs: active.length,
+    churned_subs: churned.length,
+    paused_subs: paused.length,
+    mrr_cents: mrr,
+    churn_rate_pct: Math.round(churnRate * 10) / 10,
+    refund_count: refundCount,
+    refund_amount_cents: refundAmountCents,
+  };
+}
+
+// Vendor change alerts for a reseller's offers
+export type ResellerAlert = {
+  offer_id: string;
+  offer_slug: string;
+  app_name: string;
+  kind: "floor_change" | "app_paused" | "openness_downgrade";
+  detail: string;
+};
+
+export async function getResellerAlerts(resellerId: string): Promise<ResellerAlert[]> {
+  const admin = createAdminClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: offers } = await (admin as any)
+    .from("reseller_offers")
+    .select(
+      `id, slug, sell_price_cents, vendor_floor_snapshot_cents,
+       last_observed_floor_cents, last_observed_openness,
+       apps!inner (id, name, status, min_price_cents,
+         profiles!apps_vendor_id_fkey (reseller_openness))`
+    )
+    .eq("reseller_id", resellerId)
+    .in("status", ["active", "draft"]) as {
+    data: Array<{
+      id: string;
+      slug: string;
+      sell_price_cents: number;
+      vendor_floor_snapshot_cents: number;
+      last_observed_floor_cents: number | null;
+      last_observed_openness: string | null;
+      apps: {
+        id: string;
+        name: string;
+        status: string;
+        min_price_cents: number | null;
+        profiles: { reseller_openness: string } | null;
+      } | null;
+    }> | null;
+  };
+
+  const alerts: ResellerAlert[] = [];
+
+  for (const o of offers ?? []) {
+    const app = o.apps;
+    if (!app) continue;
+
+    const currentFloor = app.min_price_cents ?? 0;
+    const lastFloor = o.last_observed_floor_cents ?? o.vendor_floor_snapshot_cents;
+    const currentOpenness = app.profiles?.reseller_openness ?? "open_to_resellers";
+    const lastOpenness = o.last_observed_openness ?? "open_to_resellers";
+
+    if (app.status !== "approved") {
+      alerts.push({
+        offer_id: o.id,
+        offer_slug: o.slug,
+        app_name: app.name,
+        kind: "app_paused",
+        detail: `Vendor paused or archived this app. Your offer has been auto-paused.`,
+      });
+    } else if (currentFloor > lastFloor) {
+      const oldUsd = (lastFloor / 100).toFixed(2);
+      const newUsd = (currentFloor / 100).toFixed(2);
+      const yourPrice = (o.sell_price_cents / 100).toFixed(2);
+      const oldMargin = ((o.sell_price_cents - lastFloor) / 100).toFixed(2);
+      const newMargin = ((o.sell_price_cents - currentFloor) / 100).toFixed(2);
+      alerts.push({
+        offer_id: o.id,
+        offer_slug: o.slug,
+        app_name: app.name,
+        kind: "floor_change",
+        detail: `Floor raised $${oldUsd}→$${newUsd}. Your offer at $${yourPrice}/mo still valid; margin reduced from $${oldMargin} to $${newMargin}.`,
+      });
+    } else if (
+      lastOpenness === "open_to_wl" &&
+      currentOpenness === "open_to_resellers"
+    ) {
+      alerts.push({
+        offer_id: o.id,
+        offer_slug: o.slug,
+        app_name: app.name,
+        kind: "openness_downgrade",
+        detail: `Vendor withdrew WL Tier 2. Existing Tier 2 subscriptions continue; new WL upgrades are blocked.`,
+      });
+    } else if (currentOpenness === "closed" && lastOpenness !== "closed") {
+      alerts.push({
+        offer_id: o.id,
+        offer_slug: o.slug,
+        app_name: app.name,
+        kind: "openness_downgrade",
+        detail: `Vendor closed reselling. Existing subscriptions continue; new sales are blocked.`,
+      });
+    }
+  }
+
+  return alerts;
+}
+
+// Markup simulator — pure computation, no DB write
+export type MarkupSimResult = {
+  sell_price_cents: number;
+  vendor_floor_cents: number;
+  reseller_share_cents: number;
+  platform_cut_cents: number;
+  vendor_share_cents: number;
+  monthly_reseller_share_cents: number;
+};
+
+export async function markupSimulate(
+  offerId: string,
+  resellerId: string,
+  newPriceCents: number
+): Promise<MarkupSimResult> {
+  const { computeResellerSplit } = await import("@/lib/stripe/transfers");
+  const admin = createAdminClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: offer } = await (admin as any)
+    .from("reseller_offers")
+    .select(
+      `vendor_floor_snapshot_cents, wl_tier,
+       apps!inner (profiles!apps_vendor_id_fkey (reseller_openness))`
+    )
+    .eq("id", offerId)
+    .eq("reseller_id", resellerId)
+    .maybeSingle() as {
+    data: {
+      vendor_floor_snapshot_cents: number;
+      wl_tier: number;
+      apps: { profiles: { reseller_openness: string } | null } | null;
+    } | null;
+  };
+
+  if (!offer) throw new Error("Offer not found");
+
+  const openness = (offer.apps?.profiles?.reseller_openness ?? "open_to_resellers") as
+    | "open_to_resellers"
+    | "open_to_wl";
+  const wlTier = (offer.wl_tier === 2 ? 2 : 1) as 1 | 2;
+  const floor = offer.vendor_floor_snapshot_cents;
+
+  if (newPriceCents < floor) {
+    return {
+      sell_price_cents: newPriceCents,
+      vendor_floor_cents: floor,
+      reseller_share_cents: 0,
+      platform_cut_cents: 0,
+      vendor_share_cents: newPriceCents,
+      monthly_reseller_share_cents: 0,
+    };
+  }
+
+  const split = computeResellerSplit({
+    amountCents: newPriceCents,
+    vendorFloorCents: floor,
+    wlTier,
+    vendorOpenness: openness,
+  });
+
+  return {
+    sell_price_cents: newPriceCents,
+    vendor_floor_cents: floor,
+    reseller_share_cents: split.resellerShareCents,
+    platform_cut_cents: split.platformCutCents,
+    vendor_share_cents: split.vendorShareCents,
+    monthly_reseller_share_cents: split.resellerShareCents,
+  };
+}
+
+// Stripe payouts for this reseller's connected account
+export type ResellerPayout = {
+  id: string;
+  amount: number;
+  currency: string;
+  arrival_date: number;
+  status: string;
+  description: string | null;
+};
+
+export async function getResellerPayouts(resellerId: string): Promise<ResellerPayout[]> {
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("stripe_account_id")
+    .eq("id", resellerId)
+    .maybeSingle();
+
+  if (!profile?.stripe_account_id) return [];
+
+  const { getStripe } = await import("@/lib/stripe/client");
+  const stripe = getStripe();
+  try {
+    const payouts = await stripe.payouts.list(
+      { limit: 20 },
+      { stripeAccount: profile.stripe_account_id }
+    );
+    return payouts.data.map((p) => ({
+      id: p.id,
+      amount: p.amount,
+      currency: p.currency,
+      arrival_date: p.arrival_date,
+      status: p.status,
+      description: p.description ?? null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// KPI totals for the reseller dashboard strip
+export type ResellerKpis = {
+  storefront_mrr_cents: number;
+  markup_earned_cents: number;
+  active_offers: number;
+  total_buyers: number;
+};
+
+export async function getResellerKpis(resellerId: string): Promise<ResellerKpis> {
+  const admin = createAdminClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: offerIds } = await (admin as any)
+    .from("reseller_offers")
+    .select("id, status")
+    .eq("reseller_id", resellerId) as { data: Array<{ id: string; status: string }> | null };
+
+  const activeOffers = (offerIds ?? []).filter((o) => o.status === "active").length;
+  const allOfferIds = (offerIds ?? []).map((o) => o.id);
+
+  if (allOfferIds.length === 0) {
+    return { storefront_mrr_cents: 0, markup_earned_cents: 0, active_offers: 0, total_buyers: 0 };
+  }
+
+  const { data: subs } = await admin
+    .from("subscriptions")
+    .select("id, status, price_cents, vendor_floor_snapshot_cents")
+    .in("reseller_offer_id", allOfferIds);
+
+  const activeSubs = (subs ?? []).filter(
+    (s) => s.status === "active" || s.status === "trialing"
+  );
+  const mrrCents = activeSubs.reduce((sum, s) => sum + s.price_cents, 0);
+  const markupEarned = activeSubs.reduce(
+    (sum, s) => sum + (s.price_cents - (s.vendor_floor_snapshot_cents ?? 0)),
+    0
+  );
+
+  return {
+    storefront_mrr_cents: mrrCents,
+    markup_earned_cents: markupEarned,
+    active_offers: activeOffers,
+    total_buyers: activeSubs.length,
+  };
+}

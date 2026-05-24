@@ -197,3 +197,34 @@ export async function updateOfferStatusAction(
   revalidatePath("/reseller/offers");
   return { success: true };
 }
+
+// Markup simulator — Server Action called from client slider
+export async function markupSimulateAction(
+  offerId: string,
+  newPriceCents: number
+): Promise<import("@/lib/services/reseller").MarkupSimResult> {
+  const { user, authed } = await requireReseller();
+  if (!authed) {
+    return {
+      sell_price_cents: newPriceCents,
+      vendor_floor_cents: 0,
+      reseller_share_cents: 0,
+      platform_cut_cents: 0,
+      vendor_share_cents: newPriceCents,
+      monthly_reseller_share_cents: 0,
+    };
+  }
+  const { markupSimulate } = await import("@/lib/services/reseller");
+  try {
+    return await markupSimulate(offerId, user!.id, newPriceCents);
+  } catch {
+    return {
+      sell_price_cents: newPriceCents,
+      vendor_floor_cents: 0,
+      reseller_share_cents: 0,
+      platform_cut_cents: 0,
+      vendor_share_cents: newPriceCents,
+      monthly_reseller_share_cents: 0,
+    };
+  }
+}
