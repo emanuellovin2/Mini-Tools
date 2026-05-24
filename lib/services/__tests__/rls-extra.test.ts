@@ -195,11 +195,14 @@ describeMaybe("RLS: role escalation guard — comprehensive", () => {
   });
 
   it("vendor cannot set charges_enabled on themselves", async () => {
-    const vendorA = await signIn("vendor-a@test.com", "password123");
-    const { error } = await vendorA
+    // vendor-b starts with charges_enabled=false per seed.sql; flipping to true must be rejected
+    // by the profiles_update_own WITH CHECK clause that freezes capability columns.
+    // (vendor-a is already true in seed, so an UPDATE to true would be a no-op and slip past.)
+    const vendorB = await signIn("vendor-b@test.com", "password123");
+    const { error } = await vendorB
       .from("profiles")
       .update({ charges_enabled: true })
-      .eq("id", IDs.VENDOR_A);
+      .eq("id", IDs.VENDOR_B);
     expect(error).not.toBeNull();
   });
 

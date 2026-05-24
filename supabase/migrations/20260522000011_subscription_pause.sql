@@ -8,6 +8,9 @@ ALTER TABLE subscriptions
 
 -- Rebuild vendor_subscription_stats to derive 'paused' from paused_until.
 -- Stripe keeps status='active' while pause_collection is set; we override via paused_until.
+-- DROP first because the return-type's `status` column changes from enum to text;
+-- CREATE OR REPLACE can't change OUT-parameter types (Postgres 42P13).
+DROP FUNCTION IF EXISTS public.vendor_subscription_stats();
 CREATE OR REPLACE FUNCTION public.vendor_subscription_stats()
 RETURNS TABLE (
   app_id             uuid,
