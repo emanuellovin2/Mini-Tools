@@ -40,8 +40,8 @@ export async function listMarketplaceApps({
   const { data, error } = await admin.rpc("list_marketplace_apps", {
     p_page: page,
     p_page_size: pageSize,
-    p_category: category ?? null,
-    p_search: search ?? null,
+    p_category: category ?? undefined,
+    p_search: search ?? undefined,
   });
 
   if (error) throw new Error(`listMarketplaceApps: ${error.message}`);

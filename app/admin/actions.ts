@@ -6,6 +6,7 @@ import { createServerSupabaseClient } from "@/lib/services/supabase-server";
 import { createAdminClient } from "@/lib/services/supabase";
 import { approveAppWithStripe } from "@/lib/stripe/products";
 import { syncConnectStatus } from "@/lib/stripe/connect";
+import { setVendorCutOverride } from "@/lib/services/admin";
 import type { Json } from "@/types/supabase";
 
 const uuidParam = z.string().uuid("Invalid ID");
@@ -76,6 +77,35 @@ export async function rejectAppAction(appId: string): Promise<ActionResult> {
 
   revalidatePath("/admin");
   return { success: true };
+}
+
+const CutOverrideSchema = z.object({
+  vendorId: z.string().uuid(),
+  newBps: z.number().int().min(0).max(5000).nullable(),
+  reason: z.string().min(10).max(500),
+});
+
+export async function setVendorCutOverrideAction(
+  input: z.infer<typeof CutOverrideSchema>
+): Promise<ActionResult> {
+  const parsed = CutOverrideSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const user = await requireAdmin();
+  if (!user) return { error: "Forbidden" };
+
+  try {
+    await setVendorCutOverride({
+      adminId: user.id,
+      vendorId: parsed.data.vendorId,
+      newBps: parsed.data.newBps,
+      reason: parsed.data.reason,
+    });
+    revalidatePath("/admin");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unknown error" };
+  }
 }
 
 export async function syncVendorStripeAction(

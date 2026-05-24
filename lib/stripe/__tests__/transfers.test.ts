@@ -36,14 +36,33 @@ function buildSelectQuery(result: unknown) {
 }
 
 describe("getVendorCutBps", () => {
-  it("returns cut_bps from vendor_billing when row exists", async () => {
-    mockAdminFrom.mockReturnValue(buildSelectQuery({ data: { cut_bps: 1000 }, error: null }));
-    expect(await getVendorCutBps("v1")).toBe(1000);
+  it("returns override when set — ignores vendor_billing entirely", async () => {
+    // First call → profiles (returns override 0); second call would be vendor_billing (never reached)
+    mockAdminFrom
+      .mockReturnValueOnce(buildSelectQuery({ data: { vendor_cut_bps_override: 0 }, error: null }));
+    expect(await getVendorCutBps("v1")).toBe(0);
+    // vendor_billing was never queried
+    expect(mockAdminFrom).toHaveBeenCalledTimes(1);
   });
 
-  it("defaults to 1200 (Tier 1) when no billing row exists — SPEC §8", async () => {
-    mockAdminFrom.mockReturnValue(buildSelectQuery({ data: null, error: null }));
+  it("returns cut_bps from vendor_billing when override is null", async () => {
+    mockAdminFrom
+      .mockReturnValueOnce(buildSelectQuery({ data: { vendor_cut_bps_override: null }, error: null }))
+      .mockReturnValueOnce(buildSelectQuery({ data: { cut_bps: 800 }, error: null }));
+    expect(await getVendorCutBps("v1")).toBe(800);
+  });
+
+  it("defaults to 1200 (Tier 1) when override is null and no billing row exists — SPEC §8", async () => {
+    mockAdminFrom
+      .mockReturnValueOnce(buildSelectQuery({ data: { vendor_cut_bps_override: null }, error: null }))
+      .mockReturnValueOnce(buildSelectQuery({ data: null, error: null }));
     expect(await getVendorCutBps("v1")).toBe(1200);
+  });
+
+  it("0% override works — vendor gets 100% on next transfer", async () => {
+    mockAdminFrom
+      .mockReturnValueOnce(buildSelectQuery({ data: { vendor_cut_bps_override: 0 }, error: null }));
+    expect(await getVendorCutBps("v1")).toBe(0);
   });
 });
 
@@ -92,6 +111,14 @@ describe("transferVendorShare — split math", () => {
     });
     expect(vendorShareCents).toBe(1759);
     expect(Number.isInteger(vendorShareCents)).toBe(true);
+  });
+
+  it("0% override (cutBps=0): vendor gets 100% of amount", async () => {
+    const { vendorShareCents } = await transferVendorShare({
+      invoiceId: "inv_override", amountCents: 10000, vendorId: "v1",
+      stripeAccountId: "acct_1", cutBps: 0,
+    });
+    expect(vendorShareCents).toBe(10000);
   });
 
   it("uses idempotency key that encodes invoice_id + vendor_id", async () => {

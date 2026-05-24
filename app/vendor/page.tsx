@@ -14,6 +14,7 @@ import {
   type VendorApp,
   type VendorSubscriptionStat,
 } from "@/lib/services/vendor";
+import { getVendorCutBps } from "@/lib/stripe/transfers";
 import AppForm from "./_components/AppForm";
 import AffiliateCommissionForm from "./_components/AffiliateCommissionForm";
 import ProfileForm from "./_components/ProfileForm";
@@ -133,7 +134,7 @@ export default async function VendorDashboard({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, display_name, stripe_account_id, charges_enabled, payouts_enabled")
+    .select("role, display_name, stripe_account_id, charges_enabled, payouts_enabled, vendor_cut_bps_override")
     .eq("id", user.id)
     .single();
 
@@ -142,13 +143,14 @@ export default async function VendorDashboard({
   const { app: selectedAppId } = await searchParams;
   const appFilter = selectedAppId || undefined;
 
-  const [apps, stats, mrr, waterfall, cohort, ltv] = await Promise.all([
+  const [apps, stats, mrr, waterfall, cohort, ltv, effectiveCutBps] = await Promise.all([
     getVendorApps(user.id),
     getVendorStats(),
     getVendorMRR(user.id, appFilter),
     getVendorMRRWaterfall(user.id, 6, appFilter),
     getVendorCohortRetention(user.id),
     getVendorLTV(user.id),
+    getVendorCutBps(user.id),
   ]);
 
   // Trailing 3-month average churn for the ChurnRateCard
@@ -185,6 +187,27 @@ export default async function VendorDashboard({
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <h2 className="font-semibold mb-4">Profile</h2>
               <ProfileForm currentDisplayName={profile.display_name ?? ""} />
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+              <h2 className="font-semibold mb-3">Platform Cut</h2>
+              {profile.vendor_cut_bps_override != null ? (
+                <div>
+                  <span className="inline-block text-xs px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200 font-medium">
+                    Custom rate {(effectiveCutBps / 100).toFixed(2)}% (set by admin)
+                  </span>
+                  <p className="text-xs text-gray-400 mt-1">
+                    This overrides the standard tier pricing.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600">
+                  {effectiveCutBps <= 300 ? "Tier 4" :
+                   effectiveCutBps <= 500 ? "Tier 3" :
+                   effectiveCutBps <= 800 ? "Tier 2" : "Tier 1"}{" "}
+                  — {(effectiveCutBps / 100).toFixed(2)}%
+                </p>
+              )}
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-200 p-6">

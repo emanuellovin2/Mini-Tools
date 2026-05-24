@@ -40,7 +40,7 @@ lib/
     apps.ts          # app CRUD + listing queries
     vendor.ts        # vendor-scoped data access
     buyer.ts         # getBuyerSubscriptions() — joins subscriptions + apps for the dashboard
-    admin.ts         # getPlatformStats, getPendingApps, getVendors, getAllSubscriptions, getAuditLog, getChurnAlerts, dispatchChurnAlerts
+    admin.ts         # getPlatformStats, getPendingApps, getVendors, getAllSubscriptions, getAuditLog, getChurnAlerts, dispatchChurnAlerts, getVendorsWithCutInfo, setVendorCutOverride
     affiliate.ts     # createAffiliateLink, getAffiliateLinks, validateAffiliateCode, getAffiliateStats, recordAttribution; getLeaderboard, getAffiliatePublicProfile, getEarnedBadges, getBadgeProgress, updateAffiliateProfile, computeEarnedBadgeIds (pure)
     reseller.ts      # createOffer, getOffers, getStorefrontOffer, upsertResellerSubscription, pauseOffersOnLapse, getResellerDashboard
     reconciliation.ts  # runReconciliation(), getReconciliationRuns() — Stripe↔DB drift detection
@@ -225,6 +225,11 @@ Wave 5 — sticky features (parallel-able within wave):
 Wave 6 — docs:
 - [x] #21 Final docs sync (SPEC.md §3/§4/§8/§11, CLAUDE.md, BUILD_PROMPTS.md)
 
+**Phase 4 — Wave 7** (sequential: #27 → #28 → #29):
+- [x] #27 Manual per-vendor commission override (admin-set bps, audit log, vendor trigger guard)
+- [ ] #28 Security hardening v2 (CSP, audit log helper, rate limiting)
+- [ ] #29 White-label Tier 2 (vendor toggle, reseller subdomain storefront, per-offer WL branding)
+
 ## Guardrails
 - Never expose buyer email, name, or card data to vendors, resellers, or affiliates — the anonymous token model (SPEC §6) and the `vendor_subscription_stats` / `reseller_sale_stats` / `affiliate_stats` boundaries (SPEC §7) are non-negotiable. None of these roles gets a read path to `subscriptions.buyer_id`.
 - A user can never change their own `role` (privilege-escalation guard, RLS — SPEC §8).
@@ -232,6 +237,7 @@ Wave 6 — docs:
 - A `subscriptions` row may have AT MOST ONE of `affiliate_id` / `reseller_id` set (CHECK constraint). Reseller-sold takes priority — if both a `?aff=` cookie and a reseller-offer checkout collide, clear the affiliate cookie and record only the reseller attribution.
 - Reseller-sold revenue does NOT count toward `vendor_billing.gross_revenue_cents` (vendor's tier is computed only from direct + affiliate sales; the vendor receives their fixed `min_price` floor on reseller sales, not a percentage).
 - The reseller's $19/mo Stripe subscription is on the **platform account** (not Connect). Lapse → existing reseller commissions continue, but **new** offers and **new** sales are blocked (`reseller_offers.status` is forced to `paused`).
+- Vendor cut precedence: `profiles.vendor_cut_bps_override` (admin-set, audited, 0–5000 bps) → `vendor_billing.cut_bps` (auto-tier) → 1200 default. Vendors cannot self-set the override — the `guard_vendor_cut_override` DB trigger blocks it.
 - Entitlement is the DB reconciled from Stripe webhooks — never grant access off a client redirect.
 - Use Stripe test mode (+ Stripe CLI for webhooks) until the full flow is verified end to end.
 - Webhook handlers and any path that writes to ≥2 tables (subscribe, refund, cron) MUST run inside a single DB transaction (Supabase RPC or explicit `BEGIN/COMMIT`) — half-written state is the #1 source of subtle billing bugs.

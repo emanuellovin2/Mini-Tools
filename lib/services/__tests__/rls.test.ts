@@ -178,6 +178,26 @@ describeMaybe("Seed data integrity", () => {
     expect(data![1].status).toBe("active");
   });
 
+  it("vendor cannot set vendor_cut_bps_override on their own profile via REST", async () => {
+    const vendorA = await signIn("vendor-a@test.com", "password123");
+    const { error } = await vendorA
+      .from("profiles")
+      .update({ vendor_cut_bps_override: 0 })
+      .eq("id", IDs.VENDOR_A);
+    // Trigger should reject the update with an exception
+    expect(error).not.toBeNull();
+    expect(error!.message).toMatch(/vendor_cut_bps_override can only be modified by admin/i);
+  });
+
+  it("vendor cannot set vendor_cut_bps_override on another vendor's profile", async () => {
+    const vendorA = await signIn("vendor-a@test.com", "password123");
+    const { error } = await vendorA
+      .from("profiles")
+      .update({ vendor_cut_bps_override: 0 })
+      .eq("id", IDs.VENDOR_B);
+    expect(error).not.toBeNull();
+  });
+
   it("vendor_b app is approved but does not appear in public listing (charges_enabled=false)", async () => {
     const admin = adminClient();
     const { data } = await admin

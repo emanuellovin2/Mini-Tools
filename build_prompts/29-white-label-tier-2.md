@@ -10,7 +10,7 @@
 ## Context
 
 Today reseller sales work as follows ([SPEC §4b](SPEC.md), [lib/stripe/transfers.ts → computeResellerSplit](lib/stripe/transfers.ts)):
-- Reseller pays $19/mo flat (platform Stripe subscription on platform account, NOT Connect)
+- **Reseller pays $9.99/mo flat base subscription** (platform Stripe subscription on platform account, NOT Connect) — lowered from the previous $19/mo to reduce entry friction. 30-day free trial unchanged (#22).
 - On reseller invoice: vendor gets exact `vendor_floor_snapshot_cents`, platform takes 5% of markup, reseller keeps the rest
 - Storefront is `/r/<reseller-slug>/<offer-slug>` (path-based, full platform branding)
 - [SPEC.md:140](SPEC.md:140) says **"No white-label / rebranding."** — this task reverses that decision.
@@ -392,7 +392,7 @@ export async function upgradeOfferToWLTier2(args: {
   brandColor: string;
   displayName: string;
 }): Promise<void> {
-  // 1. Validate: reseller owns offer; their $19/mo base sub is active|trialing
+  // 1. Validate: reseller owns offer; their $9.99/mo base sub is active|trialing
   // 2. Validate brand inputs:
   //    - color matches /^#[0-9a-fA-F]{6}$/
   //    - displayName passes deny-list check (see step 6 below)
@@ -407,7 +407,7 @@ export async function upgradeOfferToWLTier2(args: {
   //      metadata: { reseller_id, offer_id, kind: 'wl_tier2' },
   //      payment_behavior: 'default_incomplete',
   //    }
-  //    Reseller already has card on file from $19 base sub — no checkout needed
+  //    Reseller already has card on file from $9.99 base sub — no checkout needed
   // 5. Build public logo URL from logoFileKey (Supabase public bucket)
   // 6. UPDATE reseller_offers SET
   //      wl_tier = 2,
@@ -574,7 +574,9 @@ Webhook handler ([lib/stripe/webhook-handlers.ts](lib/stripe/webhook-handlers.ts
 
 ### 11. Existing reseller-offer gating — extend the base-sub check
 
-Currently ([SPEC §8](SPEC.md)) publishing a `reseller_offer` to `active` requires the reseller's $19 base sub to be `active|trialing`. Extend: a Tier 2 offer ALSO requires its OWN `wl_status` to be `trialing` or `active`. If the WL subscription lapses (`past_due`), the offer remains visible (don't break customer experience) but is flagged in the reseller's dashboard with a Fix-billing CTA.
+Currently ([SPEC §8](SPEC.md)) publishing a `reseller_offer` to `active` requires the reseller's $9.99 base sub to be `active|trialing` (price reduced from $19 in this prompt). Extend: a Tier 2 offer ALSO requires its OWN `wl_status` to be `trialing` or `active`. If the WL subscription lapses (`past_due`), the offer remains visible (don't break customer experience) but is flagged in the reseller's dashboard with a Fix-billing CTA.
+
+**Existing reseller subscriptions on the old $19 price are grandfathered.** Do NOT modify their Stripe subscriptions. The migration sets a new `STRIPE_RESELLER_PLAN_PRICE_ID` to point to the $9.99 price for new signups only. Old resellers continue at $19/mo until they cancel; new resellers see $9.99. Document the price migration in CHANGELOG and in the reseller dashboard ("Existing plan grandfathered at $19/mo; new signups at $9.99/mo. Contact support to switch."). This is the cleanest path — re-pricing live subs is messy and triggers user complaints.
 
 ---
 
@@ -597,7 +599,7 @@ npm test -- --run lib/stripe/__tests__/reseller.test.ts
 ### End-to-end Tier 2 happy path
 
 1. Vendor X (default `open_to_resellers`) toggles to `open_to_wl` → confirmation modal → save → audit log written
-2. Reseller A signs up, completes $19/mo base (with 30-day trial from #22) + Connect onboarding
+2. Reseller A signs up, completes $9.99/mo base (with 30-day trial from #22) + Connect onboarding
 3. Reseller A creates offer for Vendor X's app: floor $20, sell $50
 4. Reseller A clicks "Upgrade to WL" → uploads `acme-logo.png` (real PNG, <1MB) + picks `#FF6B00` + display name "AcmeApps"
 5. Deny-list check passes ("AcmeApps" not in list)

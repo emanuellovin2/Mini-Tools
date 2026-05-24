@@ -10,10 +10,12 @@ import {
   getAuditLog,
   getChurnAlerts,
   dispatchChurnAlerts,
+  getVendorsWithCutInfo,
 } from "@/lib/services/admin";
 import { formatPrice } from "@/lib/services/apps";
 import ApproveRejectButtons from "./_components/ApproveRejectButtons";
 import SyncStripeButton from "./_components/SyncStripeButton";
+import VendorCutOverrideTable from "./_components/VendorCutOverride";
 
 export const metadata: Metadata = {
   title: "Admin — [PLATFORM]",
@@ -82,11 +84,12 @@ export default async function AdminDashboard({ searchParams }: Props) {
     process.env.CHURN_ALERT_THRESHOLD_BPS ?? "2000"
   );
 
-  const [stats, pendingApps, vendors, { subscriptions, total: subTotal, totalPages: subTotalPages }, { entries: auditEntries, total: auditTotal, totalPages: auditTotalPages }, churnAlerts] =
+  const [stats, pendingApps, vendors, vendorCutInfo, { subscriptions, total: subTotal, totalPages: subTotalPages }, { entries: auditEntries, total: auditTotal, totalPages: auditTotalPages }, churnAlerts] =
     await Promise.all([
       getPlatformStats(),
       getPendingApps(),
       getVendors(),
+      getVendorsWithCutInfo(),
       getAllSubscriptions({ page: subPage }),
       getAuditLog({
         actorId: auditActorId,
@@ -327,6 +330,14 @@ export default async function AdminDashboard({ searchParams }: Props) {
             </tbody>
           </table>
         </div>
+      </section>
+
+      {/* Vendor commission overrides */}
+      <section>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+          Vendor Commission Overrides
+        </h2>
+        <VendorCutOverrideTable vendors={vendorCutInfo} />
       </section>
 
       {/* Subscriptions */}

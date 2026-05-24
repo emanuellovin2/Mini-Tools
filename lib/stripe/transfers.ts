@@ -27,9 +27,24 @@ export function getAffiliateCommissionBps(affiliateActiveMrrCents: number): numb
 }
 
 // Returns the active cut_bps for a vendor.
-// Defaults to Tier 1 (1200 bps = 12%) when no vendor_billing row exists — SPEC §8.
+// Precedence: (1) profiles.vendor_cut_bps_override (admin-set, audited)
+//             (2) latest vendor_billing.cut_bps ≤ today (auto-tier)
+//             (3) 1200 default (Tier 1) — SPEC §8
 export async function getVendorCutBps(vendorId: string): Promise<number> {
   const admin = createAdminClient();
+
+  // 1. Admin override takes precedence — bypasses tier entirely
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("vendor_cut_bps_override")
+    .eq("id", vendorId)
+    .maybeSingle();
+
+  if (profile?.vendor_cut_bps_override != null) {
+    return profile.vendor_cut_bps_override;
+  }
+
+  // 2. Auto-tier from latest vendor_billing row
   const today = new Date().toISOString().slice(0, 10);
   const { data } = await admin
     .from("vendor_billing")
@@ -39,6 +54,8 @@ export async function getVendorCutBps(vendorId: string): Promise<number> {
     .order("period_start", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  // 3. Default — Tier 1
   return data?.cut_bps ?? 1_200;
 }
 

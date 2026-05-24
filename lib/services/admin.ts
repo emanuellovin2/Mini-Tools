@@ -360,6 +360,65 @@ export async function getChurnAlerts(
   return alerts;
 }
 
+// ---------------------------------------------------------------------------
+// Vendor cut override (admin-only)
+// ---------------------------------------------------------------------------
+
+export type VendorCutInfo = {
+  vendor_id: string;
+  display_name: string | null;
+  cut_bps_override: number | null;
+  auto_tier_cut_bps: number;
+  effective_cut_bps: number;
+};
+
+export async function getVendorsWithCutInfo(): Promise<VendorCutInfo[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("admin_get_vendors_cut_info");
+  if (error) throw new Error(`getVendorsWithCutInfo: ${error.message}`);
+  return (data ?? []) as VendorCutInfo[];
+}
+
+export async function setVendorCutOverride({
+  adminId,
+  vendorId,
+  newBps,
+  reason,
+}: {
+  adminId: string;
+  vendorId: string;
+  newBps: number | null;
+  reason: string;
+}): Promise<void> {
+  if (reason.trim().length < 10) {
+    throw new Error("reason is required and must be ≥10 characters");
+  }
+  if (newBps !== null && (newBps < 0 || newBps > 5000)) {
+    throw new Error("newBps must be 0..5000 or null");
+  }
+
+  const admin = createAdminClient();
+
+  const { data: before } = await admin
+    .from("profiles")
+    .select("vendor_cut_bps_override, role")
+    .eq("id", vendorId)
+    .maybeSingle();
+
+  if (!before) throw new Error("vendor not found");
+  if (before.role !== "vendor") throw new Error("target user is not a vendor");
+
+  // Supabase type-gen doesn't emit nullable for RPC args — cast needed for null-able bps params.
+  const { error } = await (admin.rpc as Function)("admin_set_vendor_cut_override", {
+    p_admin_id: adminId,
+    p_vendor_id: vendorId,
+    p_new_bps: newBps,
+    p_reason: reason,
+    p_old_bps: before.vendor_cut_bps_override ?? null,
+  });
+  if (error) throw new Error(`setVendorCutOverride: ${error.message}`);
+}
+
 // Send churn alert emails for newly-flagged vendors and record in audit_log
 export async function dispatchChurnAlerts(alerts: ChurnAlert[]): Promise<void> {
   const admin = createAdminClient();
