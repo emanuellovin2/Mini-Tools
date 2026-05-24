@@ -19,7 +19,7 @@ const PARTITIONED_TABLES = [
   "audit_log",
   "jobs",
   "vendor_webhook_deliveries",
-  // Future tables added by #39/#40/#42/#46 — add here once created
+  "analytics_events",
 ];
 
 Deno.serve(async () => {

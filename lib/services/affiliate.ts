@@ -323,36 +323,19 @@ export type PromotableApp = {
   logo_url: string | null;
 };
 
-// Conversion funnel: attributed subs at each stage, optionally filtered by link code.
+// Conversion funnel: attributed subs + real top-of-funnel from analytics_events.
+// Delegates to lib/services/analytics.ts which joins rollup + subscriptions.
 export async function getAffiliateFunnel(
   affiliateId: string,
   linkCode?: string
 ): Promise<AffiliateFunnel> {
-  const admin = createAdminClient();
-  const now = new Date();
-  const t30 = new Date(now.getTime() - 30 * 86_400_000).toISOString();
-  const t90 = new Date(now.getTime() - 90 * 86_400_000).toISOString();
-
-  let query = admin
-    .from("subscriptions")
-    .select("id, status, created_at, affiliate_links!inner(code, affiliate_id)")
-    .eq("affiliate_links.affiliate_id", affiliateId);
-
-  if (linkCode) query = query.eq("affiliate_links.code", linkCode);
-
-  const { data, error } = await query;
-  if (error) throw error;
-
-  const rows = data ?? [];
-  const active = rows.filter(
-    (r) => r.status === "active" || r.status === "trialing"
-  );
-
+  const { getAffiliateFunnel: analyticsGet } = await import("@/lib/services/analytics");
+  const result = await analyticsGet(affiliateId, linkCode);
   return {
-    total_attributed: rows.length,
-    currently_active: active.length,
-    active_30d: active.filter((r) => r.created_at <= t30).length,
-    active_90d: active.filter((r) => r.created_at <= t90).length,
+    total_attributed: result.total_attributed,
+    currently_active: result.currently_active,
+    active_30d: result.active_30d,
+    active_90d: result.active_90d,
   };
 }
 

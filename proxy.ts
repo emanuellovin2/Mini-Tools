@@ -2,6 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/supabase";
 import { ROLE_DASHBOARDS, type UserRole } from "@/lib/auth/roles";
+import { visitorHash, isBot, isDnt } from "@/lib/analytics/hash";
+import { recordEvent } from "@/lib/services/analytics";
 
 // Subdomains reserved for platform use — cannot be registered as reseller slugs.
 const RESERVED_SUBDOMAINS = new Set([
@@ -38,6 +40,28 @@ async function captureAffiliateCookie(
     path: "/",
     secure: process.env.NODE_ENV === "production",
   });
+
+  // Capture affiliate click event (fire-and-forget — never block the response).
+  const ua = request.headers.get("user-agent") ?? "";
+  if (!isBot(ua)) {
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      request.headers.get("x-real-ip") ??
+      "unknown";
+    const hash = isDnt(request.headers) ? null : await visitorHash(ip, ua, request.headers);
+    recordEvent({
+      event_type: "click",
+      entity_type: "affiliate_link",
+      entity_id: affCode, // resolved to link.id at query time; affCode is the stable handle
+      visitor_hash: hash,
+      referrer: request.headers.get("referer") ?? null,
+      country:
+        request.headers.get("cf-ipcountry") ??
+        request.headers.get("x-vercel-ip-country") ??
+        null,
+    }).catch(() => void 0);
+  }
+
   return response;
 }
 

@@ -762,70 +762,18 @@ export async function getOfferAnalytics(
   resellerId: string,
   offerId: string
 ): Promise<OfferAnalytics> {
-  const admin = createAdminClient();
-
-  // Verify ownership (also serves as RLS guard at service layer)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: offerCheck } = await (admin as any)
-    .from("reseller_offers")
-    .select("id")
-    .eq("id", offerId)
-    .eq("reseller_id", resellerId)
-    .maybeSingle() as { data: { id: string } | null };
-
-  if (!offerCheck) {
-    return {
-      offer_id: offerId,
-      total_subs: 0,
-      active_subs: 0,
-      churned_subs: 0,
-      paused_subs: 0,
-      mrr_cents: 0,
-      churn_rate_pct: 0,
-      refund_count: 0,
-      refund_amount_cents: 0,
-    };
-  }
-
-  const { data: subs } = await admin
-    .from("subscriptions")
-    .select("id, status, price_cents, vendor_floor_snapshot_cents")
-    .eq("reseller_offer_id", offerId);
-
-  const rows = subs ?? [];
-  const active = rows.filter((s) => s.status === "active" || s.status === "trialing");
-  const churned = rows.filter((s) => s.status === "canceled");
-  const paused = rows.filter((s) => s.status === "paused");
-  const mrr = active.reduce((sum, s) => sum + s.price_cents, 0);
-  const churnRate = rows.length > 0 ? (churned.length / rows.length) * 100 : 0;
-
-  // Refunds: negative revenue events on subscriptions for this offer
-  const subIds = rows.map((s) => s.id);
-  let refundCount = 0;
-  let refundAmountCents = 0;
-  if (subIds.length > 0) {
-    const { data: refundEvents } = await admin
-      .from("vendor_revenue_events")
-      .select("amount_cents")
-      .in("subscription_id", subIds)
-      .lt("amount_cents", 0);
-    refundCount = (refundEvents ?? []).length;
-    refundAmountCents = (refundEvents ?? []).reduce(
-      (sum, e) => sum + Math.abs(e.amount_cents),
-      0
-    );
-  }
-
+  const { getOfferFunnel } = await import("@/lib/services/analytics");
+  const result = await getOfferFunnel(resellerId, offerId);
   return {
     offer_id: offerId,
-    total_subs: rows.length,
-    active_subs: active.length,
-    churned_subs: churned.length,
-    paused_subs: paused.length,
-    mrr_cents: mrr,
-    churn_rate_pct: Math.round(churnRate * 10) / 10,
-    refund_count: refundCount,
-    refund_amount_cents: refundAmountCents,
+    total_subs: result.total_subs,
+    active_subs: result.active_subs,
+    churned_subs: result.churned_subs,
+    paused_subs: result.paused_subs,
+    mrr_cents: result.mrr_cents,
+    churn_rate_pct: result.churn_rate_pct,
+    refund_count: result.refund_count,
+    refund_amount_cents: result.refund_amount_cents,
   };
 }
 

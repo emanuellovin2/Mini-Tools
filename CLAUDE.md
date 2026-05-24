@@ -149,12 +149,18 @@ components/
   ui/               # shadcn-style primitives: Button, Card, Input, Select, Label, Badge, Modal, Toast, Table, Skeleton
   layout/           # DashboardShell, Sidebar, Topbar, PageHeader — opt-in wrapper for dashboard pages
 next.config.ts       # security headers (CSP report-only, HSTS, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP, CORP)
-proxy.ts             # Next.js middleware: auth enforcement, role routing, ?aff= cookie capture (30d HTTP-only), subdomain rewrite (<slug>.<base> → /_wl/<slug>/)
+proxy.ts             # Next.js middleware: auth enforcement, role routing, ?aff= cookie capture (30d HTTP-only), affiliate click capture → analytics_events, subdomain rewrite (<slug>.<base> → /_wl/<slug>/)
 supabase/
   migrations/        # all schema changes — never manual dashboard edits
   functions/
     monthly-billing-cron/     # Edge Function: 0 1 1 * * — writes vendor_billing rows (excludes reseller-sold via is_reseller_sale flag)
     daily-reconciliation-cron/ # Edge Function: 0 2 * * * — Stripe↔DB checks + Resend digest
+    analytics-rollup-cron/    # Edge Function: 0 3 * * * — rolls up yesterday's analytics_events → analytics_daily (idempotent)
+lib/
+  analytics/
+    hash.ts          # visitorHash (salted daily-rotating HMAC, no raw IP), isBot, isDnt — called by proxy + /api/events
+    funnel.ts        # pure fns: buildFunnel, computeEpc, aggregateSources — tested, no DB
+    __tests__/       # funnel.test.ts, hash.test.ts (25 tests)
 types/
   supabase.ts        # auto-generated from `npm run types` — never hand-edit
 scripts/
@@ -202,6 +208,15 @@ scripts/
 - `audit_log.actor_org_id` — `writeAuditLog` MUST stamp this on every mutation going forward. Org admins read their org's rows at `/settings/organization/activity`; cross-org reads blocked by RLS.
 - **Ownership shift:** `apps`, `reseller_offers`, `affiliate_links`, `reseller_subscriptions`, `vendor_billing`, `vendor_revenue_events` gain `org_id`. `profiles.role` stays as platform role (vendor/affiliate/reseller/buyer/admin); `org_members.role` governs within-org permissions. No `owner_type` discriminator — one ownership type: `org_id`.
 - **Active-org context:** `getActiveOrg(session)` resolves the current org + caller's role; every service-layer call is scoped by it. Org switcher in the topbar (personal ↔ teams).
+
+## Analytics event capture data model (as of #46)
+- `analytics_events` — append-only, **partitioned monthly** (`PARTITION BY RANGE (created_at)`), **90d raw retention** (detached by `partition-rotation-cron`). Columns: `event_type` (`impression|view|click|signup|checkout_start|checkout_complete|launch|storefront_visit|marketplace_view`), `entity_type` (`app|offer|affiliate_link|storefront|agent|workflow|marketplace`), `entity_id`, `owner_org_id`, `affiliate_id`, `reseller_id`, `visitor_hash` (salted daily-rotating HMAC, **null when DNT/GPC**), `session_id`, `referrer`, `utm` (jsonb), `country`. **No UPDATE/DELETE** — service-role-only inserts.
+- `analytics_daily` — rollup summary (kept indefinitely). Unique per `(date, event_type, entity_type, entity_id, owner_org_id, affiliate_id, reseller_id)`. `analytics-rollup-cron` (0 3 * * *) calls `rollup_analytics_day(date)` RPC (idempotent). Dashboards read rollups; raw events used only for granular queries ≤30d.
+- **Privacy invariants:** `visitor_hash` = HMAC-SHA256(ANALYTICS_SALT_SECRET + date + ip + ua), truncated to 16 hex chars. Hash is daily-rotating — not linkable across days. DNT/Sec-GPC → `visitor_hash = null`. No buyer PII, no raw IP ever stored.
+- **Capture surface:** `POST /api/events` (batched, max 20, rate-limited 60/min/IP, bot-filtered). Server-side: affiliate `?aff=` click in `proxy.ts` → `click` event; `lib/services/analytics.ts` → `recordEvent()` for checkout events.
+- **Funnel functions:** `lib/services/analytics.ts` — `getAffiliateFunnel` (clicks→signups→checkout→subscribe + EPC + click→sale%), `getOfferFunnel` (storefront→checkout→subscribe + traffic sources), `getVendorFunnel` (impression→view→checkout→subscribe per app), `getAdminFunnel` (channel attribution). All read `analytics_daily`; pure math in `lib/analytics/funnel.ts`.
+- `lib/services/affiliate.ts:getAffiliateFunnel` and `lib/services/reseller.ts:getOfferAnalytics` **delegate** to the analytics service — same public API, enriched with top-of-funnel data.
+- `ANALYTICS_SALT_SECRET` — required env var. Add to `.env.local`. Missing → falls back to `dev-salt-not-for-production` (logged warning in production).
 
 ## How to work in this repo
 - Build one numbered prompt at a time. Do not jump ahead.
@@ -315,7 +330,7 @@ Wave 6 — docs:
 **Phase 6 — Wave 9 (Usage economy — the "4 kitchens" + foundations)** — design constraint: **BYOK + prepaid credits = zero/minimal compute cost to platform**; usage-based earnings for vendor/reseller/affiliate. **Foundation-first ordering: #47 → #48 → #46 → kitchens → #45.** #47/#48/#46 capture decisions that cannot be reconstructed retroactively — never defer.
 - [x] #47 Organizations & multi-seat (the ownership model) — `organizations`, `org_members`, personal-org bootstrap + backfill, RLS rewrite via `is_org_member` (STABLE SECURITY DEFINER + `org_members(user_id, org_id) INCLUDE (role)` index), payouts move to org, `audit_log.actor_org_id` + team activity feed — **BLOCKS #48** (pre-launch clean-break, retrofit cost explodes after launch)
 - [x] #48 Scale & resilience foundation — durable `jobs` table + tick worker, `org_quotas` + enforce, `statement_timeout` middleware, outbound webhook delivery worker, partition/retention/RLS-perf conventions in ENGINEERING.md, edge caching policy (ISR + on-demand revalidation), k6 smoke harness, Stripe 429 retry wrapper, PITR restore runbook — **BLOCKS #46/#40+** (they consume these primitives from day 1)
-- [ ] #46 Engagement & analytics event capture — append-only `analytics_events` (monthly partition, salted daily-rotating visitor hash, no PII, DNT), beacon + server capture, rollup cron via jobs queue, REAL funnels (affiliate EPC + click→sale, reseller traffic→conversion, vendor impression→install) — **capture-now, depends on #47 + #48**
+- [x] #46 Engagement & analytics event capture — append-only `analytics_events` (monthly partition, salted daily-rotating visitor hash, no PII, DNT), beacon + server capture, rollup cron via jobs queue, REAL funnels (affiliate EPC + click→sale, reseller traffic→conversion, vendor impression→install) — **capture-now, depends on #47 + #48**
 - [ ] #40 Usage metering ledger + usage-based billing (the meter) — generic `usage_events` ledger, prepaid `credit_wallets`, settlement cron, `computeUsageSplit` pure fn — **BLOCKS #41–#44**
 - [ ] #41 AI Gateway (BYOK) (the door) — encrypted `provider_keys` vault, `/api/gateway/[provider]` metered proxy, vendor agent products, spend caps — first usage revenue, zero compute cost
 - [ ] #42 Workflow / automation engine (the recipe book) — `workflows`/`workflow_versions`/`workflow_runs`/`run_steps`, triggers (manual/schedule/webhook), durable tick-driven executor, sellable templates
