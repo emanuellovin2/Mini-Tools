@@ -36,13 +36,40 @@ Vendor controls whether resellers can list their apps and at which tier. **Defau
 - Reseller pays an additional $29/mo per Tier 2 WL'd offer (separate Stripe subscription per upgrade, on the platform account)
 - 14-day free trial **per offer** (each upgrade has its own `trial_end`)
 - Platform cut on markup drops from 5% → 2.5% for Tier 2 sales
-- Reseller uploads logo (PNG/JPG/WebP only) + brand color (`#RRGGBB`) + display name → applied to:
+- Reseller uploads logo (PNG/JPG/WebP only) + brand color (`#RRGGBB`) + display name **per offer** (can override the global branding from (D)) → applied to:
   - Storefront subdomain (`<reseller-slug>.<base-host>`)
-  - Stripe Checkout (via Connect branding API)
+  - Stripe Checkout (via Connect branding API — per-account sync, last-write-wins)
   - Buyer email subject prefix + header logo
+  - "Powered by [PLATFORM]" footer hidden (small "Hosted by [PLATFORM]" legal disclosure only)
 - Buyer dashboard remains platform-branded — anti-poaching boundary preserved (SPEC §6)
 
 **Auto-approval with homoglyph deny-list.** No manual admin review. Reseller is liable per TOS for trademark infringement.
+
+### (D) Tier 1 mini-branding (global, free)
+
+Every reseller with an active base subscription can set **global** branding fields (logo + color + display name) on their profile — applied to **all** Tier 1 storefront pages on the platform path (`platforma.com/r/<slug>/<offer>`). No per-offer config, no extra cost.
+
+Tier 1 mini-branding includes:
+- Storefront header band with reseller logo + display name + brand color accent (above the platform navbar, below the buyer's view)
+- Storefront URL stays path-based on platform domain (NOT subdomain — subdomain remains exclusive Tier 2 value)
+- Stripe Checkout = **platform-branded** (no Connect sync at Tier 1 — that's $29/app Tier 2 territory because branding sync has real Stripe API + image-hosting cost)
+- Email "from" + subject + template = **platform-branded** entirely (Tier 2 unlocks email customization)
+- "Powered by [PLATFORM]" footer **stays visible** (Tier 1 distinction)
+
+When a reseller upgrades an offer to Tier 2, the per-offer branding form is **pre-filled** from global values — reseller can override per offer or accept defaults. This makes Tier 2 upgrade frictionless ("you already have your logo set; just confirm").
+
+**Validation:** global branding fields go through the same homoglyph deny-list as Tier 2 per-offer fields. Same magic-bytes check on logo upload, same color regex, same display name length limits.
+
+**Where the value separation lives:**
+
+| Surface | Tier 1 + global branding | Tier 2 per-offer |
+|---|---|---|
+| Storefront URL | `platforma.com/r/<slug>/<offer>` | `<slug>.platforma.com/<offer>` |
+| Storefront header | Logo + name (global) | Full branding (per-offer, can differ from global) |
+| "Powered by [PLATFORM]" | visible footer | hidden |
+| Stripe Checkout branding | platform | per-reseller Connect sync |
+| Email subject + header | platform | per-offer display name + logo |
+| Cost | $0 (included in base) | $29/mo per offer + 14-day trial |
 
 ### (C) Payment split — single stream + WL kickback to vendor
 
@@ -88,6 +115,28 @@ COMMENT ON COLUMN public.profiles.reseller_openness IS
 -- Index for vendors filtering by openness (e.g., reseller browsing marketplace for listable apps)
 CREATE INDEX profiles_reseller_openness_idx ON public.profiles (reseller_openness)
   WHERE role = 'vendor';
+
+-- ===========================================================
+-- (A.1) Reseller global mini-branding — applied to all Tier 1 storefront pages (free, included in base sub)
+-- ===========================================================
+ALTER TABLE public.profiles
+  ADD COLUMN wl_global_logo_url     text,
+  ADD COLUMN wl_global_brand_color  text
+    CHECK (wl_global_brand_color IS NULL OR wl_global_brand_color ~ '^#[0-9a-fA-F]{6}$'),
+  ADD COLUMN wl_global_display_name text
+    CHECK (wl_global_display_name IS NULL
+      OR (char_length(wl_global_display_name) BETWEEN 2 AND 60));
+
+COMMENT ON COLUMN public.profiles.wl_global_logo_url IS
+  'Optional reseller global logo applied to Tier 1 storefront mini-header. NULL = use platform branding. Same magic-bytes + deny-list validation as Tier 2 per-offer logos.';
+
+-- Mini-branding is "all or nothing" — either all three set or none. Prevents weird half-states.
+ALTER TABLE public.profiles
+  ADD CONSTRAINT profiles_wl_global_complete CHECK (
+    (wl_global_logo_url IS NULL AND wl_global_brand_color IS NULL AND wl_global_display_name IS NULL)
+    OR
+    (wl_global_logo_url IS NOT NULL AND wl_global_brand_color IS NOT NULL AND wl_global_display_name IS NOT NULL)
+  );
 
 -- ===========================================================
 -- (B) Reseller offer — Tier 2 fields
@@ -309,10 +358,28 @@ UI also shows a list of "Active reseller partners" — read-only display (no app
 Each offer card on `/reseller/offers` shows:
 - Tier 1 badge with "Upgrade to white-label ($29/mo, 14-day free trial)"
 - On click → modal with:
-  - Logo upload (PNG/JPG/WebP, max 1MB, magic-bytes verified)
-  - Brand color picker (`#RRGGBB`)
-  - Display name input (2-60 chars)
+  - Logo upload (PNG/JPG/WebP, max 1MB, magic-bytes verified) — **pre-filled from `profiles.wl_global_logo_url` if set**
+  - Brand color picker (`#RRGGBB`) — **pre-filled from `profiles.wl_global_brand_color`**
+  - Display name input (2-60 chars) — **pre-filled from `profiles.wl_global_display_name`**
+  - Reseller can override any field per-offer or accept defaults from global → "Use global brand" toggle in the modal
   - Auto-validation against deny-list before submit (instant client-side feedback + server-side enforcement)
+
+### 5.1. Reseller global mini-branding — `app/reseller/brand/page.tsx` + actions
+
+New page under reseller dashboard. Single form:
+- Logo upload (PNG/JPG/WebP, 1MB max)
+- Brand color picker (`#RRGGBB`)
+- Display name (2-60 chars)
+- Either ALL three set or all cleared (matches DB constraint) — UI enforces with a single "Clear branding" button
+
+Server action `setResellerGlobalBrandingAction({ logoFileKey, brandColor, displayName })`:
+- Same validation as Tier 2 upgrade (deny-list, magic-bytes, color regex)
+- Available to any reseller with active|trialing base subscription — no Tier 2 required
+- Updates all 3 profile columns atomically; audit log entry via `writeAuditLog` from #28: action=`reseller_global_branding_updated`
+
+A `clearResellerGlobalBrandingAction()` sets all 3 to NULL (storefronts revert to platform branding instantly).
+
+**No backfill to Tier 2 offers:** updating global branding does NOT mutate already-upgraded `reseller_offers.wl_logo_url` etc. The reseller chose those per-offer at upgrade time; they're immutable inputs (only the reseller can edit per-offer branding via a separate "Edit Tier 2 branding" action). This avoids accidentally re-branding a live Tier 2 offer when reseller updates their global logo.
 
 Server action `upgradeOfferToWLTier2Action({ offerId, logoFileKey, brandColor, displayName })`:
 
@@ -461,7 +528,7 @@ export async function middleware(req: NextRequest) {
 
 Add `app/_wl/[reseller-slug]/page.tsx` (root of subdomain → list of that reseller's Tier 2 offers) and `app/_wl/[reseller-slug]/[offer-slug]/page.tsx` (specific offer storefront):
 
-- Look up offer by `(reseller.slug, offer.slug)` AND `wl_tier=2` AND `wl_status IN ('trialing','active')` AND reseller's $19 base sub is `active|trialing` AND vendor of app has `reseller_openness='open_to_wl'`
+- Look up offer by `(reseller.slug, offer.slug)` AND `wl_tier=2` AND `wl_status IN ('trialing','active')` AND reseller's base sub is `active|trialing` AND vendor of app has `reseller_openness='open_to_wl'`
 - If ANY condition fails, return `notFound()` from `next/navigation` — don't leak whether slug exists
 - Render with branding from `wl_logo_url` / `wl_brand_color` / `wl_display_name`
 - `<title>` = display_name (no platform name)
@@ -469,6 +536,15 @@ Add `app/_wl/[reseller-slug]/page.tsx` (root of subdomain → list of that resel
 - Footer: small "Hosted by [PLATFORM]" (legal disclosure that the merchant of record is the platform; required for consumer protection without revealing the platform brand prominently)
 
 **Buyer dashboard** (`/buyer`): if accessed via subdomain `<slug>.<base-host>/buyer`, redirect to canonical `<base-host>/buyer` (anti-poaching — buyer dashboard is NEVER WL-branded).
+
+**Tier 1 storefront with global mini-branding** (`app/r/[reseller-slug]/[offer-slug]/page.tsx` — path-based, existing route):
+- Look up offer with normal Tier 1 rules
+- If reseller has `wl_global_*` fields set (all three non-null), render a thin header band at the top of the storefront: reseller logo (left) + display name + the brand color as accent border/CTA color
+- The platform navbar remains visible above the mini-header (Tier 1 distinction — buyer sees they're on the platform)
+- "Powered by [PLATFORM]" footer remains visible
+- Stripe Checkout = platform-branded (no Connect sync at Tier 1)
+- Email = platform-branded entirely (no subject prefix change)
+- `<title>` = `<offer name> — <reseller display_name>` if global branding set, else `<offer name> — [PLATFORM]`
 
 ### 9. Tier 2 email branding — `lib/email/resend.ts`
 
@@ -550,16 +626,19 @@ npm test -- --run lib/stripe/__tests__/reseller.test.ts
 ### Adversarial / RLS
 
 1. Reseller A tries to set own `wl_status='active'` directly via REST → blocked (no UPDATE policy)
-2. Reseller A uploads SVG as logo → rejected by magic-bytes ([lib/utils/magic-bytes.ts](lib/utils/magic-bytes.ts))
-3. Reseller A submits display name "Stripe Inc" → rejected by deny-list
+2. Reseller A uploads SVG as logo (global or per-offer) → rejected by magic-bytes ([lib/utils/magic-bytes.ts](lib/utils/magic-bytes.ts))
+3. Reseller A submits display name "Stripe Inc" (global OR per-offer) → rejected by deny-list
 4. Reseller A submits "5tripе" (digit `5` + Cyrillic `е`) → after normalization becomes "stripe" → rejected
 5. Reseller A submits display name 200 chars → rejected by length check
-6. Anonymous hits `evil.platform.local` (no such reseller) → 404, no info leak
-7. Anonymous hits `acme.platform.local/<offer-slug>` where offer exists but `wl_status='canceled'` → 404
-8. Buyer logged in tries `/buyer` via `acme.platform.local` subdomain → 301 to canonical `platform.local/buyer`
-9. Reseller B (no base sub) tries to upgrade an offer to Tier 2 → rejected (base sub not active|trialing)
-10. Reseller A tries to upgrade an offer to Tier 2 where vendor is `open_to_resellers` → rejected
-11. Vendor X tries to read another vendor's `reseller_openness` → SELECT is allowed (it's not sensitive — vendors can see who's open), but UPDATE on other rows is blocked by existing profile RLS
+6. Reseller A sets `wl_global_logo_url` but leaves `wl_global_brand_color = NULL` → blocked by `profiles_wl_global_complete` CHECK constraint (all-or-nothing)
+7. Reseller B (no base sub) tries to set global branding → rejected at server action (active|trialing base sub required)
+8. Anonymous hits `evil.platform.local` (no such reseller) → 404, no info leak
+9. Anonymous hits `acme.platform.local/<offer-slug>` where offer exists but `wl_status='canceled'` → 404
+10. Buyer logged in tries `/buyer` via `acme.platform.local` subdomain → 301 to canonical `platform.local/buyer`
+11. Reseller B (no base sub) tries to upgrade an offer to Tier 2 → rejected (base sub not active|trialing)
+12. Reseller A tries to upgrade an offer to Tier 2 where vendor is `open_to_resellers` → rejected
+13. Vendor X tries to read another vendor's `reseller_openness` → SELECT is allowed (it's not sensitive — vendors can see who's open), but UPDATE on other rows is blocked by existing profile RLS
+14. Reseller A updates `wl_global_display_name` → existing Tier 2 offers keep their per-offer snapshots (no surprise re-brand on live Tier 2 storefronts)
 
 ### Migration backfill correctness
 
@@ -590,7 +669,10 @@ SELECT reseller_openness, COUNT(*) FROM profiles WHERE role='vendor' GROUP BY 1;
 - **`open_to_resellers` is the default.** Migration sets `profiles.reseller_openness = 'open_to_resellers'` for all existing vendor rows (matches `NOT NULL DEFAULT`). Vendors who want to opt OUT must explicitly switch to `closed`. Since the new model has zero vendor tax in any state, this is a no-op for vendor revenue on Tier 1 sales — purely an opt-out into a new UI affordance. No release announcement strictly required, but a one-liner in the next product update email is polite.
 - **The 33% kickback (`VENDOR_WL_KICKBACK_BPS = 3333`) is a tunable.** Keep it as a const, NOT hardcoded inline. If platform decides 20% or 50% later, it's a one-line change. Document the chosen number in SPEC §4b. The const must satisfy `0 ≤ VENDOR_WL_KICKBACK_BPS ≤ 10000`; CI test enforces this.
 - **Kickback floors aggressively on small markups.** $0.50 markup × 5% = 2 cents commission × 33.33% = 0¢ kickback (rounded down). Acceptable — micro-amounts of money shouldn't generate sub-cent transfers. Document in vendor-facing UI: "Kickback may be $0 on very small sales due to cent rounding."
-- **Tier 2 brand auto-approval is risk-shifted, not risk-free.** Deny-list catches obvious phishing (Stripe, PayPal, etc.). It does NOT catch novel infringement (a vendor's own trademark). Have a clear takedown procedure: an admin can force-downgrade any Tier 2 offer via `setWLTierAction({offerId, tier: 1, reason})` writing an audit_log entry. TOS must place liability on reseller for uploaded brand assets.
+- **Tier 2 brand auto-approval is risk-shifted, not risk-free.** Deny-list catches obvious phishing (Stripe, PayPal, etc.). It does NOT catch novel infringement (a vendor's own trademark). Have a clear takedown procedure: an admin can force-downgrade any Tier 2 offer via `setWLTierAction({offerId, tier: 1, reason})` writing an audit_log entry. **Same takedown applies to global Tier 1 mini-branding** — admin can `clearResellerGlobalBranding({resellerId, reason})` which nulls all three columns and writes audit. TOS must place liability on reseller for ALL uploaded brand assets (global and per-offer).
+- **Global branding is all-or-nothing.** DB CHECK enforces all three fields set or all three NULL. Prevents weird half-states ("logo without name" looks broken). Server action validates this before update.
+- **Global branding updates do NOT cascade to live Tier 2 offers.** A reseller's per-offer Tier 2 branding is independent after upgrade. If reseller wants to re-brand Tier 2 offers, they edit each one. Prevents accidental brand-switching of live storefronts.
+- **Tier 1 storefront with global branding stays platform-domain-rooted.** Subdomain (`<slug>.platforma.com`) is exclusive Tier 2 value. If you allow Tier 1 to also use subdomain, you erode the per-app $29 justification ("why pay $29 if my brand already shows on subdomain"). Hard line: subdomain rewrite in `proxy.ts` returns 404 for any Tier 1-only reseller (no Tier 2 offers).
 - **Buyer dashboard NEVER WL-branded.** Anti-poaching boundary (SPEC §6). Resellers WILL ask. Refuse — buyer dashboard is post-purchase platform-owned territory. Pre-purchase surfaces (storefront, Stripe Checkout, receipt email) are the WL value.
 - **Logos: PNG/JPG/WebP only. NEVER SVG.** SVG enables stored XSS on every storefront visit. Enforce via magic-bytes ([lib/utils/magic-bytes.ts](lib/utils/magic-bytes.ts)) + Storage bucket content-type restriction. Max 1MB.
 - **Stripe Connect branding is per-account, not per-offer.** A reseller with multiple Tier 2 offers can only have ONE branding showing on Stripe Checkout (the most recently upgraded offer wins). Document this in UI; future enhancement could use separate Connect sub-accounts per offer. For launch, accept the constraint.
@@ -633,8 +715,9 @@ Update §11 — Tier 2 refunds/disputes follow the same policy as Tier 1 (vendor
 Under "Folder structure":
 - `app/_wl/[reseller-slug]/page.tsx` — WL storefront landing (subdomain rewrite target)
 - `app/_wl/[reseller-slug]/[offer-slug]/page.tsx` — WL storefront offer page
-- `lib/services/reseller.ts` — add `upgradeOfferToWLTier2, cancelWLTier2`
-- `lib/validation/wl-brand.ts` — homoglyph deny-list + `validateWLBrand()`
+- `app/reseller/brand/page.tsx` — global mini-branding settings (Tier 1, free)
+- `lib/services/reseller.ts` — add `upgradeOfferToWLTier2, cancelWLTier2, setResellerGlobalBranding, clearResellerGlobalBranding`
+- `lib/validation/wl-brand.ts` — homoglyph deny-list + `validateWLBrand()` (used by both global and per-offer validation)
 - `lib/stripe/connect.ts` — add `syncResellerConnectBranding`
 
 Add to "Environment variables":
@@ -644,8 +727,9 @@ STRIPE_WL_TIER2_PRICE_ID=             # required from #29 — $29/mo recurring p
 
 Under "Reseller data model" section (new — paralleling the affiliate one):
 - `profiles.reseller_openness` (closed | open_to_resellers | open_to_wl; default `open_to_resellers`)
+- `profiles.wl_global_logo_url / wl_global_brand_color / wl_global_display_name` (Tier 1 mini-branding; all-or-nothing CHECK; free, applied to all Tier 1 storefronts on platform path)
 - `reseller_offers.wl_tier` (1 | 2)
-- `reseller_offers.wl_logo_url / wl_brand_color / wl_display_name`
+- `reseller_offers.wl_logo_url / wl_brand_color / wl_display_name` (Tier 2 per-offer branding, pre-filled from global at upgrade time, independent thereafter)
 - `reseller_offers.wl_stripe_subscription_id` (UNIQUE per-offer subscription on platform account)
 - `reseller_offers.wl_trial_end / wl_status` (trialing → active → canceled)
 - `subscriptions.reseller_wl_tier_snapshot / vendor_openness_snapshot` (both immutable after subscribe)
