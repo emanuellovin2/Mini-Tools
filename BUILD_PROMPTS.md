@@ -71,3 +71,15 @@ Sequential: ship **#30 and #31 first** (both block all dashboards), then **#32�
 - [#37 — Marketplace v2 (search, filters, sort, categories)](build_prompts/37-marketplace-v2.md)
 - [#38 — Fee transparency layer (live calculators + `/legal/fees` page)](build_prompts/38-fee-transparency-layer.md)
 - [#39 — Cross-role: notifications, account settings, onboarding, CSV, vendor webhooks](build_prompts/39-cross-role-notifications-accounts.md)
+
+## Phase 6 — Wave 9 — Usage economy (the "4 kitchens")
+
+The pivot from "billing rail" to "system of operation for AI agencies." Designed around **BYOK + prepaid credits = zero/minimal compute cost to the platform**, and **usage-based earnings for vendor / reseller / affiliate** so all three roles are pulled in.
+
+**Strictly sequential where money depends on money: #40 → #41 → #42 → #43 → #44.** #43 can overlap #42 once the step interface is fixed; #44 can start partially after #41.
+
+- [#40 — Usage metering ledger + usage-based billing (the meter)](build_prompts/40-usage-metering-billing.md) — **BLOCKS #41–#44**
+- [#41 — AI Gateway (BYOK) (the door)](build_prompts/41-ai-gateway-byok.md) — first usage revenue, zero compute cost
+- [#42 — Workflow / automation engine (the recipe book)](build_prompts/42-workflow-engine.md) — start of lock-in
+- [#43 — Connectors / integrations (the lock-in)](build_prompts/43-connectors.md) — the moat
+- [#44 — Usage-product distribution across vendor / reseller / affiliate](build_prompts/44-usage-product-distribution.md) — makes the kitchens profitable for every role

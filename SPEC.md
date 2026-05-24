@@ -163,3 +163,22 @@ All connected accounts (vendor, affiliate, reseller) are configured for **weekly
 
 ## 12. Definition of done (per prompt)
 Code compiles with strict TS, inputs validated with Zod, money/access paths have tests, RLS covers new tables and is tested, the prompt's Verify step passes, and the Progress checklist in `CLAUDE.md` is updated. See `ENGINEERING.md`.
+
+## 13. Client ownership & provenance (`acquired_by`)
+The anti-poaching boundary (§6, §7) is **not global** — it is governed by **who acquired the end client**, recorded once per subscription and immutable thereafter. This resolves the tension between the marketplace business (the platform brings buyers and protects them) and the usage-economy business (agencies bring their own clients and must own them — see §14).
+
+- **`subscriptions.acquired_by`** (enum `platform | partner`, immutable after subscribe) is the single source of truth for the boundary.
+- **`subscriptions.partner_owner_id`** (uuid → profiles, nullable; non-null **iff** `acquired_by='partner'`) names the **single** party that owns the client relationship. CHECK: `(acquired_by='partner') = (partner_owner_id IS NOT NULL)`.
+
+### Boundary rules
+- **`acquired_by='platform'`** — the platform acquired the buyer (the marketplace channel). The full §6/§7 anti-poaching boundary applies: every counterparty (vendor, reseller, affiliate) sees only `anon_user_id` and aggregate stats, never buyer PII. **This is the default for marketplace hosted apps (#1–#39) — unchanged.**
+- **`acquired_by='partner'`** — a partner brought their own client (the usage-economy channel). The **`partner_owner_id`** party **owns and may see that client's identity** (their own customer). Anti-poaching does **not** apply between that one partner and their own client. **This is the default for usage-economy products (#40–#44): gateway agents, workflow templates, connector-backed automations.**
+
+### What stays true in BOTH modes (non-negotiable)
+- The **platform remains merchant of record**; all billing runs through the platform's Stripe (Separate Charges & Transfers, §11). Partner ownership of the *relationship* never means partner-owned billing.
+- **Buyer card / payment data is NEVER exposed to anyone** but the platform + Stripe (PCI), regardless of `acquired_by`.
+- **Ownership is singular.** Only the `partner_owner_id` party sees identity. **Every other counterparty in the value chain still sees `anon_user_id`.** Example: an agency (reseller) brings a client and sells a vendor's gateway agent → the *reseller* owns the client; the *vendor* still sees only `anon_user_id` (the vendor did not acquire this client). The vendor anti-poaching boundary therefore holds even in partner mode.
+- **Role cannot self-set ownership.** `acquired_by` / `partner_owner_id` are written only by the service role at subscribe time, from the attribution context (e.g. partner-acquired via a partner's own checkout/SDK). A user can never elevate their own visibility into a client they did not acquire.
+
+### Why scoped, not a per-subscription toggle
+Provenance is decided **once, by the acquisition context**, not flipped later. The two product lines simply carry different defaults — there is no runtime UI toggle and no dual RLS regime per row beyond reading `acquired_by`. Keep one boundary code path that branches on this column; do not fork the stats views.

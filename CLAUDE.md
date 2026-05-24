@@ -285,6 +285,13 @@ Wave 6 — docs:
 - [ ] #38 Fee transparency layer (live calculators in vendor/reseller/affiliate forms, optional buyer breakdown, canonical `/legal/fees` page)
 - [ ] #39 Cross-role: notifications bell + preferences, account settings (2FA/sessions/data export/delete), onboarding checklist per role, CSV export everywhere, vendor webhook subscribers
 
+**Phase 6 — Wave 9 (Usage economy — the "4 kitchens")** — sequential #40 → #41 → #42 → #43 → #44. Design constraint: **BYOK + prepaid credits = zero/minimal compute cost to platform**; usage-based earnings for vendor/reseller/affiliate.
+- [ ] #40 Usage metering ledger + usage-based billing (the meter) — generic `usage_events` ledger, prepaid `credit_wallets`, settlement cron, `computeUsageSplit` pure fn — **BLOCKS #41–#44**
+- [ ] #41 AI Gateway (BYOK) (the door) — encrypted `provider_keys` vault, `/api/gateway/[provider]` metered proxy, vendor agent products, spend caps — first usage revenue, zero compute cost
+- [ ] #42 Workflow / automation engine (the recipe book) — `workflows`/`workflow_runs`/`run_steps`, triggers (manual/schedule/webhook), durable resumable executor, sellable templates
+- [ ] #43 Connectors / integrations (the lock-in) — connector registry (Gmail/Slack/Sheets/HTTP), encrypted OAuth `connector_accounts`, workflow step wiring
+- [ ] #44 Usage-product distribution — metered products in marketplace, reseller per-unit markup, affiliate recurring % of platform fee, role usage-earnings dashboards
+
 ## Guardrails
 - Never expose buyer email, name, or card data to vendors, resellers, or affiliates — the anonymous token model (SPEC §6) and the `vendor_subscription_stats` / `reseller_sale_stats` / `affiliate_stats` boundaries (SPEC §7) are non-negotiable. None of these roles gets a read path to `subscriptions.buyer_id`.
 - A user can never change their own `role` (privilege-escalation guard, RLS — SPEC §8).
