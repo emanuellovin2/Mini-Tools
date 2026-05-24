@@ -1,124 +1,54 @@
 import { redirect } from "next/navigation";
-import Image from "next/image";
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/services/supabase-server";
 import {
   getVendorApps,
   getVendorStats,
-  aggregateStats,
   getVendorMRR,
   getVendorMRRWaterfall,
   getVendorChurnRate,
   getVendorCohortRetention,
   getVendorLTV,
-  type VendorApp,
-  type VendorSubscriptionStat,
+  getVendorChannelMix,
+  getVendorBalance,
+  getVendorDunning,
+  getVendorRefundsDisputes,
+  getVendorResellerKickback,
 } from "@/lib/services/vendor";
 import { getVendorCutBps } from "@/lib/stripe/transfers";
+import { KpiCard } from "@/components/ui/KpiCard";
+import { EmptyState } from "@/components/ui/EmptyState";
 import AppForm from "./_components/AppForm";
-import AffiliateCommissionForm from "./_components/AffiliateCommissionForm";
 import ProfileForm from "./_components/ProfileForm";
-import ResellerOpennessForm from "./_components/ResellerOpennessForm";
 import StripeConnect from "./_components/StripeConnect";
-import MRRCard from "./_components/MRRCard";
 import MRRWaterfallChart from "./_components/MRRWaterfallChart";
 import CohortRetentionTable from "./_components/CohortRetentionTable";
-import ChurnRateCard from "./_components/ChurnRateCard";
-import LTVCard from "./_components/LTVCard";
 import AppFilterSelect from "./_components/AppFilterSelect";
+import ChannelMixDonut from "./_components/ChannelMixDonut";
+import BalanceCard from "./_components/BalanceCard";
+import DunningQueueCard from "./_components/DunningQueueCard";
+import RefundsFeedCard from "./_components/RefundsFeedCard";
+import CommissionTierCard from "./_components/CommissionTierCard";
+import ResellerKickbackPanel from "./_components/ResellerKickbackPanel";
+import AppsTable from "./_components/AppsTable";
 
 export const metadata: Metadata = { title: "Vendor Dashboard — [PLATFORM]" };
 
-const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-700",
-  approved: "bg-green-100 text-green-700",
-  rejected: "bg-red-100 text-red-700",
+type VendorProfile = {
+  role: string;
+  display_name: string | null;
+  stripe_account_id: string | null;
+  charges_enabled: boolean | null;
+  payouts_enabled: boolean | null;
+  vendor_cut_bps_override: number | null;
+  reseller_openness: string | null;
 };
 
-function formatCents(cents: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-  }).format(cents / 100);
-}
-
-function AppRow({
-  app,
-  stats,
-}: {
-  app: VendorApp;
-  stats: VendorSubscriptionStat[];
-}) {
-  const { activeCount, mrrCents } = aggregateStats(app.id, stats);
-
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-4 p-4 border border-gray-100 rounded-xl">
-      {app.logo_url ? (
-        <Image
-          src={app.logo_url}
-          alt={app.name}
-          width={40}
-          height={40}
-          className="rounded-lg object-cover shrink-0"
-        />
-      ) : (
-        <div className="w-10 h-10 rounded-lg bg-gray-100 shrink-0" />
-      )}
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-sm">{app.name}</span>
-          <span
-            className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[app.status] ?? "bg-gray-100 text-gray-700"}`}
-          >
-            {app.status}
-          </span>
-          {app.category && (
-            <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
-              {app.category}
-            </span>
-          )}
-        </div>
-
-        <div className="mt-1 flex items-center gap-4 text-xs text-gray-700 flex-wrap">
-          <span>{formatCents(app.price_cents)}/mo</span>
-          {app.min_price_cents != null && (
-            <span className="text-gray-700">
-              floor {formatCents(app.min_price_cents)}/mo (resellable)
-            </span>
-          )}
-          {app.affiliate_commission_bps != null && (
-            <span className="text-gray-700">
-              affiliate {app.affiliate_commission_bps / 100}%
-            </span>
-          )}
-          <span>{activeCount} active subscriber{activeCount === 1 ? "" : "s"}</span>
-          <span>MRR {formatCents(mrrCents)}</span>
-        </div>
-        <AffiliateCommissionForm appId={app.id} currentBps={app.affiliate_commission_bps} />
-      </div>
-    </div>
-  );
-}
-
-function EarningsSummary({ stats }: { stats: VendorSubscriptionStat[] }) {
-  const active = stats.filter(
-    (s) => s.status === "active" || s.status === "trialing"
-  );
-  const totalMrr = active.reduce((sum, s) => sum + s.price_cents, 0);
-
-  return (
-    <div className="grid grid-cols-2 gap-4">
-      <div className="bg-gray-50 rounded-xl p-4">
-        <p className="text-xs text-gray-700 mb-1">Active subscribers</p>
-        <p className="text-2xl font-bold">{active.length}</p>
-      </div>
-      <div className="bg-gray-50 rounded-xl p-4">
-        <p className="text-xs text-gray-700 mb-1">Est. MRR (gross)</p>
-        <p className="text-2xl font-bold">{formatCents(totalMrr)}</p>
-        <p className="text-xs text-gray-700 mt-1">Stripe earnings wire up in #5–#7</p>
-      </div>
+    <div className="bg-surface rounded-[10px] border border-border shadow-[var(--shadow-card)] p-5">
+      <h2 className="text-[13px] font-semibold text-foreground mb-4">{title}</h2>
+      {children}
     </div>
   );
 }
@@ -135,11 +65,12 @@ export default async function VendorDashboard({
   if (!user) redirect("/login");
 
   const admin = (await import("@/lib/services/supabase")).createAdminClient();
-  type VendorProfile = { role: string; display_name: string | null; stripe_account_id: string | null; charges_enabled: boolean | null; payouts_enabled: boolean | null; vendor_cut_bps_override: number | null; reseller_openness: string | null };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: profile } = await (admin as any)
     .from("profiles")
-    .select("role, display_name, stripe_account_id, charges_enabled, payouts_enabled, vendor_cut_bps_override, reseller_openness")
+    .select(
+      "role, display_name, stripe_account_id, charges_enabled, payouts_enabled, vendor_cut_bps_override, reseller_openness"
+    )
     .eq("id", user.id)
     .single() as { data: VendorProfile | null };
 
@@ -148,7 +79,21 @@ export default async function VendorDashboard({
   const { app: selectedAppId } = await searchParams;
   const appFilter = selectedAppId || undefined;
 
-  const [apps, stats, mrr, waterfall, cohort, ltv, effectiveCutBps] = await Promise.all([
+  // Fetch all data in parallel
+  const [
+    apps,
+    stats,
+    mrr,
+    waterfall,
+    cohort,
+    ltv,
+    effectiveCutBps,
+    channelMix,
+    balance,
+    dunning,
+    refundsFeed,
+    kickback,
+  ] = await Promise.all([
     getVendorApps(user.id),
     getVendorStats(),
     getVendorMRR(user.id, appFilter),
@@ -156,9 +101,14 @@ export default async function VendorDashboard({
     getVendorCohortRetention(user.id),
     getVendorLTV(user.id),
     getVendorCutBps(user.id),
+    getVendorChannelMix(user.id, appFilter),
+    getVendorBalance(user.id),
+    getVendorDunning(user.id),
+    getVendorRefundsDisputes(user.id),
+    getVendorResellerKickback(user.id),
   ]);
 
-  // Trailing 3-month average churn for the ChurnRateCard
+  // Trailing churn for KPI delta
   const now = new Date();
   const [c1, c2, c3] = await Promise.all([
     getVendorChurnRate(user.id, now, appFilter),
@@ -167,140 +117,180 @@ export default async function VendorDashboard({
   ]);
   const trailing3Bps = Math.round((c1 + c2 + c3) / 3);
 
+  // Per-app channel mix for the apps table
+  const channelMixByApp = new Map<string, Awaited<ReturnType<typeof getVendorChannelMix>>>();
+  await Promise.all(
+    apps.map(async (app) => {
+      const mix = await getVendorChannelMix(user.id, app.id);
+      channelMixByApp.set(app.id, mix);
+    })
+  );
+
+  // MRR sparkline from waterfall
+  const mrrSparkline = waterfall.map((w) => w.end_mrr_cents);
+  const prevMonthMrr = waterfall.length >= 2 ? waterfall[waterfall.length - 2].end_mrr_cents : null;
+  const mrrDelta =
+    prevMonthMrr && prevMonthMrr > 0
+      ? ((mrr.mrr_cents - prevMonthMrr) / prevMonthMrr) * 100
+      : undefined;
+
+  const churnDelta = trailing3Bps > 0 ? ((c1 - trailing3Bps) / trailing3Bps) * 100 : undefined;
+
+  function formatCents(cents: number) {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+    }).format(cents / 100);
+  }
+
   return (
-    <div className="max-w-5xl mx-auto">
-      <h1 className="text-lg font-semibold mb-6">Vendor Dashboard</h1>
+    <div className="max-w-6xl mx-auto space-y-5">
+      {/* Quick-action bar */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <h1 className="text-[15px] font-semibold text-foreground flex-1">Vendor Dashboard</h1>
+        <AppFilterSelect apps={apps} selectedAppId={selectedAppId ?? null} />
+        <a
+          href="#submit"
+          className="text-[13px] px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          + New app
+        </a>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left column */}
-          <div className="space-y-4">
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <h2 className="font-semibold mb-4">Profile</h2>
-              <ProfileForm currentDisplayName={profile.display_name ?? ""} />
-            </div>
+      {/* ── 1. Hero KPI strip ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard
+          label="Net MRR"
+          value={formatCents(mrr.mrr_cents)}
+          delta={mrrDelta}
+          deltaLabel="vs last mo"
+          sparkline={mrrSparkline}
+          sub={`${mrr.active_subs} active sub${mrr.active_subs !== 1 ? "s" : ""}`}
+        />
+        <KpiCard
+          label="Active subscribers"
+          value={mrr.active_subs}
+          sub={`ARPU ${formatCents(mrr.arpu_cents)}`}
+        />
+        <KpiCard
+          label="Monthly churn"
+          value={(c1 / 100).toFixed(1) + "%"}
+          delta={churnDelta !== undefined ? -churnDelta : undefined}
+          deltaLabel="vs 3-mo avg"
+          sub={`3-mo avg ${(trailing3Bps / 100).toFixed(1)}%`}
+        />
+        <KpiCard
+          label="LTV / customer"
+          value={formatCents(ltv.avg_ltv_cents)}
+          sub={ltv.data_sparse ? "Sparse data (<6 mo)" : ltv.method}
+        />
+      </div>
 
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <h2 className="font-semibold mb-3">Platform Cut</h2>
-              {profile.vendor_cut_bps_override != null ? (
-                <div>
-                  <span className="inline-block text-xs px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200 font-medium">
-                    Custom rate {(effectiveCutBps / 100).toFixed(2)}% (set by admin)
-                  </span>
-                  <p className="text-xs text-gray-700 mt-1">
-                    This overrides the standard tier pricing.
-                  </p>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-600">
-                  {effectiveCutBps <= 300 ? "Tier 4" :
-                   effectiveCutBps <= 500 ? "Tier 3" :
-                   effectiveCutBps <= 800 ? "Tier 2" : "Tier 1"}{" "}
-                  — {(effectiveCutBps / 100).toFixed(2)}%
-                </p>
-              )}
-            </div>
+      {/* ── 2. Revenue mix + 3. Stripe balance (side by side) ─────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <Section title="Revenue mix">
+          {channelMix.total_cents === 0 ? (
+            <EmptyState
+              title="No active subscriptions"
+              body="Revenue breakdown will appear once you have subscribers."
+              cta={<span className="text-[12px] text-muted-foreground">Submit your first app to get started.</span>}
+            />
+          ) : (
+            <ChannelMixDonut mix={channelMix} />
+          )}
+        </Section>
 
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <h2 className="font-semibold mb-1">Reseller Openness</h2>
-              <p className="text-xs text-gray-700 mb-3">
-                Controls whether resellers can list or white-label your app.
-              </p>
-              <ResellerOpennessForm
-                current={(profile.reseller_openness ?? "open_to_resellers") as "closed" | "open_to_resellers" | "open_to_wl"}
-              />
-            </div>
-
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <h2 className="font-semibold mb-3">Stripe Payments</h2>
+        <Section title="Stripe Connect & cash flow">
+          <BalanceCard
+            balance={balance}
+            stripeAccountId={profile.stripe_account_id ?? null}
+            chargesEnabled={profile.charges_enabled ?? false}
+            payoutsEnabled={profile.payouts_enabled ?? false}
+          />
+          {profile.stripe_account_id && (
+            <div className="mt-3">
               <StripeConnect
-                stripeAccountId={profile.stripe_account_id ?? null}
+                stripeAccountId={profile.stripe_account_id}
                 chargesEnabled={profile.charges_enabled ?? false}
                 payoutsEnabled={profile.payouts_enabled ?? false}
               />
             </div>
-          </div>
-
-          {/* Right column */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* ── Analytics ─────────────────────────────────────────────── */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold">Analytics</h2>
-                {/* Per-app filter */}
-                <AppFilterSelect apps={apps} selectedAppId={selectedAppId ?? null} />
-              </div>
-
-              {/* KPI cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                <MRRCard snapshot={mrr} waterfall={waterfall} />
-                <ChurnRateCard churnBps={c1} trailing3Bps={trailing3Bps} />
-                <LTVCard ltv={ltv} />
-              </div>
-
-              {/* MRR waterfall bar chart */}
-              <div className="mb-6">
-                <p className="text-xs font-medium text-gray-700 mb-3">
-                  New vs Churned MRR — last 6 months
-                </p>
-                <MRRWaterfallChart data={waterfall} />
-              </div>
-
-              {/* Cohort retention heatmap */}
-              <div>
-                <p className="text-xs font-medium text-gray-700 mb-3">
-                  Cohort retention
-                </p>
-                <CohortRetentionTable rows={cohort} />
-              </div>
-
-              <p className="text-xs text-gray-700 mt-4">
-                MRR includes direct + affiliate subs. Reseller-sold subs counted at vendor floor.{" "}
-                <a
-                  href="#methodology"
-                  className="underline hover:text-gray-900"
-                  id="methodology"
-                >
-                  Methodology
-                </a>
-                : MRR = sum of active subscription prices; LTV = avg price ÷ monthly churn rate.
-              </p>
+          )}
+          {!profile.stripe_account_id && (
+            <div className="mt-3">
+              <StripeConnect
+                stripeAccountId={null}
+                chargesEnabled={false}
+                payoutsEnabled={false}
+              />
             </div>
+          )}
+        </Section>
+      </div>
 
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <h2 className="font-semibold mb-4">Earnings</h2>
-              <EarningsSummary stats={stats} />
-            </div>
+      {/* ── 4. Dunning queue ─────────────────────────────────────────────── */}
+      {dunning.count > 0 && (
+        <Section title={`Dunning queue (${dunning.count})`}>
+          <DunningQueueCard dunning={dunning} />
+        </Section>
+      )}
 
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <h2 className="font-semibold mb-4">
-                My Apps{" "}
-                <span className="text-gray-700 font-normal text-sm">
-                  ({apps.length})
-                </span>
-              </h2>
-              {apps.length === 0 ? (
-                <p className="text-sm text-gray-700">
-                  No apps yet. Submit one below.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {apps.map((app) => (
-                    <AppRow
-                      key={app.id}
-                      app={app}
-                      stats={stats}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+      {/* ── 5. Refunds & disputes ─────────────────────────────────────────── */}
+      <Section title="Refunds & disputes (last 30 days)">
+        <RefundsFeedCard feed={refundsFeed} />
+      </Section>
 
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <h2 className="font-semibold mb-4">Submit New App</h2>
-              <AppForm />
-            </div>
-          </div>
+      {/* ── 6. Commission tier ─────────────────────────────────────────────── */}
+      <Section title="Commission & fee breakdown">
+        <CommissionTierCard
+          effectiveCutBps={effectiveCutBps}
+          overrideBps={profile.vendor_cut_bps_override ?? null}
+          netMrrCents={mrr.mrr_cents}
+        />
+      </Section>
+
+      {/* ── 7. Reseller-openness panel ─────────────────────────────────────── */}
+      <Section title="Reseller openness">
+        <ResellerKickbackPanel
+          current={
+            (profile.reseller_openness ?? "open_to_resellers") as
+              | "closed"
+              | "open_to_resellers"
+              | "open_to_wl"
+          }
+          kickback={kickback}
+        />
+      </Section>
+
+      {/* ── 8. Apps table ─────────────────────────────────────────────────── */}
+      <Section title={`My apps (${apps.length})`}>
+        <AppsTable apps={apps} stats={stats} channelMixByApp={channelMixByApp} />
+      </Section>
+
+      {/* ── 9 & 10. MRR waterfall + cohort retention ───────────────────────── */}
+      <Section title="MRR waterfall — last 6 months">
+        <MRRWaterfallChart data={waterfall} />
+      </Section>
+
+      <Section title="Cohort retention">
+        <CohortRetentionTable rows={cohort} />
+        <p className="text-[11px] text-muted-foreground mt-3">
+          MRR includes direct + affiliate subs. Reseller-sold subs counted at vendor floor.
+        </p>
+      </Section>
+
+      {/* ── Submit new app ────────────────────────────────────────────────── */}
+      <Section title="Submit new app">
+        <div id="submit">
+          <AppForm />
         </div>
+      </Section>
+
+      {/* ── Profile ──────────────────────────────────────────────────────── */}
+      <Section title="Profile">
+        <ProfileForm currentDisplayName={profile.display_name ?? ""} />
+      </Section>
     </div>
   );
 }

@@ -276,7 +276,7 @@ Wave 6 — docs:
 **Phase 5 — Wave 8** (sequential: #30 + #31 first, then #32–#39 parallel-able)
 - [x] #30 App screenshots gallery (3–7/app, lightbox, drag-reorder, marketplace preview)
 - [x] #31 Design system v2 (Stripe-density tokens, drawer/sparkline/cmdk/skeleton/empty-state/toast/bell/onboarding primitives, mobile responsive, dark mode)
-- [ ] #32 Vendor dashboard v2 (channel mix, Stripe Connect balance, dunning queue, refund/dispute feed, per-app drill-down drawer, openness panel with kickback earnings, transparent fee breakdown)
+- [x] #32 Vendor dashboard v2 (channel mix, Stripe Connect balance, dunning queue, refund/dispute feed, per-app drill-down drawer, openness panel with kickback earnings, transparent fee breakdown)
 - [ ] #33 Affiliate dashboard v2 (conversion funnel, apps-to-promote catalog, earnings per app, Connect status, payout history, pending earnings, refund clawbacks, sticky referrals, share kit with QR)
 - [ ] #34 Reseller dashboard v2 (resellable apps catalog, per-offer analytics drawer, vendor change alerts, Tier 2 WL panel, markup simulator, kickback transparency)
 - [ ] #35 Buyer dashboard v2 (upcoming charges calendar, payment methods, invoice history, per-sub drawer, cancel-with-reason, pause-until date picker, privacy panel)
