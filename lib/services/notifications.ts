@@ -16,7 +16,8 @@ export type NotificationType =
   | "tier_upgraded"
   | "large_clawback"
   | "reconciliation_drift"
-  | "webhook_failures";
+  | "webhook_failures"
+  | "metric_cardinality_overflow";
 
 export interface AppNotification {
   id: string;

@@ -32,7 +32,7 @@ stripe listen --forward-to localhost:3000/api/webhooks
 
 ## Key file locations
 ```
-lib/services/          # service layer (apps.ts, solutions.ts, vendor.ts, buyer.ts, admin.ts, affiliate.ts, reseller.ts, org.ts, analytics.ts, reconciliation.ts, api-keys.ts, notifications.ts, onboarding.ts, export.ts, vendor-webhooks.ts, agency.ts, deployments.ts)
+lib/services/          # service layer (apps.ts, solutions.ts, vendor.ts, buyer.ts, admin.ts, affiliate.ts, reseller.ts, org.ts, analytics.ts, reconciliation.ts, api-keys.ts, notifications.ts, onboarding.ts, export.ts, vendor-webhooks.ts, agency.ts, deployments.ts, outcomes.ts)
 lib/stripe/            # billing.ts (computeTier), transfers.ts, webhook-handlers.ts, connect.ts, products.ts, with-retry.ts
 lib/auth/              # permissions.ts (can()), jwt.ts, roles.ts, sdk.ts
 lib/jobs/              # queue.ts (enqueueJob/claimJobs), handlers.ts
@@ -104,6 +104,17 @@ supabase/migrations/   # all schema changes — never manual dashboard edits
 - RLS: client reads own deployments, agency reads operated deployments, vendor reads aggregate via `get_vendor_deployment_stats()` RPC only (no raw rows). No cross-tenant reads.
 - Orphaned deployments: can be adopted (`operated_by=NULL`), transferred to new agency, or archived. Auto-archived after 90 days via pg_cron.
 
+**Outcome metrics (as of #51)**
+- `deployment_metrics`: append-only, **daily** partition (not monthly). `tenant_shard_id` first in all composites. 90d raw retention; detached by `partition-rotation-cron`.
+- `deployment_metrics_rollup`: indefinite daily summaries. `rollup_watermark` per `(deployment_id, metric_key, dimensions_hash, date)` row; idempotent ON CONFLICT. `cardinality_overflow=true` when >1000 distinct dimension combos/day for a metric.
+- `emitMetric` in `lib/services/outcomes.ts` — only write path. `volume_class='high'` → jobs queue (`outcome_emit_batch`); low/medium → sync insert. Cross-partition idempotency: 7-day window app-layer check.
+- `dimensions` jsonb: max 16 keys, values max 64 chars, no PII (email/phone/PAN rejected at service layer + DB CHECK). `hasPiiValue()` exported for tests.
+- Reserved key namespaces: `lead.*` `meeting.*` `task.*` `time.*` `revenue.*` `cost.*` `quality.*`. Custom keys: `custom.<vendor_slug>.<key>`.
+- `getSolutionOutcomeBenchmarks` — vendor-callable RPC; enforces k≥5 deployments before returning aggregates.
+- `outcomes_archive_router` — stub reads hot rollup; future S3 cold-storage path for >24mo data.
+- Rollup cron: `outcomes-rollup-cron` Edge Function every 15 min → enqueues `outcomes_rollup_partition` jobs → calls `rollup_outcomes_window(date)` RPC.
+- RLS: client reads own, agency reads operated, vendor reads nothing direct (benchmarks RPC only), admin reads all.
+
 **Solutions abstraction (as of #49)**
 - `solutions` table (renamed from `apps`). Legacy `CREATE VIEW apps AS SELECT * FROM solutions` — existing code works unchanged.
 - `solution_type enum('saas'|'agent'|'workflow'|'bundle') DEFAULT 'saas'`. Non-SaaS types gated by `SOLUTIONS_NON_SAAS_ENABLED=true`.
@@ -136,7 +147,7 @@ Repositioning: infrastructure agencies use to build agent-powered businesses for
 - [x] #49 Solutions abstraction — `apps→solutions` rename + legacy view, `solution_type` enum, `runtime_config`, `template_of_id`, `solution_versions`, search interface, `SOLUTIONS_NON_SAAS_ENABLED` flag
 - [x] #54 Wave 9 scale invariants — `lib/search/index.ts` interface + Postgres impl, `lib/db/with-replica.ts` + `with-region.ts`, `organizations.region` + `custom_domain`, `settlement_batches`, `idempotency_keys_v2` TTL partitions, tenant noisy-neighbor (pg_cron kill + `tenant_query_stats` mview), `lib/reserved-slugs.ts` single source, `lib/cold-storage/index.ts` stub, `CUSTOM_DOMAINS_ENABLED` flag, ENGINEERING.md §12 + k6 Wave 9 scenarios
 - [x] #50 Agency ↔ Client + Deployments — `organization_type` extended (`agency`|`client`), `client_relationships` (one active agency per client), `solution_deployments` as op unit for non-SaaS (SaaS keeps subscriptions), `getEffectiveConfig` Redis-cached (5min + 30s LRU), RLS trust boundaries. **BLOCKS #51–#53, refits #40–#44.**
-- [ ] #51 Outcome metrics seam — `deployment_metrics` (daily partition, append-only), `emitMetric` idempotent, reserved namespaces (`lead.*`/`meeting.*`/`task.*`/`time.*`/`revenue.*`/`cost.*`/`quality.*`), k≥5 anonymity on benchmarks, PII dimension guard, incremental 15-min rollup with watermark.
+- [x] #51 Outcome metrics seam — `deployment_metrics` (daily partition, append-only), `emitMetric` idempotent, reserved namespaces (`lead.*`/`meeting.*`/`task.*`/`time.*`/`revenue.*`/`cost.*`/`quality.*`), k≥5 anonymity on benchmarks, PII dimension guard, incremental 15-min rollup with watermark.
 - [ ] #40 Usage metering + billing — `usage_events.deployment_id` refit, prepaid `credit_wallets`, settlement cron, `computeUsageSplit` pure fn (vendor/agency/platform/reseller/affiliate). **BLOCKS #41–#44.**
 - [ ] #41 AI Gateway (BYOK) — per-deployment key routing (vendor/agency/client BYOK), spend caps, encrypted `provider_keys` vault, `/api/gateway/[provider]` metered proxy.
 - [ ] #42 Workflow engine — `workflows/versions/runs/run_steps`, triggers (manual/schedule/webhook), durable tick executor, sellable templates. Runs scoped to deployments.

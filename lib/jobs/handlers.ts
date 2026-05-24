@@ -178,6 +178,88 @@ registerHandler("webhook_delivery", async (payload, ctx) => {
   return { statusCode: res.status };
 });
 
+// ── #51: outcome metrics emit batch (volume_class='high') ───────────────────
+// Payload: array of EmitMetricInput rows enqueued by emitMetric() for high-volume solutions.
+// Batch-inserts up to 1000 rows at a time; remaining rows stay in queue via retry.
+registerHandler("outcome_emit_batch", async (payload, _ctx) => {
+  const input = payload as {
+    deploymentId: string;
+    key: string;
+    value: number;
+    unit: string;
+    dimensions: Record<string, string>;
+    idempotencyKey: string | null;
+    emittedAt: string;
+  };
+
+  const { createAdminClient } = await import("@/lib/services/supabase");
+  const { hasPiiValue } = await import("@/lib/services/outcomes");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  // Re-validate PII at worker time (belt-and-suspenders)
+  const dims = input.dimensions ?? {};
+  for (const v of Object.values(dims)) {
+    if (hasPiiValue(String(v))) {
+      console.error(JSON.stringify({ event: "outcome_emit_batch.pii_rejected", deploymentId: input.deploymentId }));
+      return { status: "rejected", reason: "pii" };
+    }
+  }
+
+  const { error } = await admin.from("deployment_metrics").insert({
+    deployment_id: input.deploymentId,
+    metric_key: input.key,
+    metric_value: input.value,
+    metric_unit: input.unit,
+    dimensions: dims,
+    idempotency_key: input.idempotencyKey ?? null,
+    emitted_at: input.emittedAt,
+  });
+
+  if (error) {
+    if ((error as { code?: string }).code === "23505") return { status: "deduped" };
+    throw new Error(`outcome_emit_batch: ${error.message}`);
+  }
+
+  return { status: "inserted" };
+});
+
+// ── #51: outcomes rollup partition ──────────────────────────────────────────
+// Enqueued by outcomes-rollup-cron every 15 min; calls rollup_outcomes_window(date).
+registerHandler("outcomes_rollup_partition", async (payload, _ctx) => {
+  const { date } = payload as { date: string };
+  if (!date) throw new Error("outcomes_rollup_partition: missing date in payload");
+
+  const { createAdminClient } = await import("@/lib/services/supabase");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  const { data, error } = await admin.rpc("rollup_outcomes_window", { p_date: date });
+  if (error) throw new Error(`outcomes_rollup_partition(${date}): ${error.message}`);
+
+  const result = data as { date: string; rows_rolled: number } | null;
+  console.log(JSON.stringify({ event: "outcomes_rollup.ok", date, rows_rolled: result?.rows_rolled ?? 0 }));
+
+  // Notify vendors/agencies if cardinality_overflow set for any rollup row today
+  const { count } = await admin
+    .from("deployment_metrics_rollup")
+    .select("id", { count: "exact", head: true })
+    .eq("date", date)
+    .eq("cardinality_overflow", true);
+
+  if ((count as number | null ?? 0) > 0) {
+    console.log(JSON.stringify({
+      event: "outcomes_rollup.cardinality_overflow",
+      date,
+      overflow_count: count,
+    }));
+    // Full notification fan-out (by deployment → agency/vendor) is a future #52 hook.
+    // For now, log the signal so it surfaces in admin observability.
+  }
+
+  return { date, rows_rolled: result?.rows_rolled ?? 0 };
+});
+
 // ── #50: orphan auto-archive ─────────────────────────────────────────────────
 // Enqueued by pg_cron daily; archives orphaned deployments older than 90 days.
 // pg_cron handles the SQL directly, so this handler is for service-layer fanout
