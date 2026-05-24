@@ -21,6 +21,8 @@ import KickbackCard from "./_components/KickbackCard";
 import { markupSimulateAction } from "./actions";
 import type { OfferCardData } from "./_components/OfferDrawer";
 import type { OfferAnalytics } from "@/lib/services/reseller";
+import { OnboardingCard } from "@/components/ui/OnboardingCard";
+import { buildResellerSteps, getOnboardingState } from "@/lib/services/onboarding";
 
 export const metadata: Metadata = { title: "Reseller Dashboard — [PLATFORM]" };
 
@@ -99,6 +101,7 @@ export default async function ResellerDashboard({
   if (profile?.role !== "reseller") redirect("/login");
   if (!profile.slug) redirect("/reseller/setup");
 
+  const onboardingState = await getOnboardingState(user.id).catch(() => ({}));
   const resSub = await getResellerSubscription(user.id);
   if (!resSub) redirect("/reseller/setup");
 
@@ -182,8 +185,18 @@ export default async function ResellerDashboard({
 
   const activeTab = tab ?? "dashboard";
 
+  const onboardingSteps = buildResellerSteps(onboardingState, {
+    hasSubscription: resSub?.status === "active" || resSub?.status === "trialing",
+    hasStripe: !!(profile.stripe_account_id && profile.charges_enabled),
+    hasBrand: !!(profile.wl_global_logo_url || profile.wl_global_brand_color),
+    hasOffer: rawOffers.length > 0,
+  });
+
   return (
     <div className="max-w-6xl mx-auto space-y-5">
+      {/* Onboarding checklist */}
+      <OnboardingCard steps={onboardingSteps} />
+
       {/* Onboarding toasts */}
       {(setup === "success" || onboard === "success") && (
         <div className="flex items-center gap-3 rounded-[10px] border border-ok/30 bg-ok-soft p-3 text-[13px] text-ok">

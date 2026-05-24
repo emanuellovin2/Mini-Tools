@@ -4,10 +4,13 @@ import { createServerSupabaseClient } from "@/lib/services/supabase-server";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { OrgSwitcher } from "@/components/layout/OrgSwitcher";
 import { getUserOrgs, getActiveOrg } from "@/lib/services/org";
+import { NotificationBellConnected } from "@/components/layout/NotificationBellConnected";
 
 const VENDOR_NAV = [
   { label: "Dashboard", href: "/vendor" },
-  { label: "Settings", href: "/settings/organization" },
+  { label: "Webhooks",  href: "/vendor/settings/webhooks" },
+  { label: "Settings",  href: "/settings/organization" },
+  { label: "Account",   href: "/settings/account" },
 ];
 
 export default async function VendorLayout({ children }: { children: ReactNode }) {
@@ -37,6 +40,7 @@ export default async function VendorLayout({ children }: { children: ReactNode }
       nav={VENDOR_NAV}
       user={{ email: user.email ?? "", role: "vendor" }}
       testMode={process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") ?? false}
+      notificationBell={<NotificationBellConnected />}
       orgSwitcher={<OrgSwitcher orgs={orgOptions} currentOrgId={activeCtx.org.id} />}
     >
       {children}

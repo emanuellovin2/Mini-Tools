@@ -273,3 +273,36 @@ export async function sendReconciliationDigest(opts: {
     })
   );
 }
+
+// ---------------------------------------------------------------------------
+// Data export ready (#39)
+// ---------------------------------------------------------------------------
+
+export async function sendExportReady(opts: {
+  to: string;
+  filename: string;
+  csv: string;
+}): Promise<boolean> {
+  const to = opts.to;
+  if (!to) return false;
+
+  // Inline CSV as an attachment (data-URI base64)
+  const base64 = Buffer.from(opts.csv, "utf-8").toString("base64");
+
+  return safeSend("export_ready", (resend) =>
+    resend.emails.send({
+      from: fromAddress(),
+      to,
+      subject: `[PLATFORM] Your export is ready: ${escapeHtml(opts.filename)}`,
+      html: `<p>Your requested data export (<strong>${escapeHtml(opts.filename)}</strong>) is attached to this email.</p>
+<p>If your email client does not display the attachment, contact support.</p>`,
+      attachments: [
+        {
+          filename: opts.filename,
+          content: base64,
+          contentType: "text/csv",
+        },
+      ],
+    })
+  );
+}

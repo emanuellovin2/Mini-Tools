@@ -337,7 +337,7 @@ Wave 6 — docs:
 - [x] #36 Admin dashboard v2 (system health, take-rate trend, channel mix, concentration risk, payout obligation, webhook health + DLQ, drill-downs, manual support tools, feature flags, JWT rotation, tax export)
 - [x] #37 Marketplace v2 (search, category nav, filters, sort, screenshot cards, featured carousel, SEO)
 - [x] #38 Fee transparency layer (live calculators in vendor/reseller/affiliate forms, optional buyer breakdown, canonical `/legal/fees` page)
-- [ ] #39 Cross-role: notifications bell + preferences, account settings (2FA/sessions/data export/delete), onboarding checklist per role, CSV export everywhere, vendor webhook subscribers
+- [x] #39 Cross-role: notifications bell + preferences, account settings (2FA/sessions/data export/delete), onboarding checklist per role, CSV export everywhere, vendor webhook subscribers
 
 **Phase 6 — Wave 9 (Usage economy — the "4 kitchens" + foundations)** — design constraint: **BYOK + prepaid credits = zero/minimal compute cost to platform**; usage-based earnings for vendor/reseller/affiliate. **Foundation-first ordering: #47 → #48 → #46 → kitchens → #45.** #47/#48/#46 capture decisions that cannot be reconstructed retroactively — never defer.
 - [x] #47 Organizations & multi-seat (the ownership model) — `organizations`, `org_members`, personal-org bootstrap + backfill, RLS rewrite via `is_org_member` (STABLE SECURITY DEFINER + `org_members(user_id, org_id) INCLUDE (role)` index), payouts move to org, `audit_log.actor_org_id` + team activity feed — **BLOCKS #48** (pre-launch clean-break, retrofit cost explodes after launch)
@@ -352,7 +352,7 @@ Wave 6 — docs:
 
 **Wave 8 stragglers — org-aware (run after #47):**
 - [x] #37 Marketplace v2 + **reviews & ratings** (`app_reviews`, verified-purchase only, trigger-maintained `rating_avg/rating_count` on apps) — reputation = non-portable stickiness
-- [ ] #39 Cross-role: notifications/2FA/sessions/onboarding/CSV/**vendor webhook subscribers** (v1.* event versioning) + **partner platform API** (`api_keys` test/live mode, `idempotency_keys`, scoped + rate-limited `/api/v1/*`) — embedding stickiness
+- [x] #39 Cross-role: notifications/2FA/sessions/onboarding/CSV/**vendor webhook subscribers** (v1.* event versioning) + **partner platform API** (`api_keys` test/live mode, `idempotency_keys`, scoped + rate-limited `/api/v1/*`) — embedding stickiness
 
 ## Guardrails
 - Never expose buyer email, name, or card data to vendors, resellers, or affiliates — the anonymous token model (SPEC §6) and the `vendor_subscription_stats` / `reseller_sale_stats` / `affiliate_stats` boundaries (SPEC §7) are non-negotiable. None of these roles gets a read path to `subscriptions.buyer_id`.

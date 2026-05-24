@@ -34,6 +34,8 @@ import CommissionTierCard from "./_components/CommissionTierCard";
 import ResellerKickbackPanel from "./_components/ResellerKickbackPanel";
 import AppsTable from "./_components/AppsTable";
 import VendorFunnelCard from "./_components/VendorFunnelCard";
+import { OnboardingCard } from "@/components/ui/OnboardingCard";
+import { buildVendorSteps, getOnboardingState } from "@/lib/services/onboarding";
 
 export const metadata: Metadata = { title: "Vendor Dashboard — [PLATFORM]" };
 
@@ -116,6 +118,16 @@ export default async function VendorDashboard({
     getVendorFunnel(activeOrg.id),
   ]);
 
+  const onboardingState = await getOnboardingState(user.id).catch(() => ({}));
+  const onboardingSteps = buildVendorSteps(onboardingState, {
+    hasStripe: !!(profile.stripe_account_id && profile.charges_enabled),
+    hasApp: apps.length > 0,
+    hasScreenshots: apps.some((a) => (a.screenshot_urls?.length ?? 0) >= 3),
+    hasMinPrice: apps.some((a) => a.min_price_cents != null),
+    hasResellerness: !!profile.reseller_openness,
+    hasSubmitted: apps.some((a) => a.status !== "pending"),
+  });
+
   // Trailing churn for KPI delta
   const now = new Date();
   const [c1, c2, c3] = await Promise.all([
@@ -154,6 +166,9 @@ export default async function VendorDashboard({
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">
+      {/* Onboarding checklist — auto-hides when all steps done */}
+      <OnboardingCard steps={onboardingSteps} />
+
       {/* Quick-action bar */}
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="text-[15px] font-semibold text-foreground flex-1">Vendor Dashboard</h1>

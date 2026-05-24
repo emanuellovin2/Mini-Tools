@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/services/supabase-server";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { OrgSwitcher } from "@/components/layout/OrgSwitcher";
 import { getUserOrgs, getActiveOrg } from "@/lib/services/org";
+import { NotificationBellConnected } from "@/components/layout/NotificationBellConnected";
 
 const RESELLER_NAV = [
   { label: "Dashboard", href: "/reseller" },
@@ -41,6 +42,7 @@ export default async function ResellerLayout({ children }: { children: ReactNode
       nav={RESELLER_NAV}
       user={{ email: user.email ?? "", role: "reseller" }}
       testMode={process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") ?? false}
+      notificationBell={<NotificationBellConnected />}
       orgSwitcher={<OrgSwitcher orgs={orgOptions} currentOrgId={activeCtx.org.id} />}
     >
       {children}

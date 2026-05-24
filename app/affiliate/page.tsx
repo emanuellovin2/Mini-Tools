@@ -29,6 +29,8 @@ import PayoutHistoryCard from "./_components/PayoutHistoryCard";
 import { PendingEarningsCard, ClawbacksCard } from "./_components/PendingEarningsCard";
 import RetentionCard from "./_components/RetentionCard";
 import type { AffiliateFunnel } from "@/lib/services/affiliate";
+import { OnboardingCard } from "@/components/ui/OnboardingCard";
+import { buildAffiliateSteps, getOnboardingState } from "@/lib/services/onboarding";
 
 export const metadata: Metadata = { title: "Affiliate Dashboard — [PLATFORM]" };
 
@@ -115,6 +117,13 @@ export default async function AffiliateDashboardPage() {
   const lifetimeMrr = profile.affiliate_lifetime_mrr_cents ?? 0;
   const affiliateCommBps = getAffiliateCommissionBps(activeMrr);
 
+  const onboardingState = await getOnboardingState(user.id).catch(() => ({}));
+  const onboardingSteps = buildAffiliateSteps(onboardingState, {
+    hasStripe: !!(profile.stripe_account_id && profile.charges_enabled),
+    hasSlug: !!profile.slug,
+    hasLink: false, // will be updated after links load
+  });
+
   const [
     links,
     badgesWithStatus,
@@ -172,8 +181,18 @@ export default async function AffiliateDashboardPage() {
     }).format(cents / 100);
   }
 
+  // Update link step with actual data
+  const stepsWithLinks = buildAffiliateSteps(onboardingState, {
+    hasStripe: !!(profile.stripe_account_id && profile.charges_enabled),
+    hasSlug: !!profile.slug,
+    hasLink: links.length > 0,
+  });
+
   return (
     <div className="max-w-6xl mx-auto space-y-5">
+      {/* Onboarding checklist */}
+      <OnboardingCard steps={stepsWithLinks} />
+
       {/* Stripe Connect banner */}
       {!onboardingDone && (
         <div className="flex items-center justify-between gap-4 rounded-[10px] border border-bad/30 bg-bad-soft p-4">

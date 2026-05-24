@@ -76,11 +76,28 @@ registerHandler("erasure", async (payload, _ctx) => {
   return { status: "stub" };
 });
 
-// Stub: data export (#39 will populate)
+// Data export — runs the scoped query and emails a CSV download link.
 registerHandler("export", async (payload, _ctx) => {
-  const { exportId } = payload as { exportId: string };
-  console.log(JSON.stringify({ event: "jobs.export.stub", exportId }));
-  return { status: "stub" };
+  const { scope, userId, orgId, role, emailTo } = payload as {
+    scope: string;
+    userId: string;
+    orgId: string;
+    role: string;
+    emailTo: string;
+  };
+
+  const [{ runExportDirect }, { sendExportReady }] = await Promise.all([
+    import("@/lib/services/export"),
+    import("@/lib/email/resend"),
+  ]);
+
+  const { csv, filename } = await runExportDirect(
+    scope as import("@/lib/services/export").ExportScope,
+    { userId, orgId, role }
+  );
+
+  await sendExportReady({ to: emailTo, filename, csv });
+  return { scope, rows: csv.split("\n").length - 1 };
 });
 
 // Outbound webhook delivery (#39 §5 will wire real endpoints table)
@@ -92,6 +109,7 @@ registerHandler("webhook_delivery", async (payload, ctx) => {
     secret,
     deliveryId,
     orgId,
+    webhookId,
   } = payload as {
     endpointUrl: string;
     eventType: string;
@@ -99,6 +117,7 @@ registerHandler("webhook_delivery", async (payload, ctx) => {
     secret: string;
     deliveryId: string;
     orgId: string;
+    webhookId?: string;
   };
 
   const bodyJson = JSON.stringify(body);
@@ -143,6 +162,18 @@ registerHandler("webhook_delivery", async (payload, ctx) => {
     delivered_at: res.ok ? new Date().toISOString() : null,
   });
 
-  if (!res.ok) throw new Error(`webhook_delivery: HTTP ${res.status}`);
+  if (!res.ok) {
+    if (webhookId) {
+      const { recordWebhookFailure } = await import("@/lib/services/vendor-webhooks");
+      await recordWebhookFailure(webhookId).catch(() => {});
+    }
+    throw new Error(`webhook_delivery: HTTP ${res.status}`);
+  }
+
+  if (webhookId) {
+    const { recordWebhookSuccess } = await import("@/lib/services/vendor-webhooks");
+    await recordWebhookSuccess(webhookId).catch(() => {});
+  }
+
   return { statusCode: res.status };
 });

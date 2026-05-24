@@ -6,8 +6,11 @@ import { OrgSwitcher } from "@/components/layout/OrgSwitcher";
 import { getUserOrgs, getActiveOrg } from "@/lib/services/org";
 
 const SETTINGS_NAV = [
-  { label: "Organization", href: "/settings/organization" },
-  { label: "Activity", href: "/settings/organization/activity" },
+  { label: "Account",       href: "/settings/account" },
+  { label: "Notifications", href: "/settings/notifications" },
+  { label: "Organization",  href: "/settings/organization" },
+  { label: "Activity",      href: "/settings/organization/activity" },
+  { label: "API Keys",      href: "/settings/api" },
 ];
 
 export default async function SettingsLayout({ children }: { children: ReactNode }) {

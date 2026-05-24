@@ -9,6 +9,8 @@ import { describe, it, expect } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 
+type AnyClient = SupabaseClient<Database>;
+
 const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -267,5 +269,71 @@ describeMaybe("RLS: app_reviews table", () => {
     const admin: AnyClient = adminClient();
     const { error } = await admin.from("app_reviews").select("id, status");
     expect(error).toBeNull();
+  });
+});
+
+// ─── #39 RLS tests ────────────────────────────────────────────────────────────
+
+describeMaybe("RLS: notifications", () => {
+  it("user cannot read another user's notifications", async () => {
+    const admin: AnyClient = adminClient();
+    // Insert a notification for vendor_a via service role
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin as any).from("notifications").insert({
+      user_id: IDs.VENDOR_A,
+      type: "app_approved",
+      title: "Test notification",
+    });
+
+    // vendor_b should see 0 notifications (all belong to vendor_a)
+    const vendorB: AnyClient = await signIn("vendor-b@test.com", "password123");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (vendorB as any).from("notifications").select("id");
+    expect((data ?? []).length).toBe(0);
+  });
+
+  it("anon cannot insert notifications", async () => {
+    const anon = createClient<Database>(SUPABASE_URL, ANON_KEY!, {
+      auth: { persistSession: false },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (anon as any).from("notifications").insert({
+      user_id: IDs.VENDOR_A,
+      type: "app_approved",
+      title: "Injected",
+    });
+    expect(error).not.toBeNull();
+  });
+});
+
+describeMaybe("RLS: vendor_webhooks", () => {
+  it("vendor can only read their own webhooks", async () => {
+    const admin: AnyClient = adminClient();
+    // Insert a webhook for vendor_a
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin as any).from("vendor_webhooks").insert({
+      vendor_id: IDs.VENDOR_A,
+      url: "https://example.com/test-hook",
+      signing_secret: "test-secret",
+      events: ["v1.subscription.created"],
+    });
+
+    // vendor_b sees 0 webhooks
+    const vendorB: AnyClient = await signIn("vendor-b@test.com", "password123");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (vendorB as any).from("vendor_webhooks").select("id");
+    expect((data ?? []).length).toBe(0);
+  });
+
+  it("vendor cannot insert a webhook for another vendor", async () => {
+    const vendorB: AnyClient = await signIn("vendor-b@test.com", "password123");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (vendorB as any).from("vendor_webhooks").insert({
+      vendor_id: IDs.VENDOR_A,
+      url: "https://attacker.com/steal",
+      signing_secret: "evil",
+      events: ["v1.subscription.created"],
+    });
+    expect(error).not.toBeNull();
   });
 });
