@@ -159,6 +159,12 @@ export default async function VendorDashboard({
         <h1 className="text-[15px] font-semibold text-foreground flex-1">Vendor Dashboard</h1>
         <AppFilterSelect apps={apps} selectedAppId={selectedAppId ?? null} />
         <a
+          href="/legal/fees"
+          className="text-[13px] text-muted-foreground hover:text-foreground underline"
+        >
+          How fees work →
+        </a>
+        <a
           href="#submit"
           className="text-[13px] px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
         >
@@ -300,7 +306,11 @@ export default async function VendorDashboard({
       {/* ── Submit new app ────────────────────────────────────────────────── */}
       <Section title="Submit new app">
         <div id="submit">
-          <AppForm />
+          <AppForm
+            cutBps={effectiveCutBps}
+            overrideBps={profile.vendor_cut_bps_override ?? null}
+            currentNetMrrCents={mrr.mrr_cents}
+          />
         </div>
       </Section>
 

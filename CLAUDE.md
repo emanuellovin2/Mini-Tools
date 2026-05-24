@@ -76,6 +76,9 @@ lib/
     with-timeout.ts  # withStatementTimeout(ms, fn) — SET LOCAL via claim_jobs RPC; presets: withFastTimeout/withStandardTimeout/withCronTimeout
   stripe/
     with-retry.ts    # withStripeRetry(fn) — 429/5xx exponential backoff + jitter, max 5 attempts; idempotent calls only
+  pricing/
+    preview.ts       # pure preview fns: previewVendorDirect/previewAffiliate/previewReseller/previewBuyer + computeStripeFee — no DB, no side effects; UI uses these for live fee calculators
+    __tests__/       # preview.test.ts — fuzz tests (1000 iter) proving sum invariant for all channels
   cache/
     revalidate.ts    # revalidateMarketplace/App/Storefront/WLStorefront/AffiliateProfile/Leaderboard — tagged ISR invalidation
   validation/
@@ -101,6 +104,9 @@ app/
       checkout/      # POST /api/reseller/checkout — create Checkout for buyer buying via reseller offer
       connect/       # GET /api/reseller/connect — redirect to Stripe Connect Express onboarding
     well-known/      # JWKS endpoint
+  legal/
+    fees/
+      page.tsx           # canonical fee schedule: 4-tier vendor, affiliate tiers, reseller markup, refund policy, worked examples — linked from every fee widget
   buyer/
     page.tsx             # buyer dashboard: subscription list, Launch, cancel-at-period-end, pause
     actions.ts           # cancelSubscriptionAction, pauseSubscriptionAction (Server Actions)
@@ -149,6 +155,7 @@ app/
       SyncStripeButton.tsx
 components/
   ui/               # shadcn-style primitives: Button, Card, Input, Select, Label, Badge, Modal, Toast, Table, Skeleton
+                    # BuyerFeeBreakdown.tsx — collapsible "How this is split" widget (client); uses previewBuyer()
   layout/           # DashboardShell, Sidebar, Topbar, PageHeader — opt-in wrapper for dashboard pages
 next.config.ts       # security headers (CSP report-only, HSTS, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP, CORP)
 proxy.ts             # Next.js middleware: auth enforcement, role routing, ?aff= cookie capture (30d HTTP-only), affiliate click capture → analytics_events, subdomain rewrite (<slug>.<base> → /_wl/<slug>/)
@@ -326,7 +333,7 @@ Wave 6 — docs:
 - [ ] #35 Buyer dashboard v2 (upcoming charges calendar, payment methods, invoice history, per-sub drawer, cancel-with-reason, pause-until date picker, privacy panel)
 - [x] #36 Admin dashboard v2 (system health, take-rate trend, channel mix, concentration risk, payout obligation, webhook health + DLQ, drill-downs, manual support tools, feature flags, JWT rotation, tax export)
 - [ ] #37 Marketplace v2 (search, category nav, filters, sort, screenshot cards, featured carousel, SEO)
-- [ ] #38 Fee transparency layer (live calculators in vendor/reseller/affiliate forms, optional buyer breakdown, canonical `/legal/fees` page)
+- [x] #38 Fee transparency layer (live calculators in vendor/reseller/affiliate forms, optional buyer breakdown, canonical `/legal/fees` page)
 - [ ] #39 Cross-role: notifications bell + preferences, account settings (2FA/sessions/data export/delete), onboarding checklist per role, CSV export everywhere, vendor webhook subscribers
 
 **Phase 6 — Wave 9 (Usage economy — the "4 kitchens" + foundations)** — design constraint: **BYOK + prepaid credits = zero/minimal compute cost to platform**; usage-based earnings for vendor/reseller/affiliate. **Foundation-first ordering: #47 → #48 → #46 → kitchens → #45.** #47/#48/#46 capture decisions that cannot be reconstructed retroactively — never defer.

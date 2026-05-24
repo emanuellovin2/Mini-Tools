@@ -48,9 +48,14 @@ export default async function MarketplacePage({ searchParams }: Props) {
           </Link>
           <h1 className="text-2xl font-bold">Marketplace</h1>
         </div>
-        <Link href="/login" className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors">
-          Sign in
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/legal/fees" className="text-sm text-gray-500 hover:text-gray-700 underline">
+            How fees work
+          </Link>
+          <Link href="/login" className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors">
+            Sign in
+          </Link>
+        </div>
       </div>
 
       {/* Search */}

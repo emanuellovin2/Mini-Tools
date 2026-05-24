@@ -5,6 +5,7 @@ import { getMarketplaceApp, formatPrice } from "@/lib/services/apps";
 import { createServerSupabaseClient } from "@/lib/services/supabase-server";
 import SubscribeButton from "./_components/SubscribeButton";
 import ScreenshotGallery from "./_components/ScreenshotGallery";
+import { BuyerFeeBreakdown } from "@/components/ui/BuyerFeeBreakdown";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -145,14 +146,19 @@ export default async function AppDetailPage({ params, searchParams }: Props) {
           <p className="text-gray-600 leading-relaxed mb-8">{app.description}</p>
         )}
 
-        <div className="border-t border-gray-100 pt-6 flex items-center justify-between gap-4">
-          <div>
-            <span className="text-3xl font-bold">
-              {formatPrice(app.price_cents, app.currency)}
-            </span>
-            <span className="text-gray-700 text-sm ml-1">/month</span>
+        <div className="border-t border-gray-100 pt-6 space-y-3">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <span className="text-3xl font-bold">
+                {formatPrice(app.price_cents, app.currency)}
+              </span>
+              <span className="text-gray-700 text-sm ml-1">/month</span>
+            </div>
+            {renderCta()}
           </div>
-          {renderCta()}
+          {isBuyer && !hasActiveSub && checkout !== "success" && (
+            <BuyerFeeBreakdown priceCents={app.price_cents} channel="direct" />
+          )}
         </div>
       </div>
     </div>

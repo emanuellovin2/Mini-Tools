@@ -189,6 +189,16 @@ export default async function AffiliateDashboardPage() {
         </div>
       )}
 
+      {/* Quick action bar */}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[13px] text-muted-foreground">
+          Current commission tier: <strong>{(affiliateCommBps / 100).toFixed(0)}%</strong> of net
+        </p>
+        <Link href="/legal/fees" className="text-[13px] text-muted-foreground hover:text-foreground underline">
+          How commissions work →
+        </Link>
+      </div>
+
       {/* Hero */}
       <HeroBanner
         activeMrrCents={activeMrr}
@@ -267,7 +277,17 @@ export default async function AffiliateDashboardPage() {
       {/* Referral links */}
       <Section title="Your referral links">
         <div className="mb-5">
-          <GenerateLinkForm />
+          <GenerateLinkForm
+            activeMrrCents={activeMrr}
+            appCatalog={promotableApps
+              .filter((a) => a.affiliate_commission_bps != null)
+              .map((a) => ({
+                id: a.id,
+                name: a.name,
+                price_cents: a.price_cents,
+                affiliate_commission_bps: a.affiliate_commission_bps,
+              }))}
+          />
         </div>
         <LinksTableV2
           links={links}

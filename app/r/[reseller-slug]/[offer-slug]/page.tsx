@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { getStorefrontOffer } from "@/lib/services/reseller";
 import SubscribeButton from "./_components/SubscribeButton";
+import { BuyerFeeBreakdown } from "@/components/ui/BuyerFeeBreakdown";
 
 interface Params {
   "reseller-slug": string;
@@ -116,6 +117,14 @@ export default async function StorefrontPage({
           </div>
 
           <SubscribeButton offerId={offer.id} />
+
+          <BuyerFeeBreakdown
+            priceCents={offer.sell_price_cents}
+            channel="reseller"
+            resellerFloorCents={offer.vendor_floor_snapshot_cents}
+            resellerWlTier={1}
+            vendorOpenness="open_to_resellers"
+          />
 
           <p className="text-xs text-center text-gray-700 mt-4">
             By subscribing you agree to our Terms of Service. Cancel anytime.
