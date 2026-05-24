@@ -330,7 +330,7 @@ Wave 6 — docs:
 - [x] #32 Vendor dashboard v2 (channel mix, Stripe Connect balance, dunning queue, refund/dispute feed, per-app drill-down drawer, openness panel with kickback earnings, transparent fee breakdown)
 - [x] #33 Affiliate dashboard v2 (conversion funnel, apps-to-promote catalog, earnings per app, Connect status, payout history, pending earnings, refund clawbacks, sticky referrals, share kit with QR)
 - [x] #34 Reseller dashboard v2 (resellable apps catalog, per-offer analytics drawer, vendor change alerts, Tier 2 WL panel, markup simulator, kickback transparency)
-- [ ] #35 Buyer dashboard v2 (upcoming charges calendar, payment methods, invoice history, per-sub drawer, cancel-with-reason, pause-until date picker, privacy panel)
+- [x] #35 Buyer dashboard v2 (upcoming charges calendar, payment methods, invoice history, per-sub drawer, cancel-with-reason, pause-until date picker, privacy panel)
 - [x] #36 Admin dashboard v2 (system health, take-rate trend, channel mix, concentration risk, payout obligation, webhook health + DLQ, drill-downs, manual support tools, feature flags, JWT rotation, tax export)
 - [x] #37 Marketplace v2 (search, category nav, filters, sort, screenshot cards, featured carousel, SEO)
 - [x] #38 Fee transparency layer (live calculators in vendor/reseller/affiliate forms, optional buyer breakdown, canonical `/legal/fees` page)
