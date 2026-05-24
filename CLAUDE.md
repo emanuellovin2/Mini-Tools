@@ -13,6 +13,9 @@ A multi-sided marketplace where developers list SaaS apps and sell them on subsc
 - **Affiliate (referral):** vendor sets `affiliate_commission_bps` per app (20–80%). On affiliate sales: platform takes **5% of net**, affiliate gets their set %, vendor keeps the rest. Affiliate tier: 20%/25%/30% at $0/$5k/$20k active MRR generated. Commission snapshotted at subscribe time — tier changes only affect new subs.
 - **Reseller (storefront):** pays **$19/month** for platform access (30-day free trial). On each sale: vendor gets `min_price` floor, platform takes **5% of markup** (Tier 1) or **2.5% of markup** (Tier 2 WL), reseller keeps the rest. Vendor with `open_to_wl` gets 33% kickback on platform commission (both tiers).
 
+## Next.js version note
+This project uses **Next.js 16** — which has breaking API and file-convention changes not reflected in most LLM training data. Before writing any Next.js-specific code (routing, middleware, caching, RSC patterns), read the bundled docs at `node_modules/next/dist/docs/` (start with `01-app/`). Do not assume Next.js 13–15 conventions apply.
+
 ## Commands (available after #1 bootstraps the project)
 ```bash
 npm run dev          # Next.js dev server
