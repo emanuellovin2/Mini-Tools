@@ -217,3 +217,55 @@ describeMaybe("Seed data integrity", () => {
     expect(publicData ?? []).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// RLS: app_reviews table (#37)
+// ---------------------------------------------------------------------------
+describeMaybe("RLS: app_reviews table", () => {
+  const REVIEW_ID = "00000000-0000-0000-0002-000000000001"; // seeded in test setup if present
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type AnyClient = any;
+
+  it("anonymous user can read published reviews", async () => {
+    const anon: AnyClient = createClient<Database>(SUPABASE_URL, ANON_KEY!, {
+      auth: { persistSession: false },
+    });
+    const { data, error } = await anon
+      .from("app_reviews")
+      .select("id, status")
+      .eq("app_id", IDs.APP_1);
+    expect(error).toBeNull();
+    // All returned rows must be published
+    (data ?? []).forEach((r: { status: string }) => expect(r.status).toBe("published"));
+  });
+
+  it("buyer cannot insert review without a valid subscription", async () => {
+    const buyer: AnyClient = await signIn("buyer-1@test.com", "password123");
+    const { error } = await buyer.from("app_reviews").insert({
+      app_id: IDs.APP_1,
+      buyer_id: IDs.BUYER_1,
+      subscription_id: "00000000-0000-0000-0000-000000000999", // non-existent
+      rating: 5,
+    });
+    // FK violation or RLS block expected
+    expect(error).not.toBeNull();
+  });
+
+  it("vendor cannot read hidden reviews on other vendors' apps", async () => {
+    const vendorB: AnyClient = await signIn("vendor-b@test.com", "password123");
+    const { data } = await vendorB
+      .from("app_reviews")
+      .select("id, status")
+      .eq("app_id", IDs.APP_1)
+      .eq("status", "hidden");
+    // vendor_b cannot see hidden reviews on vendor_a's app
+    expect(data ?? []).toHaveLength(0);
+  });
+
+  it("admin can read all reviews including hidden", async () => {
+    const admin: AnyClient = adminClient();
+    const { error } = await admin.from("app_reviews").select("id, status");
+    expect(error).toBeNull();
+  });
+});

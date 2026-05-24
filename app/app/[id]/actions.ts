@@ -129,3 +129,73 @@ export async function subscribeAction(appId: string): Promise<SubscribeResult> {
 
   return { url: session.url! };
 }
+
+// ---------------------------------------------------------------------------
+// createReviewAction — verified-purchase review submission
+// ---------------------------------------------------------------------------
+
+const reviewSchema = z.object({
+  appId: z.string().uuid(),
+  subscriptionId: z.string().uuid(),
+  rating: z.number().int().min(1).max(5),
+  title: z.string().max(120).optional(),
+  body: z.string().max(2000).optional(),
+});
+
+export type ReviewResult = { ok: true } | { error: string };
+
+export async function createReviewAction(
+  input: z.infer<typeof reviewSchema>
+): Promise<ReviewResult> {
+  const parsed = reviewSchema.safeParse(input);
+  if (!parsed.success) return { error: "Invalid input." };
+  const { appId, subscriptionId, rating, title, body } = parsed.data;
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sign in to leave a review." };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (profile?.role !== "buyer") return { error: "Only buyers can leave reviews." };
+
+  // Verify the subscription belongs to this buyer + this app
+  const admin = createAdminClient();
+  const { data: sub } = await admin
+    .from("subscriptions")
+    .select("id, app_id, buyer_id, status")
+    .eq("id", subscriptionId)
+    .single();
+
+  if (!sub || sub.app_id !== appId || sub.buyer_id !== user.id) {
+    return { error: "Subscription not found." };
+  }
+
+  // Check for existing review (duplicate guard — DB also has UNIQUE constraint)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existing } = await (admin.from as any)("app_reviews")
+    .select("id")
+    .eq("app_id", appId)
+    .eq("buyer_id", user.id)
+    .maybeSingle();
+  if (existing) return { error: "You already reviewed this app." };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin.from as any)("app_reviews").insert({
+    app_id: appId,
+    buyer_id: user.id,
+    subscription_id: subscriptionId,
+    rating,
+    title: title ?? null,
+    body: body ?? null,
+  });
+
+  if (error) return { error: "Could not save your review. Please try again." };
+
+  return { ok: true };
+}

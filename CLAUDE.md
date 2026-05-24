@@ -332,7 +332,7 @@ Wave 6 — docs:
 - [x] #34 Reseller dashboard v2 (resellable apps catalog, per-offer analytics drawer, vendor change alerts, Tier 2 WL panel, markup simulator, kickback transparency)
 - [ ] #35 Buyer dashboard v2 (upcoming charges calendar, payment methods, invoice history, per-sub drawer, cancel-with-reason, pause-until date picker, privacy panel)
 - [x] #36 Admin dashboard v2 (system health, take-rate trend, channel mix, concentration risk, payout obligation, webhook health + DLQ, drill-downs, manual support tools, feature flags, JWT rotation, tax export)
-- [ ] #37 Marketplace v2 (search, category nav, filters, sort, screenshot cards, featured carousel, SEO)
+- [x] #37 Marketplace v2 (search, category nav, filters, sort, screenshot cards, featured carousel, SEO)
 - [x] #38 Fee transparency layer (live calculators in vendor/reseller/affiliate forms, optional buyer breakdown, canonical `/legal/fees` page)
 - [ ] #39 Cross-role: notifications bell + preferences, account settings (2FA/sessions/data export/delete), onboarding checklist per role, CSV export everywhere, vendor webhook subscribers
 
@@ -348,7 +348,7 @@ Wave 6 — docs:
 - [ ] #45 Partner-client data lifecycle & DPA + CRM seam — `partner_clients` identity registry (tags/lifecycle_stage/notes — agency client book), cross-kitchen erasure/export hooks, retention cron, `/legal/dpa` — legal foundation for §13 (platform = data processor); depends on #40/#41/#43/#47
 
 **Wave 8 stragglers — org-aware (run after #47):**
-- [ ] #37 Marketplace v2 + **reviews & ratings** (`app_reviews`, verified-purchase only, trigger-maintained `rating_avg/rating_count` on apps) — reputation = non-portable stickiness
+- [x] #37 Marketplace v2 + **reviews & ratings** (`app_reviews`, verified-purchase only, trigger-maintained `rating_avg/rating_count` on apps) — reputation = non-portable stickiness
 - [ ] #39 Cross-role: notifications/2FA/sessions/onboarding/CSV/**vendor webhook subscribers** (v1.* event versioning) + **partner platform API** (`api_keys` test/live mode, `idempotency_keys`, scoped + rate-limited `/api/v1/*`) — embedding stickiness
 
 ## Guardrails

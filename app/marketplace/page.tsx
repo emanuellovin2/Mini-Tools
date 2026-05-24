@@ -3,107 +3,144 @@ import type { Metadata } from "next";
 import {
   listMarketplaceApps,
   listMarketplaceCategories,
+  getFeaturedApps,
   formatPrice,
+  formatRating,
   MARKETPLACE_PAGE_SIZE,
 } from "@/lib/services/apps";
-import { parseMarketplaceParams } from "@/lib/validation/marketplace";
+import {
+  parseMarketplaceParams,
+  buildMarketplaceHref,
+} from "@/lib/validation/marketplace";
+import { FeaturedCarousel } from "./_components/FeaturedCarousel";
+import { MarketplaceSearch } from "./_components/MarketplaceSearch";
+import { SortDropdown } from "./_components/SortDropdown";
+import { FilterSidebar, FilterSheet } from "./_components/MarketplaceFilters";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export const metadata: Metadata = {
   title: "Marketplace — [PLATFORM]",
-  description: "Discover and subscribe to independent SaaS tools.",
+  description:
+    "Discover and subscribe to independent SaaS tools built by developers.",
+  openGraph: {
+    title: "Marketplace — [PLATFORM]",
+    description: "Discover and subscribe to independent SaaS tools.",
+    type: "website",
+  },
 };
 
 type Props = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+const FIXED_CATEGORIES = [
+  "Productivity",
+  "Developer",
+  "Marketing",
+  "Finance",
+  "AI",
+];
+
 export default async function MarketplacePage({ searchParams }: Props) {
   const raw = await searchParams;
-  const { page, category, search } = parseMarketplaceParams(raw);
+  const params = parseMarketplaceParams(raw);
+  const { page, category, search, sort, priceMin, priceMax, ratingMin, hasAffiliate, hasTrial } = params;
 
-  const [{ apps, total, totalPages }, categories] = await Promise.all([
-    listMarketplaceApps({ page, pageSize: MARKETPLACE_PAGE_SIZE, category, search }),
+  const [{ apps, total, totalPages }, categories, featured] = await Promise.all([
+    listMarketplaceApps({
+      page,
+      pageSize: MARKETPLACE_PAGE_SIZE,
+      category,
+      search,
+      sort,
+      priceMin,
+      priceMax,
+      ratingMin,
+      hasAffiliate,
+      hasTrial,
+    }),
     listMarketplaceCategories(),
+    // Only fetch featured when on the default landing (no filters active)
+    !search && !category && !priceMin && !priceMax && !ratingMin && !hasAffiliate && !hasTrial && page === 1
+      ? getFeaturedApps(5)
+      : Promise.resolve([]),
   ]);
 
-  function href(overrides: { page?: number; category?: string; search?: string }) {
-    const p = new URLSearchParams();
-    const s = "search" in overrides ? overrides.search : search;
-    const c = "category" in overrides ? overrides.category : category;
-    const pg = overrides.page ?? (("search" in overrides || "category" in overrides) ? 1 : page);
-    if (s) p.set("search", s);
-    if (c) p.set("category", c);
-    if (pg > 1) p.set("page", String(pg));
-    const qs = p.toString();
-    return `/marketplace${qs ? `?${qs}` : ""}`;
-  }
+  const allCategories = Array.from(
+    new Set([...FIXED_CATEGORIES, ...categories])
+  );
+
+  const isFiltered =
+    search || category || priceMin != null || priceMax != null ||
+    ratingMin != null || hasAffiliate != null || hasTrial != null;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-10">
+    <div className="max-w-6xl mx-auto px-4 py-10">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <Link href="/" className="text-sm text-gray-700 hover:text-gray-900 mb-1 inline-block">
+          <Link href="/" className="text-xs text-muted-foreground hover:text-foreground mb-1 inline-block">
             [PLATFORM]
           </Link>
           <h1 className="text-2xl font-bold">Marketplace</h1>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/legal/fees" className="text-sm text-gray-500 hover:text-gray-700 underline">
+          <Link
+            href="/legal/fees"
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+          >
             How fees work
           </Link>
-          <Link href="/login" className="text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors">
+          <Link
+            href="/login"
+            className="text-sm border border-border px-4 py-2 rounded-lg hover:bg-muted transition-colors"
+          >
             Sign in
           </Link>
         </div>
       </div>
 
-      {/* Search */}
-      <form method="get" action="/marketplace" className="mb-5">
-        {category && <input type="hidden" name="category" value={category} />}
-        <div className="flex gap-2">
-          <input
-            name="search"
-            defaultValue={search}
-            placeholder="Search apps…"
-            className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-          />
-          <button
-            type="submit"
-            className="bg-black text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
-          >
-            Search
-          </button>
-          {search && (
-            <Link
-              href={href({ search: undefined })}
-              className="border border-gray-300 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors"
-            >
-              Clear
-            </Link>
-          )}
-        </div>
-      </form>
+      {/* Featured carousel — only on unfiltered first page */}
+      {featured.length > 0 && <FeaturedCarousel apps={featured} />}
 
-      {/* Category chips */}
-      {categories.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-6">
+      {/* Search + sort + mobile filters row */}
+      <div className="flex gap-2 mb-5">
+        <MarketplaceSearch params={params} />
+        <FilterSheet params={params} />
+        <SortDropdown params={params} />
+      </div>
+
+      {/* Category pills */}
+      {allCategories.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-6 overflow-x-auto pb-1">
           <Link
-            href={href({ category: undefined })}
-            className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-              !category ? "bg-black text-white border-black" : "border-gray-300 hover:bg-gray-50"
+            href={buildMarketplaceHref(params, { category: undefined, page: 1 })}
+            className={`shrink-0 px-3 py-1 rounded-full text-xs border transition-colors ${
+              !category
+                ? "bg-primary text-primary-foreground border-primary"
+                : "border-border hover:bg-muted"
             }`}
           >
             All
           </Link>
-          {categories.map((cat) => (
+          <Link
+            href={buildMarketplaceHref(params, { category: "trending", page: 1 })}
+            className={`shrink-0 px-3 py-1 rounded-full text-xs border transition-colors ${
+              category === "trending"
+                ? "bg-primary text-primary-foreground border-primary"
+                : "border-border hover:bg-muted"
+            }`}
+          >
+            🔥 Trending
+          </Link>
+          {allCategories.map((cat) => (
             <Link
               key={cat}
-              href={href({ category: cat })}
-              className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+              href={buildMarketplaceHref(params, { category: cat, page: 1 })}
+              className={`shrink-0 px-3 py-1 rounded-full text-xs border transition-colors ${
                 category === cat
-                  ? "bg-black text-white border-black"
-                  : "border-gray-300 hover:bg-gray-50"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border hover:bg-muted"
               }`}
             >
               {cat}
@@ -112,102 +149,165 @@ export default async function MarketplacePage({ searchParams }: Props) {
         </div>
       )}
 
-      {/* Count */}
-      <p className="text-sm text-gray-700 mb-5">
-        {total === 0 ? "No apps found" : `${total} app${total === 1 ? "" : "s"}`}
-        {search && <span> matching &ldquo;{search}&rdquo;</span>}
-        {category && <span> in {category}</span>}
-      </p>
+      {/* Main content: sidebar + grid */}
+      <div className="flex gap-8">
+        <FilterSidebar params={params} />
 
-      {/* Grid */}
-      {apps.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          {apps.map((app) => (
-            <Link
-              key={app.id}
-              href={`/app/${app.id}`}
-              className="flex flex-col border border-gray-200 rounded-xl overflow-hidden hover:border-gray-400 hover:shadow-sm transition-all"
-            >
-              {/* Preview screenshot or gradient fallback */}
-              {app.screenshot_urls[0] ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={app.screenshot_urls[0]}
-                  alt={`${app.name} screenshot`}
-                  className="w-full aspect-[16/10] object-cover"
-                  loading="lazy"
-                />
+        <div className="flex-1 min-w-0">
+          {/* Result count */}
+          <p className="text-xs text-muted-foreground mb-4">
+            {total === 0
+              ? "No apps found"
+              : `${total} app${total === 1 ? "" : "s"}`}
+            {search && (
+              <span>
+                {" "}
+                matching &ldquo;{search}&rdquo;
+              </span>
+            )}
+            {category && <span> in {category}</span>}
+          </p>
+
+          {/* App grid */}
+          {apps.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+              {apps.map((app) => (
+                <Link
+                  key={app.id}
+                  href={`/app/${app.id}`}
+                  className="group flex flex-col border border-border rounded-xl overflow-hidden hover:border-primary/50 hover:shadow-sm transition-all"
+                >
+                  {/* Screenshot */}
+                  {app.screenshot_urls[0] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={app.screenshot_urls[0]}
+                      alt={`${app.name} screenshot`}
+                      className="w-full aspect-[16/10] object-cover group-hover:opacity-95 transition-opacity"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full aspect-[16/10] bg-gradient-to-br from-muted to-muted/60" />
+                  )}
+
+                  <div className="p-4 flex flex-col flex-1">
+                    <div className="flex justify-between items-start gap-2 mb-1">
+                      <h2 className="font-semibold text-sm leading-snug">
+                        {app.name}
+                      </h2>
+                      {app.category && (
+                        <span className="shrink-0 text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
+                          {app.category}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Rating */}
+                    {app.rating_count > 0 && (
+                      <div className="flex items-center gap-1 mb-1.5">
+                        <span className="text-amber-400 text-xs">★</span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatRating(app.rating_avg)}
+                          <span className="ml-0.5">({app.rating_count})</span>
+                        </span>
+                      </div>
+                    )}
+
+                    {app.description && (
+                      <p className="text-xs text-muted-foreground mb-3 line-clamp-2 flex-1">
+                        {app.description}
+                      </p>
+                    )}
+
+                    <div className="flex items-center justify-between mt-auto pt-2 gap-2">
+                      <span className="text-sm font-semibold">
+                        {formatPrice(app.price_cents, app.currency)}
+                        <span className="text-muted-foreground font-normal text-xs ml-0.5">
+                          /mo
+                        </span>
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {app.has_free_trial && (
+                          <span className="text-[9px] font-medium bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full">
+                            Free trial
+                          </span>
+                        )}
+                        {app.affiliate_commission_bps != null &&
+                          app.affiliate_commission_bps > 0 && (
+                            <span className="text-[9px] font-medium bg-violet-50 text-violet-700 border border-violet-200 px-1.5 py-0.5 rounded-full">
+                              {Math.round(app.affiliate_commission_bps / 100)}%
+                              affiliate
+                            </span>
+                          )}
+                      </div>
+                    </div>
+
+                    {app.subscriber_count > 0 && (
+                      <p className="text-[10px] text-muted-foreground mt-1.5">
+                        {app.subscriber_count} subscriber
+                        {app.subscriber_count !== 1 ? "s" : ""}
+                      </p>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="No apps match your filters"
+              body={
+                isFiltered
+                  ? "Try adjusting your search or filters."
+                  : "No apps are available yet."
+              }
+              cta={
+                isFiltered ? (
+                  <Link
+                    href="/marketplace"
+                    className="text-sm text-primary underline"
+                  >
+                    Clear all filters
+                  </Link>
+                ) : undefined
+              }
+              className="border border-dashed border-border rounded-xl py-20"
+            />
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 mt-4">
+              {page > 1 ? (
+                <Link
+                  href={buildMarketplaceHref(params, { page: page - 1 })}
+                  className="border border-border px-4 py-2 rounded-lg text-sm hover:bg-muted transition-colors"
+                >
+                  ← Previous
+                </Link>
               ) : (
-                <div className="w-full aspect-[16/10] bg-gradient-to-br from-gray-100 to-gray-200" />
+                <span className="px-4 py-2 rounded-lg text-sm text-muted-foreground border border-border/40">
+                  ← Previous
+                </span>
               )}
-
-              <div className="p-5 flex flex-col flex-1">
-                <div className="flex justify-between items-start gap-2 mb-2">
-                  <h2 className="font-semibold text-base leading-snug">{app.name}</h2>
-                  {app.category && (
-                    <span className="shrink-0 text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
-                      {app.category}
-                    </span>
-                  )}
-                </div>
-                {app.description && (
-                  <p className="text-sm text-gray-700 mb-3 line-clamp-2 flex-1">
-                    {app.description}
-                  </p>
-                )}
-                <div className="flex items-center justify-between mt-auto pt-2">
-                  <span className="text-sm font-medium">
-                    {formatPrice(app.price_cents, app.currency)}<span className="text-gray-700 font-normal">/mo</span>
-                  </span>
-                  {app.vendor_name && (
-                    <span className="text-xs text-gray-700">by {app.vendor_name}</span>
-                  )}
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-20 text-gray-700 border border-dashed border-gray-200 rounded-xl">
-          <p className="text-sm">No apps match your filters.</p>
-          <Link href="/marketplace" className="text-sm text-black underline mt-2 inline-block">
-            Clear filters
-          </Link>
-        </div>
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-4 mt-4">
-          {page > 1 ? (
-            <Link
-              href={href({ page: page - 1 })}
-              className="border border-gray-300 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors"
-            >
-              ← Previous
-            </Link>
-          ) : (
-            <span className="px-4 py-2 rounded-lg text-sm text-gray-600 border border-gray-100">
-              ← Previous
-            </span>
-          )}
-          <span className="text-sm text-gray-700">
-            {page} / {totalPages}
-          </span>
-          {page < totalPages ? (
-            <Link
-              href={href({ page: page + 1 })}
-              className="border border-gray-300 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors"
-            >
-              Next →
-            </Link>
-          ) : (
-            <span className="px-4 py-2 rounded-lg text-sm text-gray-600 border border-gray-100">
-              Next →
-            </span>
+              <span className="text-sm text-muted-foreground">
+                {page} / {totalPages}
+              </span>
+              {page < totalPages ? (
+                <Link
+                  href={buildMarketplaceHref(params, { page: page + 1 })}
+                  className="border border-border px-4 py-2 rounded-lg text-sm hover:bg-muted transition-colors"
+                >
+                  Next →
+                </Link>
+              ) : (
+                <span className="px-4 py-2 rounded-lg text-sm text-muted-foreground border border-border/40">
+                  Next →
+                </span>
+              )}
+            </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
