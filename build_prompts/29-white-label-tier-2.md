@@ -1,7 +1,7 @@
 # Task #29 — White-label Tier 2 (vendor reseller-openness toggle + per-offer WL branding)
 
 > **Before starting:** read `ENGINEERING.md`, `SPEC.md` §3, §4b, §6, §7, §11. Read [build_prompts/27-manual-vendor-commission-override.md](build_prompts/27-manual-vendor-commission-override.md) and [build_prompts/28-security-hardening-v2.md](build_prompts/28-security-hardening-v2.md) — both must be shipped first.
-> **Definition of Done:** schema + RLS in place, `computeResellerSplit` rewritten with two-stream math + property-based invariant test, vendor toggle UI (3-state), reseller Tier 2 upgrade flow with per-offer Stripe subscription + 14-day trial, brand auto-approval with homoglyph deny-list, subdomain storefront routing in `proxy.ts`, Stripe Connect branding sync, Tier 2 email branding (subject prefix + header logo), buyer dashboard stays platform-branded, migration backfills existing reseller subscriptions to grandfathered 0% vendor cut, comprehensive tests on every money path + adversarial RLS checks, SPEC.md updated, Verify step passes.
+> **Definition of Done:** schema + RLS in place, `computeResellerSplit` rewritten with single-commission + WL kickback math (`VENDOR_WL_KICKBACK_BPS=3333`) + property-based invariant test (sum invariant + non-negative platform cut), vendor toggle UI (3-state), reseller Tier 2 upgrade flow with per-offer Stripe subscription + 14-day trial, brand auto-approval with homoglyph deny-list, subdomain storefront routing in `proxy.ts`, Stripe Connect branding sync, Tier 2 email branding (subject prefix + header logo), buyer dashboard stays platform-branded, migration backfills existing reseller subscriptions to grandfathered `open_to_resellers` (exact-floor status quo, no surprise kickback), comprehensive tests on every money path + adversarial RLS checks, SPEC.md updated, Verify step passes.
 
 **Phase 4 — Wave 7. Depends on: #27 (admin override precedence stays unchanged — confirms our `getVendorCutBps` precedence is still correct), #28 (CSP, audit log helper, rate limiting must be live before opening new attack surface via host-based routing). Blocks: #30 (custom domain CNAME + email domain — explicitly deferred).**
 
@@ -19,17 +19,17 @@ Today reseller sales work as follows ([SPEC §4b](SPEC.md), [lib/stripe/transfer
 
 ### (A) Vendor toggle — 3-state, default `open_to_resellers`
 
-Vendor controls whether resellers can list their apps and at which tier. **Default is Tier 1 open** (matches the current implicit behavior — any app with `min_price_cents` set is reseller-eligible). The vendor cut applies **only to reseller sales** — direct sales **always** use the 12/8/5/3% tier system (status quo, unchanged).
+Vendor controls whether resellers can list their apps and at which tier. **Default is Tier 1 open** (matches the current implicit behavior — any app with `min_price_cents` set is reseller-eligible). Direct sales **always** use the 12/8/5/3% tier system (status quo, unchanged) regardless of toggle. **Vendor never pays a per-sale tax on reseller sales** — vendor always receives at least the exact `floor`.
 
-| Toggle | Direct sales cut | Tier 1 reseller? | Tier 2 (WL) reseller? | Vendor cut on reseller sales |
+| Toggle | Direct sales cut | Tier 1 reseller? | Tier 2 (WL) reseller? | Vendor receives per reseller sale |
 |---|---|---|---|---|
 | `closed` | 12/8/5/3% | ❌ | ❌ | n/a |
-| `open_to_resellers` (default) | 12/8/5/3% | ✅ | ❌ | **3%** of vendor's floor |
-| `open_to_wl` | 12/8/5/3% | ✅ | ✅ | **0%** (on Tier 1 AND Tier 2) |
+| `open_to_resellers` (default) | 12/8/5/3% | ✅ | ❌ | exact `floor` (status quo) |
+| `open_to_wl` | 12/8/5/3% | ✅ | ✅ | `floor + 33% of platform's reseller commission` (kickback) |
 
-`open_to_wl` is a strict superset of `open_to_resellers` + carrot: zero vendor-side tax on **both** tiers. Strong incentive to fully open up.
+`open_to_wl` is a strict superset of `open_to_resellers` + carrot: vendor receives 1/3 of platform's reseller-side commission as a kickback on every reseller sale (Tier 1 OR Tier 2). Strict improvement vs status quo on all paths — vendor never loses money by opening up further.
 
-**No per-reseller approval, no engagement guard, no markup share.** Resellers self-enroll. Vendor's toggle is the only gate.
+**No per-reseller approval, no engagement guard, no markup share, no vendor tax.** Resellers self-enroll. Vendor's toggle is the only gate. Reseller economics are identical across all toggle states (the kickback comes from platform's margin, not reseller's).
 
 ### (B) Reseller Tier 2 upgrade (per-offer)
 
@@ -44,21 +44,25 @@ Vendor controls whether resellers can list their apps and at which tier. **Defau
 
 **Auto-approval with homoglyph deny-list.** No manual admin review. Reseller is liable per TOS for trademark infringement.
 
-### (C) Two-stream payment split (independent, non-cumulative)
+### (C) Payment split — single stream + WL kickback to vendor
 
-On a reseller invoice, platform receives TWO independent cuts:
-- **Reseller-side cut** = 5% of markup (Tier 1) or 2.5% (Tier 2) — taxed on reseller's share of markup
-- **Vendor-side cut** = 3% (open_to_resellers) or 0% (open_to_wl) — taxed on vendor's floor
+On a reseller invoice, platform takes ONE cut from reseller-side markup. On `open_to_wl` subscriptions, platform redistributes **1/3 (3333 bps)** of that cut back to the vendor as a kickback. Reseller economics are identical regardless of vendor toggle.
 
-These are independent line items, not a single combined fee.
+- **Reseller-side platform commission** = `floor(markup × 500 / 10000)` (Tier 1) or `floor(markup × 250 / 10000)` (Tier 2)
+- **WL kickback to vendor** = `floor(platform_commission × 3333 / 10000)` if `vendor_openness_snapshot = 'open_to_wl'`, else 0
+- **Vendor share** = `floor + kickback`
+- **Platform net** = `platform_commission − kickback`
+- **Reseller share** = `amount − vendor_share − platform_net` (= `markup − platform_commission`, the residual absorbs rounding)
 
 Worked example ($50 sell, $20 floor, $30 markup):
 
 | Scenario | Vendor net | Reseller net | Platform |
 |---|---|---|---|
-| Tier 1, vendor=open_to_resellers | $20 − $0.60 = **$19.40** | $30 − $1.50 = **$28.50** | $0.60 + $1.50 = **$2.10** |
-| Tier 1, vendor=open_to_wl | **$20** | **$28.50** | **$1.50** |
-| Tier 2, vendor=open_to_wl | **$20** | $30 − $0.75 = **$29.25** | **$0.75** (+ $29/mo metered) |
+| Tier 1, vendor=open_to_resellers | **$20** (status quo) | $30 − $1.50 = **$28.50** | **$1.50** |
+| Tier 1, vendor=open_to_wl | $20 + $0.49 kickback = **$20.49** | **$28.50** | $1.50 − $0.49 = **$1.01** |
+| Tier 2, vendor=open_to_wl | $20 + $0.24 kickback = **$20.24** | $30 − $0.75 = **$29.25** | $0.75 − $0.24 = **$0.51** (+ $29/mo metered) |
+
+The kickback is the **only** economic difference between `open_to_resellers` and `open_to_wl` on Tier 1 sales. On Tier 2 sales (only allowed when `open_to_wl`), kickback applies on the 2.5% Tier 2 commission. Reseller's $28.50 / $29.25 numbers are independent of vendor toggle — adoption-safe.
 
 ---
 
@@ -79,7 +83,7 @@ ALTER TABLE public.profiles
     NOT NULL DEFAULT 'open_to_resellers';
 
 COMMENT ON COLUMN public.profiles.reseller_openness IS
-  'Vendor toggle for reseller program. closed = no resellers; open_to_resellers (default) = Tier 1 only, vendor pays 3% of floor on reseller sales; open_to_wl = Tier 1 + Tier 2, vendor pays 0% of floor on reseller sales. Direct sales always use the 12/8/5/3% tier system regardless of this toggle.';
+  'Vendor toggle for reseller program. closed = no resellers; open_to_resellers (default) = Tier 1 only, vendor receives exact floor on reseller sales (status quo); open_to_wl = Tier 1 + Tier 2 allowed, vendor receives floor + 33% of platform commission as kickback. Direct sales always use the 12/8/5/3% tier system regardless of this toggle. Vendor never pays a per-sale tax in any state.';
 
 -- Index for vendors filtering by openness (e.g., reseller browsing marketplace for listable apps)
 CREATE INDEX profiles_reseller_openness_idx ON public.profiles (reseller_openness)
@@ -142,25 +146,30 @@ ALTER TABLE public.subscriptions
     );
 
 -- ===========================================================
--- (D) Migration backfill — grandfather existing reseller subs at 0% vendor cut
+-- (D) Migration backfill — grandfather existing reseller subs at status quo (no kickback)
 -- ===========================================================
--- Existing reseller subscriptions paid 0% vendor cut (status quo: vendor got exact floor).
--- Marking them as open_to_wl preserves that for the lifetime of each subscription.
--- The vendor's profile default (open_to_resellers) applies only to NEW subs after this migration.
+-- Existing reseller subscriptions paid 0% vendor tax and received no kickback (status quo: vendor got exact floor).
+-- The model preserves vendor's exact-floor outcome on open_to_resellers, so backfill to that.
+-- If a vendor later flips their profile to open_to_wl, existing grandfathered subs stay at open_to_resellers
+-- (immutable snapshot) — vendor's economics on old subs do not change retroactively. Only NEW subs use the live toggle.
 UPDATE public.subscriptions
   SET reseller_wl_tier_snapshot = 1,
-      vendor_openness_snapshot  = 'open_to_wl'    -- grandfather: 0% vendor cut for old subs
+      vendor_openness_snapshot  = 'open_to_resellers'    -- grandfather: exact-floor status quo
   WHERE reseller_id IS NOT NULL
     AND reseller_wl_tier_snapshot IS NULL;
 ```
 
-### 2. `lib/stripe/transfers.ts` — `computeResellerSplit()` rewrite (two-stream math)
+### 2. `lib/stripe/transfers.ts` — `computeResellerSplit()` rewrite (single-stream + WL kickback)
 
 ```ts
+// WL kickback rate: vendor receives 1/3 of platform's reseller-side commission on open_to_wl sales.
+// Exposed as a const for tunability — DO NOT inline. Future adjustments (20%/50%) are a one-line config change.
+export const VENDOR_WL_KICKBACK_BPS = 3333;   // 33.33% (one third)
+
 export interface ResellerSplit {
-  vendorShareCents: number;
-  platformCutCents: number;     // = platformFromReseller + platformFromVendor
-  resellerShareCents: number;
+  vendorShareCents: number;     // = floor + kickback (or = amount in Stripe-fee edge case)
+  platformCutCents: number;     // = platformCommission − kickback
+  resellerShareCents: number;   // = amount − vendor − platform (residual; absorbs rounding)
 }
 
 export function computeResellerSplit(args: {
@@ -177,27 +186,33 @@ export function computeResellerSplit(args: {
   }
 
   // Invariant guard: Tier 2 sales are only valid for vendors opted into WL.
-  // Migration backfill grandfathers historical subs at open_to_wl; the only way to get here
-  // with (wlTier=2, vendorOpenness=open_to_resellers) is a logic bug. Refuse to compute money.
+  // The only way to reach here with (wlTier=2, vendorOpenness=open_to_resellers) is a logic bug.
   if (wlTier === 2 && vendorOpenness !== 'open_to_wl') {
     throw new Error(`invariant: Tier 2 sale requires vendorOpenness=open_to_wl, got ${vendorOpenness}`);
   }
 
   const markup = amountCents - vendorFloorCents;
-  const resellerSideBps = wlTier === 2 ? 250 : 500;                    // 2.5% Tier 2, 5% Tier 1
-  const vendorSideBps = vendorOpenness === 'open_to_wl' ? 0 : 300;     // 0% WL, 3% open_to_resellers
+  const resellerSideBps = wlTier === 2 ? 250 : 500;    // 2.5% Tier 2, 5% Tier 1
 
-  // Two independent cuts, both floored (integer-safe)
-  const platformFromReseller = Math.floor((markup * resellerSideBps) / 10_000);
-  const platformFromVendor   = Math.floor((vendorFloorCents * vendorSideBps) / 10_000);
+  // Platform's gross commission from reseller markup (floored, integer-safe)
+  const platformCommission = Math.floor((markup * resellerSideBps) / 10_000);
 
-  const vendorShare = vendorFloorCents - platformFromVendor;
-  const platformCut = platformFromReseller + platformFromVendor;
-  const resellerShare = amountCents - vendorShare - platformCut;
+  // WL kickback — only when vendor opted into WL. Math.floor caps each step independently
+  // so very small commissions (e.g. on $0.10 markup) yield zero kickback; documented behavior.
+  const vendorKickback = vendorOpenness === 'open_to_wl'
+    ? Math.floor((platformCommission * VENDOR_WL_KICKBACK_BPS) / 10_000)
+    : 0;
 
-  // Sum invariant — assertion (must hold by construction)
+  const vendorShare = vendorFloorCents + vendorKickback;
+  const platformCut = platformCommission - vendorKickback;
+  const resellerShare = amountCents - vendorShare - platformCut;   // = markup − platformCommission (residual)
+
+  // Sum invariant assertions (must hold by construction; runtime guard catches future regressions)
   if (resellerShare < 0) {
     throw new Error(`computeResellerSplit: negative reseller share (amount=${amountCents}, vendor=${vendorShare}, platform=${platformCut})`);
+  }
+  if (platformCut < 0) {
+    throw new Error(`computeResellerSplit: negative platform cut (kickback > commission)`);
   }
   if (vendorShare + platformCut + resellerShare !== amountCents) {
     throw new Error(`computeResellerSplit: sum invariant broken (sum=${vendorShare + platformCut + resellerShare}, expected=${amountCents})`);
@@ -210,25 +225,46 @@ export function computeResellerSplit(args: {
 **Tests required** ([lib/stripe/__tests__/reseller.test.ts](lib/stripe/__tests__/reseller.test.ts)) — replace existing tests:
 
 ```ts
-// Worked examples
-it("Tier 1 open_to_resellers: $50 sell, $20 floor → $19.40 / $28.50 / $2.10", () => {});
-it("Tier 1 open_to_wl: $50 sell, $20 floor → $20 / $28.50 / $1.50", () => {});
-it("Tier 2 open_to_wl: $50 sell, $20 floor → $20 / $29.25 / $0.75", () => {});
+// Worked examples — amounts in cents
+it("Tier 1 open_to_resellers (status quo): $50/$20 → vendor=2000, platform=150, reseller=2850", () => {});
+it("Tier 1 open_to_wl with kickback: $50/$20 → vendor=2049, platform=101, reseller=2850", () => {
+  // markup=3000 cents; platformCommission = floor(3000*500/10000) = 150
+  // kickback = floor(150*3333/10000) = floor(49.995) = 49
+  // vendor = 2000 + 49 = 2049; platform = 150 - 49 = 101; reseller = 5000-2049-101 = 2850 ✓
+});
+it("Tier 2 open_to_wl with kickback: $50/$20 → vendor=2024, platform=51, reseller=2925", () => {
+  // markup=3000; platformCommission = floor(3000*250/10000) = 75
+  // kickback = floor(75*3333/10000) = floor(24.9975) = 24
+  // vendor = 2024; platform = 51; reseller = 5000-2024-51 = 2925 ✓
+});
 
 // Edge cases
-it("amount < floor (Stripe fee edge): vendor gets full amount", () => {});
-it("amount == floor (no markup): vendor=amount, platform=vendor-side-only, reseller=0", () => {});
-it("1¢ markup: floors gracefully, all parties non-negative", () => {});
+it("amount < floor (Stripe fee edge): vendor gets full amount, platform/reseller 0", () => {});
+it("amount == floor (no markup): vendor=floor, platform=0, reseller=0", () => {});
+it("1¢ markup, Tier 1 open_to_wl: kickback floors to 0, no error", () => {
+  // markup=1; platformCommission = floor(1*500/10000) = 0; kickback = 0; reseller gets the 1¢
+});
+it("tiny markup with kickback floors to 0", () => {
+  // markup=50¢, Tier 1 open_to_wl: platformCommission=2, kickback=floor(2*3333/10000)=0
+  // Documented: small commissions yield zero kickback. Acceptable.
+});
 
-// Invariant guard
+// Invariant guards
 it("throws when wlTier=2 but vendorOpenness=open_to_resellers (logic bug)", () => {});
+it("throws on negative platform cut (kickback > commission — should be impossible by construction)", () => {});
 
 // Property-based fuzz — 1000 random tuples, sum invariant must hold
 it("[fuzz 1000×] vendor + platform + reseller === amount for all valid inputs", () => {
   // amount: 100..10_000_000
   // floor: 0..amount
-  // wlTier: 1 or 2
-  // openness: open_to_resellers (Tier 1 only) | open_to_wl
+  // wlTier: 1 or 2 (2 only paired with open_to_wl)
+  // openness: open_to_resellers (Tier 1 only) | open_to_wl (either tier)
+  // ALSO assert: platformCut >= 0 always
+});
+
+// Kickback boundary
+it("kickback never exceeds platformCommission (platform cut stays non-negative)", () => {
+  // Hold for VENDOR_WL_KICKBACK_BPS in [0, 10000]. At 10000 (100%), kickback === commission, platform=0.
 });
 ```
 
@@ -250,8 +286,10 @@ The webhook handler ([lib/stripe/webhook-handlers.ts](lib/stripe/webhook-handler
 
 New section "Reseller program" with 3-state radio:
 - Closed (no resellers)
-- Open to resellers (default) — "Resellers can sell your apps with their own pricing markup. You pay 3% of your floor on reseller sales. Direct sales unchanged."
-- Open to white-label — "Same as above, plus resellers can upgrade individual offers to Tier 2 (own branding). You pay 0% of your floor on ALL reseller sales (Tier 1 + Tier 2)."
+- Open to resellers (default) — "Resellers can sell your apps with their own pricing markup. You receive the exact `floor` you set on every reseller sale (status quo). Direct sales unchanged."
+- Open to white-label — "Same as above, PLUS resellers can upgrade individual offers to Tier 2 with their own branding (logo, color, name). You receive `floor + 1/3 of platform's commission` as a kickback on every reseller sale (Tier 1 AND Tier 2). Strict improvement vs status quo — vendor never loses by opening up."
+
+UI shows the live math on the toggle card based on the vendor's last 30 days of reseller sales: "Estimated +$X/mo if you switch to open_to_wl (assuming same volume)." Pull from `subscription_stats` aggregate, no buyer PII.
 
 Server action `setResellerOpennessAction({ openness })`:
 - Validates with Zod (enum)
@@ -262,7 +300,7 @@ Server action `setResellerOpennessAction({ openness })`:
 UI also shows a list of "Active reseller partners" — read-only display (no approval flow):
 - Reseller display_name, app, tier badge, MRR via this offer (from `subscription_stats` view, no buyer PII)
 
-**Flipping from open_to_wl back to open_to_resellers:** UI confirmation modal: "X existing Tier 2 subscriptions will continue at 0% vendor cut. New Tier 2 upgrades will be blocked. Continue?" Set on profile; existing Tier 2 offers remain `wl_tier=2` and continue running.
+**Flipping from open_to_wl back to open_to_resellers:** UI confirmation modal: "X existing Tier 2 subscriptions will continue with their snapshot pricing (kickback stays in effect for the lifetime of those subs). New Tier 2 upgrades will be blocked. New Tier 1 sales going forward will receive only the floor (no kickback). Continue?" Set on profile; existing Tier 2 offers remain `wl_tier=2` and continue running until canceled or wl subscription lapses.
 
 **Flipping to closed:** confirmation: "Y active reseller offers will continue serving existing subscribers, but new sales through them will be blocked." On flip, set `reseller_offers.status='paused'` for all offers on this vendor's apps. Existing subscriptions are NOT canceled (anti-buyer-disruption).
 
@@ -493,21 +531,21 @@ npm test -- --run lib/stripe/__tests__/reseller.test.ts
 9. Buyer hits `acme.platform.local/<offer-slug>` → sees WL storefront with AcmeApps branding, no "Powered by"
 10. Buyer subscribes → Stripe Checkout shows AcmeApps logo (Connect branding) → checkout completes
 11. Subscription created with `reseller_wl_tier_snapshot=2, vendor_openness_snapshot='open_to_wl'`
-12. Webhook `invoice.paid` ($50 net): vendor receives **$20**, reseller receives **$29.25**, platform retains **$0.75**. Sum invariant ✓
+12. Webhook `invoice.paid` ($50 net = 5000 cents): platformCommission = floor(3000 × 250 / 10000) = 75¢; kickback = floor(75 × 3333 / 10000) = 24¢. Vendor receives **$20.24**, reseller receives **$29.25**, platform retains **$0.51**. Sum: 2024 + 2925 + 51 = 5000 ✓
 13. Buyer's receipt email: subject `[AcmeApps] Your receipt for <app>`, header shows AcmeApps logo, footer "Hosted by [PLATFORM]"
 14. Day 15: Stripe charges reseller $29 (trial ended) → webhook flips `wl_status` to `active`
-15. Vendor X's dashboard: direct sales section shows 12/8/5/3% tier (unchanged); reseller program section shows 1 active Tier 2 partner with MRR (no buyer PII)
+15. Vendor X's dashboard: direct sales section shows 12/8/5/3% tier (unchanged); reseller program section shows 1 active Tier 2 partner with MRR + total kickback YTD (no buyer PII)
 
 ### Toggle transitions
 
-- Vendor X flips `open_to_wl` → `open_to_resellers`: existing Tier 2 sub keeps `vendor_openness_snapshot='open_to_wl'`, future invoices still split at 0% vendor cut. NEW Tier 2 upgrades for Vendor X's apps are blocked. Vendor X's `reseller_openness='open_to_resellers'`.
-- Vendor X flips `open_to_resellers` → `closed`: all `reseller_offers.status='paused'` for X's apps; existing subscriptions continue serving buyers.
+- Vendor X flips `open_to_wl` → `open_to_resellers`: existing Tier 2 sub keeps `vendor_openness_snapshot='open_to_wl'`, future invoices on that sub continue computing kickback ($0.24 per Tier 2 invoice). NEW Tier 2 upgrades for Vendor X's apps are blocked. NEW Tier 1 sales of X's apps after the flip have `vendor_openness_snapshot='open_to_resellers'` (no kickback). Vendor X's profile = `open_to_resellers`.
+- Vendor X flips `open_to_resellers` → `closed`: all `reseller_offers.status='paused'` for X's apps; existing subscriptions continue serving buyers with their snapshots.
 - Vendor Y is `closed` (manually toggled). Reseller tries to create offer on Y's app → rejected with "vendor is not open to resellers".
 
 ### Refund / dispute (SPEC §11 — unchanged policy, new math)
 
-- Tier 2 voluntary refund $50: reverse vendor transfer ($20) only. Platform $0.75 stays. Reseller $29.25 stays.
-- Tier 2 dispute lost: reverse all transfers (vendor + reseller). Platform $0.75 absorbed.
+- Tier 2 voluntary refund $50 (vendor=$20.24, platform=$0.51, reseller=$29.25): reverse vendor transfer of **$20.24** (floor + kickback). Platform $0.51 stays. Reseller $29.25 stays. Vendor refund includes the kickback they received — that kickback was contingent on a successful sale; the refund unwinds the sale.
+- Tier 2 dispute lost: reverse all transfers (vendor $20.24 + reseller $29.25). Platform $0.51 absorbed.
 
 ### Adversarial / RLS
 
@@ -528,12 +566,15 @@ npm test -- --run lib/stripe/__tests__/reseller.test.ts
 ```sql
 -- After migration, every existing reseller subscription should have:
 --   reseller_wl_tier_snapshot = 1
---   vendor_openness_snapshot = 'open_to_wl'   ← grandfathered at 0% vendor cut
+--   vendor_openness_snapshot = 'open_to_resellers'   ← grandfathered: vendor still gets exact floor (status quo, no kickback)
 -- And every vendor profile should have reseller_openness = 'open_to_resellers' (default).
 SELECT COUNT(*) FROM subscriptions
   WHERE reseller_id IS NOT NULL
     AND (reseller_wl_tier_snapshot IS NULL OR vendor_openness_snapshot IS NULL);
 -- expected: 0
+
+SELECT vendor_openness_snapshot, COUNT(*) FROM subscriptions WHERE reseller_id IS NOT NULL GROUP BY 1;
+-- expected: all → open_to_resellers (preserves status quo exact-floor; no surprise kickback to grandfathered vendors)
 
 SELECT reseller_openness, COUNT(*) FROM profiles WHERE role='vendor' GROUP BY 1;
 -- expected: all vendors → open_to_resellers (unless explicitly set otherwise)
@@ -543,10 +584,12 @@ SELECT reseller_openness, COUNT(*) FROM profiles WHERE role='vendor' GROUP BY 1;
 
 ## Caution
 
-- **Two-stream math sum invariant is non-negotiable.** Property-based fuzz test (1000 random tuples) must always satisfy `vendor + platform + reseller === amount`. Off-by-one in `Math.floor` historically caused MRR drift (commit bf2dcf3). The resellerShare residual absorbs all rounding.
-- **Snapshots are immutable.** Once a subscription is created, `reseller_wl_tier_snapshot` and `vendor_openness_snapshot` NEVER change. Vendor flipping their toggle does not retroactively re-price existing subscriptions. This preserves MRR sanity and lets buyers trust their pricing.
-- **Migration backfill: grandfather existing reseller subs at `open_to_wl` (0% vendor cut).** Today's status quo: vendor gets exact floor on reseller sales (0% vendor tax). The migration MUST preserve that — `UPDATE subscriptions SET vendor_openness_snapshot = 'open_to_wl' WHERE reseller_id IS NOT NULL`. New subs created after migration use the live vendor toggle. If you forget this backfill, every existing reseller-sold subscription suddenly costs vendors 3% they never agreed to.
-- **`open_to_resellers` is the default.** Migration sets `profiles.reseller_openness = 'open_to_resellers'` for all existing vendor rows (matches `NOT NULL DEFAULT`). Vendors who want to opt OUT must explicitly switch to `closed`. Communicate this in a release announcement before deploy (vendors implicitly become subject to the 3% on new reseller sales unless they switch to `closed` — but the migration backfill grandfathers existing subs).
+- **Sum invariant is non-negotiable.** Property-based fuzz test (1000 random tuples) must always satisfy `vendor + platform + reseller === amount` AND `platformCut >= 0`. Off-by-one in `Math.floor` historically caused MRR drift (commit bf2dcf3). The `resellerShare` is computed as residual so it absorbs all rounding from the kickback floor + commission floor.
+- **Snapshots are immutable.** Once a subscription is created, `reseller_wl_tier_snapshot` and `vendor_openness_snapshot` NEVER change. Vendor flipping their toggle does not retroactively re-price existing subscriptions. This preserves MRR sanity and lets buyers trust their pricing. A vendor who flipped from `open_to_wl` to `open_to_resellers` continues earning kickback on their old WL subs — and that's correct (it was the deal at subscribe time).
+- **Migration backfill: grandfather existing reseller subs at `open_to_resellers` (exact-floor status quo).** Today vendor gets exact floor on reseller sales. The migration MUST preserve that — `UPDATE subscriptions SET vendor_openness_snapshot = 'open_to_resellers' WHERE reseller_id IS NOT NULL`. Backfilling to `open_to_wl` would silently grant kickback to vendors who never opted in — surprise bonus, but also platform margin loss the user never agreed to. New subs after migration use the live vendor toggle.
+- **`open_to_resellers` is the default.** Migration sets `profiles.reseller_openness = 'open_to_resellers'` for all existing vendor rows (matches `NOT NULL DEFAULT`). Vendors who want to opt OUT must explicitly switch to `closed`. Since the new model has zero vendor tax in any state, this is a no-op for vendor revenue on Tier 1 sales — purely an opt-out into a new UI affordance. No release announcement strictly required, but a one-liner in the next product update email is polite.
+- **The 33% kickback (`VENDOR_WL_KICKBACK_BPS = 3333`) is a tunable.** Keep it as a const, NOT hardcoded inline. If platform decides 20% or 50% later, it's a one-line change. Document the chosen number in SPEC §4b. The const must satisfy `0 ≤ VENDOR_WL_KICKBACK_BPS ≤ 10000`; CI test enforces this.
+- **Kickback floors aggressively on small markups.** $0.50 markup × 5% = 2 cents commission × 33.33% = 0¢ kickback (rounded down). Acceptable — micro-amounts of money shouldn't generate sub-cent transfers. Document in vendor-facing UI: "Kickback may be $0 on very small sales due to cent rounding."
 - **Tier 2 brand auto-approval is risk-shifted, not risk-free.** Deny-list catches obvious phishing (Stripe, PayPal, etc.). It does NOT catch novel infringement (a vendor's own trademark). Have a clear takedown procedure: an admin can force-downgrade any Tier 2 offer via `setWLTierAction({offerId, tier: 1, reason})` writing an audit_log entry. TOS must place liability on reseller for uploaded brand assets.
 - **Buyer dashboard NEVER WL-branded.** Anti-poaching boundary (SPEC §6). Resellers WILL ask. Refuse — buyer dashboard is post-purchase platform-owned territory. Pre-purchase surfaces (storefront, Stripe Checkout, receipt email) are the WL value.
 - **Logos: PNG/JPG/WebP only. NEVER SVG.** SVG enables stored XSS on every storefront visit. Enforce via magic-bytes ([lib/utils/magic-bytes.ts](lib/utils/magic-bytes.ts)) + Storage bucket content-type restriction. Max 1MB.
@@ -573,17 +616,17 @@ Replace [SPEC.md:140](SPEC.md:140) ("No white-label / rebranding") with new §4c
 > Tier 2 requires the **vendor's** `reseller_openness='open_to_wl'` at subscribe time. After subscribe, the (tier, openness) snapshot is immutable.
 
 Update §3 (Vendor pricing) — direct sales unchanged (12/8/5/3% tier system). Add new §3.1 "Reseller program toggle":
-> Each vendor has `reseller_openness ∈ {closed, open_to_resellers, open_to_wl}`, default `open_to_resellers`. The toggle **only** affects vendor cuts on **reseller sales**; direct sales always use the 4-tier system. Vendor cut on reseller sales is 3% of floor (open_to_resellers) or 0% (open_to_wl, both Tier 1 and Tier 2). Toggle changes affect only NEW reseller subscriptions; existing subs keep their snapshot.
+> Each vendor has `reseller_openness ∈ {closed, open_to_resellers, open_to_wl}`, default `open_to_resellers`. The toggle **only** affects vendor income from **reseller sales**; direct sales always use the 4-tier system. Vendor never pays a per-sale tax on reseller sales. On `open_to_wl`, vendor additionally receives a kickback equal to `VENDOR_WL_KICKBACK_BPS` (currently 3333 bps = 33.33%) of platform's reseller-side commission, paid on every reseller sale (Tier 1 OR Tier 2). Toggle changes affect only NEW reseller subscriptions; existing subs keep their snapshot.
 
 Update §4b (Reseller economics) — replace the formula:
 > Reseller sale split:
-> - `vendor_share = vendor_floor_snapshot − floor(vendor_floor_snapshot × vendor_side_bps / 10000)`
->   where `vendor_side_bps = 0` if `vendor_openness_snapshot='open_to_wl'` else `300`
-> - `platform_share = floor(markup × reseller_side_bps / 10000) + floor(vendor_floor_snapshot × vendor_side_bps / 10000)`
->   where `reseller_side_bps = 250` if `reseller_wl_tier_snapshot=2` else `500`
-> - `reseller_share = amount − vendor_share − platform_share`  (absorbs rounding)
+> - `platform_commission = floor(markup × reseller_side_bps / 10000)` where `reseller_side_bps = 250` if `reseller_wl_tier_snapshot=2` else `500`
+> - `vendor_kickback = floor(platform_commission × VENDOR_WL_KICKBACK_BPS / 10000)` if `vendor_openness_snapshot='open_to_wl'`, else `0`
+> - `vendor_share = vendor_floor_snapshot + vendor_kickback`
+> - `platform_share = platform_commission − vendor_kickback`
+> - `reseller_share = amount − vendor_share − platform_share` (= `markup − platform_commission`; absorbs rounding)
 
-Update §11 — Tier 2 refunds/disputes follow the same policy as Tier 1 (vendor-only on refund, all-reverse on dispute), with the new split.
+Update §11 — Tier 2 refunds/disputes follow the same policy as Tier 1 (vendor-only on refund, all-reverse on dispute). On voluntary refund, the reversed vendor transfer includes the kickback — the kickback was contingent on a successful sale that's now being unwound.
 
 ## CLAUDE.md updates
 
@@ -609,9 +652,10 @@ Under "Reseller data model" section (new — paralleling the affiliate one):
 
 Add to "Guardrails":
 - Vendor cut on **direct sales** = always 12/8/5/3% per tier (and admin override from #27); the reseller_openness toggle does NOT affect direct sales.
-- Vendor cut on **reseller sales** = `vendor_openness_snapshot` (0% open_to_wl, 3% open_to_resellers). Snapshot taken at subscribe time, immutable.
+- Vendor never pays a per-sale tax on **reseller sales**. Vendor income from reseller sales = `floor` (open_to_resellers, snapshot) OR `floor + 33% × platform_commission` (open_to_wl, snapshot). `vendor_openness_snapshot` is immutable after subscribe.
 - Tier 2 subscribe requires live check: `vendor.reseller_openness='open_to_wl'`. Snapshot stays even if vendor flips later.
-- `computeResellerSplit` enforces invariant: Tier 2 sale → vendorOpenness MUST be `open_to_wl`. Throws on mismatch (logic bug detector).
+- `computeResellerSplit` enforces invariants: (1) Tier 2 sale → vendorOpenness MUST be `open_to_wl`; (2) `vendor + platform + reseller === amount`; (3) `platformCut >= 0` (kickback never exceeds commission). Throws on any violation.
+- `VENDOR_WL_KICKBACK_BPS = 3333` exported const in `lib/stripe/transfers.ts`. Never inline. Tuning is a one-line config change.
 - Brand uploads: PNG/JPG/WebP only (no SVG), 1MB max, magic-bytes verified, display name passes homoglyph-normalized deny-list.
 - Subdomain storefront enumeration: non-existent or inactive Tier 2 → 404. Buyer dashboard NEVER WL-branded (anti-poaching).
 - Reserved subdomains hardcoded in `proxy.ts`: www/api/admin/auth/app/dashboard/support/help/mail/email/ftp/ns1/ns2/staging/dev/test/prod.
