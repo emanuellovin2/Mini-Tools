@@ -18,7 +18,10 @@ export async function generateMetadata({
   const result = await getStorefrontOffer(resellerSlug, offerSlug);
   if (!result) return { title: "Not found" };
   const app = result.offer.apps as { name: string } | null;
-  return { title: `${app?.name ?? "App"} — ${result.reseller.display_name ?? resellerSlug}` };
+  const resellerRecord = result.reseller as unknown as Record<string, unknown>;
+  const wlName = resellerRecord.wl_global_display_name as string | null;
+  const displayLabel = wlName ?? (resellerRecord.display_name as string | null) ?? resellerSlug;
+  return { title: `${app?.name ?? "App"} — ${displayLabel}` };
 }
 
 export default async function StorefrontPage({
@@ -31,6 +34,12 @@ export default async function StorefrontPage({
   if (!result) notFound();
 
   const { reseller, offer } = result;
+  const resellerRecord = reseller as unknown as Record<string, unknown>;
+  const wlLogoUrl = resellerRecord.wl_global_logo_url as string | null;
+  const wlBrandColor = resellerRecord.wl_global_brand_color as string | null;
+  const wlDisplayName = resellerRecord.wl_global_display_name as string | null;
+  const hasGlobalBranding = !!(wlLogoUrl && wlBrandColor && wlDisplayName);
+
   const app = offer.apps as {
     id: string;
     name: string;
@@ -52,7 +61,17 @@ export default async function StorefrontPage({
 
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* Tier 1 global mini-branding band — shown only when reseller has set all 3 fields */}
+      {hasGlobalBranding && (
+        <div
+          style={{ background: wlBrandColor!, position: "fixed", top: 0, left: 0, right: 0, zIndex: 50 }}
+          className="flex items-center gap-3 px-6 py-2"
+        >
+          <Image src={wlLogoUrl!} alt={wlDisplayName!} width={24} height={24} className="rounded object-contain" />
+          <span className="text-white font-medium text-sm">{wlDisplayName}</span>
+        </div>
+      )}
+      <div className={`w-full max-w-md bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden${hasGlobalBranding ? " mt-10" : ""}`}>
         {/* App header */}
         <div className="p-8 border-b border-gray-100">
           <div className="flex items-center gap-4 mb-4">
@@ -89,7 +108,7 @@ export default async function StorefrontPage({
               <span className="text-base font-normal text-gray-500">/mo</span>
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              Sold by {reseller.display_name ?? resellerSlug} · Powered by{" "}
+              Sold by {wlDisplayName ?? (resellerRecord.display_name as string | null) ?? resellerSlug} · Powered by{" "}
               <a href="/marketplace" className="underline">
                 [PLATFORM]
               </a>

@@ -3,11 +3,17 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/supabase";
 import { ROLE_DASHBOARDS, type UserRole } from "@/lib/auth/roles";
 
+// Subdomains reserved for platform use — cannot be registered as reseller slugs.
+const RESERVED_SUBDOMAINS = new Set([
+  "www", "api", "admin", "auth", "app", "dashboard", "support", "help",
+  "mail", "email", "ftp", "ns1", "ns2", "staging", "dev", "test", "prod",
+]);
+
 // Paths accessible without authentication.
 // Note: each prefix is matched with `startsWith`, so a bare "/r" would also match
 // "/reseller" (the reseller dashboard) and silently bypass auth. Storefront URLs are
 // always /r/<reseller-slug>/<offer-slug> so the trailing slash form is exact enough.
-const PUBLIC_PATHS = ["/login", "/signup", "/api/auth", "/api/webhooks", "/api/verify", "/.well-known", "/marketplace", "/app", "/r/", "/affiliates"];
+const PUBLIC_PATHS = ["/login", "/signup", "/api/auth", "/api/webhooks", "/api/verify", "/.well-known", "/marketplace", "/app", "/r/", "/affiliates", "/_wl/"];
 const AUTH_ONLY_PUBLIC = ["/login", "/signup"];
 
 // Capture ?aff=<code> on any public page visit and set an HTTP-only attribution cookie.
@@ -38,6 +44,35 @@ async function captureAffiliateCookie(
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // ── Subdomain routing for Tier 2 WL storefronts ──────────────────────────
+  // <reseller-slug>.<base-host> → internal rewrite to /_wl/<slug>/<path>
+  // Buyer dashboard (/buyer) is always redirected to canonical domain (anti-poaching).
+  const baseHost = (() => {
+    try {
+      return new URL(process.env.NEXT_PUBLIC_APP_URL!).host;
+    } catch {
+      return "";
+    }
+  })();
+  if (baseHost) {
+    const host = (request.headers.get("host") ?? "").toLowerCase().split(":")[0];
+    if (host !== baseHost && host.endsWith(`.${baseHost}`)) {
+      const slug = host.slice(0, host.length - baseHost.length - 1);
+      if (!RESERVED_SUBDOMAINS.has(slug)) {
+        // Buyer dashboard must never be WL-branded (anti-poaching)
+        if (pathname.startsWith("/buyer")) {
+          const canonical = new URL(`https://${baseHost}${pathname}${request.nextUrl.search}`);
+          return NextResponse.redirect(canonical);
+        }
+        // Rewrite to internal WL route
+        const url = request.nextUrl.clone();
+        url.pathname = `/_wl/${slug}${pathname === "/" ? "" : pathname}`;
+        return NextResponse.rewrite(url);
+      }
+    }
+  }
+
+  // ── Standard path-based routing ──────────────────────────────────────────
   // Static public paths (JWKS, API callbacks)
   if (
     PUBLIC_PATHS.some((p) => pathname.startsWith(p)) &&

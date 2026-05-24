@@ -66,12 +66,44 @@ async function safeSend(
 // Buyer emails
 // ---------------------------------------------------------------------------
 
+// WL Tier 2 branding context for buyer emails. When set, subject prefix and header logo
+// reflect the reseller's brand instead of the platform's. From address stays platform
+// (per-reseller domain deferred to #30).
+export interface WLEmailBranding {
+  displayName: string;
+  logoUrl: string;
+  brandColor: string;
+}
+
+const PLATFORM_NAME = "[PLATFORM]";
+
+function buildEmailHeader(wl?: WLEmailBranding): string {
+  if (!wl) return "";
+  const name = escapeHtml(wl.displayName);
+  const color = escapeHtml(wl.brandColor);
+  const logoUrl = escapeHtml(wl.logoUrl);
+  return `
+    <div style="background:${color};padding:12px 24px;display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+      <img src="${logoUrl}" alt="${name}" style="height:32px;width:auto;object-fit:contain;" />
+      <span style="color:#fff;font-weight:bold;font-size:16px">${name}</span>
+    </div>
+  `;
+}
+
+function buildEmailFooter(wl?: WLEmailBranding): string {
+  if (wl) {
+    return `<p style="color:#aaa;font-size:11px;margin-top:24px">Hosted by ${PLATFORM_NAME}</p>`;
+  }
+  return `<p style="color:#aaa;font-size:11px;margin-top:24px">Powered by ${PLATFORM_NAME}</p>`;
+}
+
 export async function sendSubscriptionReceipt(opts: {
   buyerEmail: string;
   appName: string;
   amountCents: number;
   invoiceId: string;
   currency?: string;
+  wlBranding?: WLEmailBranding;
 }): Promise<boolean> {
   const currency = opts.currency ?? "usd";
   const formatted = new Intl.NumberFormat("en-US", {
@@ -83,15 +115,21 @@ export async function sendSubscriptionReceipt(opts: {
   const invoiceId = escapeHtml(opts.invoiceId);
   const formattedAmount = escapeHtml(formatted);
 
+  const subjectPrefix = opts.wlBranding ? `[${opts.wlBranding.displayName}] ` : "";
+  const header = buildEmailHeader(opts.wlBranding);
+  const footer = buildEmailFooter(opts.wlBranding);
+
   return safeSend("subscription_receipt", (resend) =>
     resend.emails.send({
       from: fromAddress(),
       to: opts.buyerEmail,
-      subject: `Receipt — ${opts.appName} subscription`,
+      subject: `${subjectPrefix}Receipt — ${opts.appName} subscription`,
       html: `
+        ${header}
         <p>Thanks for subscribing to <strong>${appName}</strong>.</p>
         <p>Payment of <strong>${formattedAmount}</strong> received.</p>
         <p style="color:#888;font-size:12px">Invoice ID: ${invoiceId}</p>
+        ${footer}
       `,
     })
   );
@@ -102,6 +140,7 @@ export async function sendPaymentFailedNotice(opts: {
   appName: string;
   amountDueCents: number;
   currency?: string;
+  wlBranding?: WLEmailBranding;
 }): Promise<boolean> {
   const currency = opts.currency ?? "usd";
   const formatted = new Intl.NumberFormat("en-US", {
@@ -112,16 +151,22 @@ export async function sendPaymentFailedNotice(opts: {
   const appName = escapeHtml(opts.appName);
   const formattedAmount = escapeHtml(formatted);
 
+  const subjectPrefix = opts.wlBranding ? `[${opts.wlBranding.displayName}] ` : "";
+  const header = buildEmailHeader(opts.wlBranding);
+  const footer = buildEmailFooter(opts.wlBranding);
+
   return safeSend("payment_failed", (resend) =>
     resend.emails.send({
       from: fromAddress(),
       to: opts.buyerEmail,
-      subject: `Action required — payment failed for ${opts.appName}`,
+      subject: `${subjectPrefix}Action required — payment failed for ${opts.appName}`,
       html: `
+        ${header}
         <p>We couldn't process your payment of <strong>${formattedAmount}</strong> for
         <strong>${appName}</strong>.</p>
         <p>Please update your payment method to keep access to the app.</p>
         <p>Your access has been suspended until the payment is resolved.</p>
+        ${footer}
       `,
     })
   );

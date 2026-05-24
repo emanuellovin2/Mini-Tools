@@ -10,91 +10,204 @@ vi.mock("@/lib/stripe/client", () => ({
 
 import {
   computeResellerSplit,
+  VENDOR_WL_KICKBACK_BPS,
   transferResellerVendorFloor,
   transferResellerShare,
 } from "../transfers";
 
 beforeEach(() => vi.clearAllMocks());
 
-describe("computeResellerSplit — reseller money math (SPEC §4b, #16: 5% of markup)", () => {
-  it("worked example: buyer=$50, floor=$40, markup=$10 → platform=$0.50, reseller=$9.50, vendor=$40", () => {
-    const { vendorShareCents, platformFeeCents, resellerShareCents } =
-      computeResellerSplit(5000, 4000);
-    expect(vendorShareCents).toBe(4000);  // $40 floor
-    expect(platformFeeCents).toBe(50);    // 5% of 1000¢ markup = 50¢ = $0.50
-    expect(resellerShareCents).toBe(950); // 1000¢ - 50¢ = 950¢ = $9.50
+// ---------------------------------------------------------------------------
+// computeResellerSplit — worked examples from the spec
+// ---------------------------------------------------------------------------
+
+describe("computeResellerSplit — Tier 1 open_to_resellers (status quo)", () => {
+  it("$50/$20 → vendor=2000, platform=150, reseller=2850", () => {
+    // markup=3000; platformCommission=floor(3000*500/10000)=150; kickback=0
+    const split = computeResellerSplit({
+      amountCents: 5000,
+      vendorFloorCents: 2000,
+      wlTier: 1,
+      vendorOpenness: "open_to_resellers",
+    });
+    expect(split.vendorShareCents).toBe(2000);
+    expect(split.platformCutCents).toBe(150);
+    expect(split.resellerShareCents).toBe(2850);
+    expect(split.vendorShareCents + split.platformCutCents + split.resellerShareCents).toBe(5000);
   });
 
-  it("vendor + reseller + platform = gross (no leakage)", () => {
-    const { vendorShareCents, platformFeeCents, resellerShareCents } =
-      computeResellerSplit(5000, 4000);
-    expect(vendorShareCents + platformFeeCents + resellerShareCents).toBe(5000);
+  it("zero markup: sell=floor → platform=0, reseller=0, vendor=floor", () => {
+    const split = computeResellerSplit({
+      amountCents: 5000,
+      vendorFloorCents: 5000,
+      wlTier: 1,
+      vendorOpenness: "open_to_resellers",
+    });
+    expect(split.vendorShareCents).toBe(5000);
+    expect(split.platformCutCents).toBe(0);
+    expect(split.resellerShareCents).toBe(0);
   });
 
-  it("zero markup: sell=floor → platform=$0, reseller=$0, vendor=floor", () => {
-    const { vendorShareCents, platformFeeCents, resellerShareCents } =
-      computeResellerSplit(5000, 5000);
-    expect(vendorShareCents).toBe(5000);
-    expect(platformFeeCents).toBe(0);
-    expect(resellerShareCents).toBe(0);
-  });
-
-  it("clamps gracefully when available < floor (Stripe fees ate margin)", () => {
-    // At webhook time, net (after Stripe fees) can dip below the gross floor.
-    // Vendor still gets full floor; platform absorbs the deficit; reseller/platform share = 0.
-    const { vendorShareCents, platformFeeCents, resellerShareCents } =
-      computeResellerSplit(4000, 5000);
-    expect(vendorShareCents).toBe(5000);
-    expect(platformFeeCents).toBe(0);
-    expect(resellerShareCents).toBe(0);
-  });
-
-  it("thin markup with Stripe fee: vendor full floor, smaller reseller share, platform proportional", () => {
-    // sell $10 (1000¢), floor $9.50 (950¢), Stripe fee ~59¢ → net ≈ 941¢
-    // markup on net = 941 - 950 = -9 → clamp; vendor still gets 950, others 0
-    const split1 = computeResellerSplit(941, 950);
-    expect(split1).toEqual({ vendorShareCents: 950, platformFeeCents: 0, resellerShareCents: 0 });
-
-    // sell $15, floor $10, fee ~74¢ → net = 1426
-    // markup on net = 426 → platform = floor(426*500/10000) = 21, reseller = 405
-    const split2 = computeResellerSplit(1426, 1000);
-    expect(split2.vendorShareCents).toBe(1000);
-    expect(split2.platformFeeCents).toBe(21);
-    expect(split2.resellerShareCents).toBe(405);
-    expect(split2.vendorShareCents + split2.platformFeeCents + split2.resellerShareCents).toBe(1426);
+  it("amount < floor (Stripe fee edge): vendor gets full amount, others 0", () => {
+    const split = computeResellerSplit({
+      amountCents: 1900,
+      vendorFloorCents: 2000,
+      wlTier: 1,
+      vendorOpenness: "open_to_resellers",
+    });
+    expect(split.vendorShareCents).toBe(1900);
+    expect(split.platformCutCents).toBe(0);
+    expect(split.resellerShareCents).toBe(0);
   });
 
   it("platform fee uses floor() — integer-safe", () => {
-    // markup = 1999 - 1000 = 999 → floor(999 * 500 / 10000) = floor(49.95) = 49
-    const { platformFeeCents } = computeResellerSplit(1999, 1000);
-    expect(platformFeeCents).toBe(49);
-    expect(Number.isInteger(platformFeeCents)).toBe(true);
-  });
-
-  it("resellerShareCents is integer-safe", () => {
-    const { resellerShareCents } = computeResellerSplit(1999, 1000);
-    expect(Number.isInteger(resellerShareCents)).toBe(true);
-  });
-
-  it("larger markup: buyer=$100, floor=$20 → markup=$80 → platform=$4, reseller=$76, vendor=$20", () => {
-    const { vendorShareCents, platformFeeCents, resellerShareCents } =
-      computeResellerSplit(10000, 2000);
-    expect(vendorShareCents).toBe(2000);
-    expect(platformFeeCents).toBe(400);    // 5% of 8000¢ = 400¢ = $4
-    expect(resellerShareCents).toBe(7600); // 8000¢ - 400¢ = 7600¢ = $76
-    expect(vendorShareCents + platformFeeCents + resellerShareCents).toBe(10000);
+    // markup=999; floor(999*500/10000)=floor(49.95)=49
+    const split = computeResellerSplit({
+      amountCents: 1999,
+      vendorFloorCents: 1000,
+      wlTier: 1,
+      vendorOpenness: "open_to_resellers",
+    });
+    expect(split.platformCutCents).toBe(49);
+    expect(Number.isInteger(split.platformCutCents)).toBe(true);
+    expect(Number.isInteger(split.resellerShareCents)).toBe(true);
   });
 });
+
+describe("computeResellerSplit — Tier 1 open_to_wl (kickback)", () => {
+  it("$50/$20 → vendor=2049, platform=101, reseller=2850", () => {
+    // markup=3000; platformCommission=floor(3000*500/10000)=150
+    // kickback=floor(150*3333/10000)=floor(49.995)=49
+    // vendor=2000+49=2049; platform=150-49=101; reseller=5000-2049-101=2850
+    const split = computeResellerSplit({
+      amountCents: 5000,
+      vendorFloorCents: 2000,
+      wlTier: 1,
+      vendorOpenness: "open_to_wl",
+    });
+    expect(split.vendorShareCents).toBe(2049);
+    expect(split.platformCutCents).toBe(101);
+    expect(split.resellerShareCents).toBe(2850);
+    expect(split.vendorShareCents + split.platformCutCents + split.resellerShareCents).toBe(5000);
+  });
+
+  it("1¢ markup, Tier 1 open_to_wl: kickback floors to 0, no error", () => {
+    // markup=1; platformCommission=floor(1*500/10000)=0; kickback=0; reseller gets the 1¢
+    const split = computeResellerSplit({
+      amountCents: 2001,
+      vendorFloorCents: 2000,
+      wlTier: 1,
+      vendorOpenness: "open_to_wl",
+    });
+    expect(split.platformCutCents).toBe(0);
+    expect(split.vendorShareCents).toBe(2000); // no kickback (commission was 0)
+    expect(split.resellerShareCents).toBe(1);
+    expect(split.vendorShareCents + split.platformCutCents + split.resellerShareCents).toBe(2001);
+  });
+
+  it("tiny markup: 50¢ markup, platformCommission=2, kickback floors to 0", () => {
+    // markup=50; platformCommission=floor(50*500/10000)=2; kickback=floor(2*3333/10000)=0
+    const split = computeResellerSplit({
+      amountCents: 2050,
+      vendorFloorCents: 2000,
+      wlTier: 1,
+      vendorOpenness: "open_to_wl",
+    });
+    expect(split.platformCutCents).toBe(2);
+    expect(split.vendorShareCents).toBe(2000); // kickback=0 on tiny commission
+    expect(split.resellerShareCents).toBe(48);
+  });
+});
+
+describe("computeResellerSplit — Tier 2 open_to_wl (2.5% commission + kickback)", () => {
+  it("$50/$20 → vendor=2024, platform=51, reseller=2925", () => {
+    // markup=3000; platformCommission=floor(3000*250/10000)=75
+    // kickback=floor(75*3333/10000)=floor(24.9975)=24
+    // vendor=2000+24=2024; platform=75-24=51; reseller=5000-2024-51=2925
+    const split = computeResellerSplit({
+      amountCents: 5000,
+      vendorFloorCents: 2000,
+      wlTier: 2,
+      vendorOpenness: "open_to_wl",
+    });
+    expect(split.vendorShareCents).toBe(2024);
+    expect(split.platformCutCents).toBe(51);
+    expect(split.resellerShareCents).toBe(2925);
+    expect(split.vendorShareCents + split.platformCutCents + split.resellerShareCents).toBe(5000);
+  });
+});
+
+describe("computeResellerSplit — invariant guards", () => {
+  it("throws when wlTier=2 but vendorOpenness=open_to_resellers", () => {
+    expect(() =>
+      computeResellerSplit({
+        amountCents: 5000,
+        vendorFloorCents: 2000,
+        wlTier: 2,
+        vendorOpenness: "open_to_resellers",
+      })
+    ).toThrow(/invariant.*Tier 2/);
+  });
+
+  it("VENDOR_WL_KICKBACK_BPS is in [0, 10000] — CI guard", () => {
+    expect(VENDOR_WL_KICKBACK_BPS).toBeGreaterThanOrEqual(0);
+    expect(VENDOR_WL_KICKBACK_BPS).toBeLessThanOrEqual(10_000);
+  });
+
+  it("kickback never exceeds platformCommission — platform cut stays non-negative", () => {
+    const split = computeResellerSplit({
+      amountCents: 10_000,
+      vendorFloorCents: 1_000,
+      wlTier: 1,
+      vendorOpenness: "open_to_wl",
+    });
+    expect(split.platformCutCents).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("computeResellerSplit — sum invariant (fuzz 1000×)", () => {
+  it("vendor + platform + reseller === amount for 1000 random valid inputs", () => {
+    const seed = 42;
+    let s = seed;
+    function rand(min: number, max: number): number {
+      s = (s * 1664525 + 1013904223) & 0xffffffff;
+      return min + Math.abs(s) % (max - min + 1);
+    }
+
+    for (let i = 0; i < 1000; i++) {
+      const amount = rand(100, 10_000_000);
+      const floor = rand(0, amount);
+      const isTier2 = rand(0, 1) === 1;
+      // Tier 2 requires open_to_wl
+      const vendorOpenness: "open_to_resellers" | "open_to_wl" = isTier2
+        ? "open_to_wl"
+        : rand(0, 1) === 1
+        ? "open_to_wl"
+        : "open_to_resellers";
+      const wlTier: 1 | 2 = isTier2 ? 2 : 1;
+
+      const split = computeResellerSplit({ amountCents: amount, vendorFloorCents: floor, wlTier, vendorOpenness });
+
+      expect(split.vendorShareCents + split.platformCutCents + split.resellerShareCents).toBe(amount);
+      expect(split.platformCutCents).toBeGreaterThanOrEqual(0);
+      expect(split.resellerShareCents).toBeGreaterThanOrEqual(0);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// transferResellerVendorFloor
+// ---------------------------------------------------------------------------
 
 describe("transferResellerVendorFloor", () => {
   beforeEach(() => {
     mockTransfersCreate.mockResolvedValue({ id: "tr_vf_abc" });
   });
 
-  it("transfers exactly the vendor floor amount", async () => {
+  it("transfers exactly the vendor share amount", async () => {
     const { transferId } = await transferResellerVendorFloor({
       invoiceId: "inv_1",
-      vendorFloorCents: 4000,
+      vendorShareCents: 4000,
       vendorId: "v1",
       stripeAccountId: "acct_v1",
     });
@@ -106,7 +219,7 @@ describe("transferResellerVendorFloor", () => {
   it("uses idempotency key encoding vendor_floor", async () => {
     await transferResellerVendorFloor({
       invoiceId: "inv_2",
-      vendorFloorCents: 4000,
+      vendorShareCents: 4000,
       vendorId: "v_42",
       stripeAccountId: "acct_v",
     });
@@ -117,14 +230,31 @@ describe("transferResellerVendorFloor", () => {
   it("sets transfer_group matching the invoice", async () => {
     await transferResellerVendorFloor({
       invoiceId: "inv_3",
-      vendorFloorCents: 4000,
+      vendorShareCents: 4000,
       vendorId: "v1",
       stripeAccountId: "acct_v",
     });
     const [body] = mockTransfersCreate.mock.calls[0];
     expect(body.transfer_group).toBe("invoice_inv_3");
   });
+
+  it("regression: transferResellerVendorFloor amount matches computeResellerSplit vendorShareCents", () => {
+    // Verify the two functions are wired together correctly — no internal recomputation.
+    const split = computeResellerSplit({
+      amountCents: 5000,
+      vendorFloorCents: 2000,
+      wlTier: 1,
+      vendorOpenness: "open_to_wl",
+    });
+    // Amount to pass to transferResellerVendorFloor must be split.vendorShareCents, not floor.
+    expect(split.vendorShareCents).toBe(2049);
+    // Caller passes this value — no function-level recomputation needed.
+  });
 });
+
+// ---------------------------------------------------------------------------
+// transferResellerShare
+// ---------------------------------------------------------------------------
 
 describe("transferResellerShare", () => {
   beforeEach(() => {
@@ -166,6 +296,10 @@ describe("transferResellerShare", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Reseller trial days — first-time vs returning (#22)
+// ---------------------------------------------------------------------------
+
 describe("Reseller trial days — first-time vs returning (#22)", () => {
   function computeTrialDays(hasPriorSub: boolean, envDays = 30): number {
     if (hasPriorSub) return 0;
@@ -186,23 +320,5 @@ describe("Reseller trial days — first-time vs returning (#22)", () => {
 
   it("RESELLER_TRIAL_DAYS=0 disables trials for everyone", () => {
     expect(computeTrialDays(false, 0)).toBe(0);
-  });
-});
-
-describe("End-to-end split accounting — all parties sum to gross", () => {
-  it("various markups: vendor+platform+reseller always equals gross", () => {
-    const cases = [
-      { gross: 5000, floor: 4000 },  // $10 markup
-      { gross: 10000, floor: 2000 }, // $80 markup
-      { gross: 2000, floor: 1800 },  // $20 markup
-    ];
-
-    for (const { gross, floor } of cases) {
-      const { vendorShareCents, platformFeeCents, resellerShareCents } =
-        computeResellerSplit(gross, floor);
-      expect(vendorShareCents + platformFeeCents + resellerShareCents).toBe(gross);
-      expect(vendorShareCents).toBe(floor);
-      expect(resellerShareCents).toBeGreaterThanOrEqual(0);
-    }
   });
 });

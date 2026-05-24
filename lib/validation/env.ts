@@ -31,6 +31,8 @@ const serverEnvSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
   // Required from #14 — Stripe Price id for the reseller's $19/mo platform subscription
   STRIPE_RESELLER_PLAN_PRICE_ID: z.string().min(1),
+  // Required from #29 — $29/mo recurring price for Tier 2 per-offer WL upgrades
+  STRIPE_WL_TIER2_PRICE_ID: z.string().min(1),
   // Required from #28 in production — distributed rate limiter (Upstash Redis)
   UPSTASH_REDIS_REST_URL:
     process.env.NODE_ENV === "production"

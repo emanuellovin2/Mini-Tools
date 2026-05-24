@@ -43,6 +43,51 @@ export async function createOnboardingLink(
   return link.url;
 }
 
+// Sync reseller's Stripe Connect account branding for Tier 2 white-label.
+// Uploads the logo to Stripe Files API (required — Stripe can't reference external URLs)
+// then updates branding settings. Idempotent — repeated calls overwrite with latest values.
+// Note: branding is per-account, not per-offer. Multiple Tier 2 offers share one branding;
+// the most recently upgraded offer's branding wins on Stripe Checkout.
+export async function syncResellerConnectBranding(args: {
+  resellerStripeAccountId: string;
+  logoUrl: string;
+  brandColor: string;
+  displayName: string;
+}): Promise<void> {
+  const stripe = getStripe();
+
+  // Download logo bytes from Supabase Storage public URL
+  const logoResponse = await fetch(args.logoUrl);
+  if (!logoResponse.ok) {
+    throw new Error(`Failed to fetch logo from ${args.logoUrl}: ${logoResponse.status}`);
+  }
+  const logoBuffer = Buffer.from(await logoResponse.arrayBuffer());
+
+  // Upload to Stripe Files (scoped to the connected account)
+  const file = await stripe.files.create(
+    {
+      purpose: "business_logo",
+      file: {
+        data: logoBuffer,
+        name: "logo.png",
+        type: "application/octet-stream",
+      },
+    },
+    { stripeAccount: args.resellerStripeAccountId }
+  );
+
+  // Update connected account branding
+  await stripe.accounts.update(args.resellerStripeAccountId, {
+    settings: {
+      branding: {
+        logo: file.id,
+        primary_color: args.brandColor,
+      },
+    },
+    business_profile: { name: args.displayName },
+  });
+}
+
 export async function syncConnectStatus(
   vendorId: string,
   accountId: string

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/services/supabase-server";
 import { createAdminClient } from "@/lib/services/supabase";
-import { createOffer, updateOfferStatus, setResellerSlug, isSlugAvailable } from "@/lib/services/reseller";
+import { createOffer, updateOfferStatus, setResellerSlug, isSlugAvailable, upgradeOfferToWLTier2, cancelWLTier2 } from "@/lib/services/reseller";
 import { createOfferSchema, slugSchema } from "@/lib/validation/reseller";
 import { getStripe } from "@/lib/stripe/client";
 import type { Database } from "@/types/supabase";
@@ -117,6 +117,63 @@ export async function createOfferAction(
     });
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to create offer" };
+  }
+
+  revalidatePath("/reseller/offers");
+  return { success: true };
+}
+
+// Upgrade an offer to WL Tier 2
+export async function upgradeOfferToWLTier2Action(
+  _prev: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  const { user, authed } = await requireReseller();
+  if (!authed) return { error: "Not authenticated as a reseller" };
+
+  const offerId = formData.get("offer_id") as string | null;
+  const brandColor = (formData.get("brand_color") as string | null)?.trim() ?? "";
+  const displayName = (formData.get("display_name") as string | null)?.trim() ?? "";
+  const logoFile = formData.get("logo") as File | null;
+
+  if (!offerId) return { error: "Missing offer ID" };
+  if (!logoFile || logoFile.size === 0) return { error: "Logo file is required" };
+
+  // Upload logo
+  const { createAdminClient: adminClient } = await import("@/lib/services/supabase");
+  const admin = adminClient();
+  const buf = Buffer.from(await logoFile.arrayBuffer());
+  const fileKey = `reseller/${user!.id}/offer-${offerId}-logo-${Date.now()}.png`;
+  const { error: uploadError } = await admin.storage
+    .from("logos")
+    .upload(fileKey, buf, { contentType: logoFile.type || "image/png", upsert: true });
+  if (uploadError) return { error: `Upload failed: ${uploadError.message}` };
+
+  try {
+    await upgradeOfferToWLTier2({
+      resellerId: user!.id,
+      offerId,
+      logoFileKey: fileKey,
+      brandColor,
+      displayName,
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Upgrade failed" };
+  }
+
+  revalidatePath("/reseller/offers");
+  return { success: true };
+}
+
+// Cancel WL Tier 2 on an offer
+export async function cancelWLTier2Action(offerId: string): Promise<ActionResult> {
+  const { user, authed } = await requireReseller();
+  if (!authed) return { error: "Not authenticated as a reseller" };
+
+  try {
+    await cancelWLTier2({ resellerId: user!.id, offerId });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to cancel WL Tier 2" };
   }
 
   revalidatePath("/reseller/offers");

@@ -211,7 +211,7 @@ export async function handleCheckoutSessionCompleted(
 
   // Reseller storefront checkout — buyer subscribing via a reseller offer.
   if (meta.reseller_offer_id) {
-    const { buyer_id, app_id, anon_user_id, reseller_id, reseller_offer_id, vendor_floor_snapshot_cents } = meta;
+    const { buyer_id, app_id, anon_user_id, reseller_id, reseller_offer_id, vendor_floor_snapshot_cents, reseller_wl_tier, vendor_openness } = meta;
     if (!buyer_id || !app_id || !anon_user_id || !reseller_id || !reseller_offer_id || !vendor_floor_snapshot_cents) {
       throw new Error(`Missing reseller metadata in checkout session ${session.id}`);
     }
@@ -220,6 +220,9 @@ export async function handleCheckoutSessionCompleted(
     const status = stripeStatusToSubscriptionStatus(sub.status);
     const priceCents = sub.items.data[0]?.price?.unit_amount ?? 0;
     const periodEnd = getSubPeriodEnd(sub);
+
+    const wlTierSnapshot = reseller_wl_tier ? Number(reseller_wl_tier) : 1;
+    const vendorOpennessSnapshot = (vendor_openness === "open_to_wl" ? "open_to_wl" : "open_to_resellers") as "open_to_resellers" | "open_to_wl";
 
     const { error, data: upsertedRows } = await admin
       .from("subscriptions")
@@ -239,7 +242,10 @@ export async function handleCheckoutSessionCompleted(
           reseller_offer_id,
           vendor_floor_snapshot_cents: Number(vendor_floor_snapshot_cents),
           affiliate_id: null, // reseller takes priority (SPEC §4)
-        },
+          reseller_wl_tier_snapshot: wlTierSnapshot,
+          vendor_openness_snapshot: vendorOpennessSnapshot,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
         { onConflict: "stripe_subscription_id" }
       )
       .select("id")
@@ -341,7 +347,45 @@ export async function handleSubscriptionUpdated(
   const status = stripeStatusToSubscriptionStatus(sub.status);
   const periodEnd = getSubPeriodEnd(sub);
 
-  // Check if this is a reseller platform $19/mo subscription.
+  // Check if this is a WL Tier 2 per-offer subscription.
+  if (sub.metadata?.kind === "wl_tier2") {
+    type WLOfferRow = { id: string; wl_status: string };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: wlOfferData } = await (admin as any)
+      .from("reseller_offers")
+      .select("id, wl_status")
+      .eq("wl_stripe_subscription_id", sub.id)
+      .maybeSingle() as { data: WLOfferRow | null };
+
+    if (wlOfferData) {
+      let newWlStatus: string;
+      if (sub.status === "active") newWlStatus = "active";
+      else if (sub.status === "trialing") newWlStatus = "trialing";
+      else if (sub.status === "past_due" || sub.status === "unpaid") newWlStatus = "past_due";
+      else newWlStatus = "canceled";
+
+      const updatePayload: Record<string, unknown> = { wl_status: newWlStatus };
+      if (newWlStatus === "canceled") updatePayload.wl_tier = 1; // downgrade on cancel
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (admin as any)
+        .from("reseller_offers")
+        .update(updatePayload)
+        .eq("id", wlOfferData.id);
+
+      await writeAuditLog(admin, {
+        actor_id: null,
+        actor_role: "system",
+        action: "wl_tier2_subscription.updated",
+        entity_type: "reseller_offers",
+        entity_id: wlOfferData.id,
+        metadata: { stripe_sub_id: sub.id, wl_status: newWlStatus },
+      });
+    }
+    return;
+  }
+
+  // Check if this is a reseller platform subscription.
   const { data: resellerPlatformSub } = await admin
     .from("reseller_subscriptions")
     .select("*")
@@ -453,7 +497,32 @@ export async function handleInvoicePaid(
 
   if (!subscriptionId) return; // Non-subscription invoice — skip
 
-  // Check if this is a reseller platform $19/mo invoice — just update status, no app transfer.
+  // Check if this is a WL Tier 2 $29/mo per-offer invoice — update wl_status, no app transfer.
+  type WLOfferInvoice = { id: string; reseller_id: string };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: wlOffer } = await (admin as any)
+    .from("reseller_offers")
+    .select("id, reseller_id")
+    .eq("wl_stripe_subscription_id", subscriptionId)
+    .maybeSingle() as { data: WLOfferInvoice | null };
+  if (wlOffer) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin as any)
+      .from("reseller_offers")
+      .update({ wl_status: "active" })
+      .eq("id", wlOffer.id);
+    await writeAuditLog(admin, {
+      actor_id: null,
+      actor_role: "system",
+      action: "wl_tier2_subscription.invoice.paid",
+      entity_type: "reseller_offers",
+      entity_id: wlOffer.id,
+      metadata: { stripe_sub_id: subscriptionId, amount_cents: invoice.amount_paid },
+    });
+    return;
+  }
+
+  // Check if this is a reseller platform subscription invoice — just update status, no app transfer.
   const { data: resellerPlatformSub } = await admin
     .from("reseller_subscriptions")
     .select("*")
@@ -497,12 +566,26 @@ export async function handleInvoicePaid(
   let affiliateIdForTransfer: string | null = null;
   let affiliateCommissionSnapshotBps: number | null = null;
   let resellerId: string | null = null;
+  let resellerOfferId: string | null = null;
   let vendorFloorSnapshotCents: number | null = null;
-  const { data: subRow } = await admin
+  let resellerWlTierSnapshot: 1 | 2 = 1;
+  let vendorOpennessSnapshot: "open_to_resellers" | "open_to_wl" = "open_to_resellers";
+  type SubRow = {
+    app_id: string | null;
+    reseller_id: string | null;
+    reseller_offer_id: string | null;
+    affiliate_id: string | null;
+    vendor_floor_snapshot_cents: number | null;
+    affiliate_commission_snapshot_bps: number | null;
+    reseller_wl_tier_snapshot: number | null;
+    vendor_openness_snapshot: string | null;
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: subRow } = await (admin as any)
     .from("subscriptions")
-    .select("app_id, reseller_id, affiliate_id, vendor_floor_snapshot_cents, affiliate_commission_snapshot_bps")
+    .select("app_id, reseller_id, reseller_offer_id, affiliate_id, vendor_floor_snapshot_cents, affiliate_commission_snapshot_bps, reseller_wl_tier_snapshot, vendor_openness_snapshot")
     .eq("stripe_subscription_id", subscriptionId)
-    .maybeSingle();
+    .maybeSingle() as { data: SubRow | null };
 
   if (subRow?.app_id) {
     appId = subRow.app_id;
@@ -510,7 +593,10 @@ export async function handleInvoicePaid(
     affiliateIdForTransfer = subRow.affiliate_id ?? null;
     affiliateCommissionSnapshotBps = subRow.affiliate_commission_snapshot_bps ?? null;
     resellerId = subRow.reseller_id ?? null;
+    resellerOfferId = subRow.reseller_offer_id ?? null;
     vendorFloorSnapshotCents = subRow.vendor_floor_snapshot_cents ?? null;
+    resellerWlTierSnapshot = (subRow.reseller_wl_tier_snapshot === 2 ? 2 : 1) as 1 | 2;
+    vendorOpennessSnapshot = subRow.vendor_openness_snapshot === "open_to_wl" ? "open_to_wl" : "open_to_resellers";
   } else {
     const stripeSub = await stripe.subscriptions.retrieve(subscriptionId);
     appId = stripeSub.metadata?.app_id ?? null;
@@ -566,16 +652,30 @@ export async function handleInvoicePaid(
   let affiliateTransferId: string | null = null;
 
   if (isResellerSale && resellerId !== null && vendorFloorSnapshotCents !== null) {
-    const split = computeResellerSplit(netAmountCents, vendorFloorSnapshotCents);
+    const split = computeResellerSplit({
+      amountCents: netAmountCents,
+      vendorFloorCents: vendorFloorSnapshotCents,
+      wlTier: resellerWlTierSnapshot,
+      vendorOpenness: vendorOpennessSnapshot,
+    });
     vendorShareCents = split.vendorShareCents;
 
     const vendorResult = await transferResellerVendorFloor({
       invoiceId,
-      vendorFloorCents: vendorFloorSnapshotCents,
+      vendorShareCents: split.vendorShareCents,
       vendorId: app.vendor_id,
       stripeAccountId: vendorProfile.stripe_account_id,
     });
     vendorTransferId = vendorResult.transferId;
+
+    // Track the sale on the offer for dashboard stats
+    if (resellerOfferId) {
+      await admin
+        .from("reseller_offers")
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .update({ wl_last_sale_at: new Date().toISOString() } as any)
+        .eq("id", resellerOfferId);
+    }
 
     if (split.resellerShareCents > 0) {
       const { data: resellerProfile } = await admin
@@ -754,6 +854,8 @@ export async function handleInvoicePaid(
             reseller_share_cents: resellerShareCents,
             reseller_transfer_id: resellerTransferId,
             vendor_floor_cents: vendorFloorSnapshotCents,
+            wl_tier: resellerWlTierSnapshot,
+            vendor_openness: vendorOpennessSnapshot,
           }
         : {
             cut_bps: cutBps,
@@ -802,12 +904,32 @@ export async function handleInvoicePaid(
           .eq("id", appId)
           .single();
 
+        // For Tier 2 WL subs, look up offer branding to pass to email
+        let wlBranding: import("@/lib/email/resend").WLEmailBranding | undefined;
+        if (isResellerSale && resellerOfferId && resellerWlTierSnapshot === 2) {
+          const { data: wlOfferRow } = await admin
+            .from("reseller_offers")
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .select("wl_display_name, wl_logo_url, wl_brand_color" as any)
+            .eq("id", resellerOfferId)
+            .maybeSingle();
+          const wlRow = wlOfferRow as Record<string, string | null> | null;
+          if (wlRow?.wl_display_name && wlRow.wl_logo_url && wlRow.wl_brand_color) {
+            wlBranding = {
+              displayName: wlRow.wl_display_name,
+              logoUrl: wlRow.wl_logo_url,
+              brandColor: wlRow.wl_brand_color,
+            };
+          }
+        }
+
         await sendSubscriptionReceipt({
           buyerEmail,
           appName: appRow?.name ?? "your app",
           amountCents: grossAmountCents,
           invoiceId,
           currency: invoice.currency,
+          wlBranding,
         });
       }
     }

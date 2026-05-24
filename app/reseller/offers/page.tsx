@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createServerSupabaseClient } from "@/lib/services/supabase-server";
-import { getResellerSubscription, getOffers, getResellableApps } from "@/lib/services/reseller";
+import { getResellerSubscription, getOffers, getResellableApps, type ResellerOfferRow } from "@/lib/services/reseller";
 import CreateOfferForm from "./_components/CreateOfferForm";
 import OfferStatusButton from "./_components/OfferStatusButton";
+import WLUpgradeButton from "./_components/WLUpgradeButton";
 
 export const metadata: Metadata = { title: "Reseller Offers — [PLATFORM]" };
 
@@ -70,8 +71,9 @@ export default async function OffersPage() {
             <p className="text-sm text-gray-400">No offers yet. Create one below.</p>
           ) : (
             <div className="space-y-3">
-              {offers.map((offer) => {
+              {offers.map((offer: ResellerOfferRow) => {
                 const app = offer.apps as { name: string } | null;
+                const isWLActive = offer.wl_tier === 2 && (offer.wl_status === "active" || offer.wl_status === "trialing");
                 return (
                   <div
                     key={offer.id}
@@ -88,14 +90,28 @@ export default async function OffersPage() {
                           /r/{profile.slug}/{offer.slug}
                         </p>
                       )}
+                      {isWLActive && profile.slug && (
+                        <p className="text-xs text-indigo-600 mt-0.5">
+                          WL: {profile.slug}.platform.com/{offer.slug}
+                        </p>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      {isWLActive && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-indigo-100 text-indigo-700">
+                          WL Tier 2
+                        </span>
+                      )}
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full font-medium ${OFFER_STATUS_BADGE[offer.status] ?? "bg-gray-100"}`}
                       >
                         {offer.status}
                       </span>
-                      <OfferStatusButton offer={offer} canPublish={canPublish} />
+                      <OfferStatusButton
+                        offer={{ id: offer.id, status: offer.status as "active" | "paused" | "draft" }}
+                        canPublish={canPublish}
+                      />
+                      <WLUpgradeButton offerId={offer.id} wlStatus={offer.wl_status} />
                     </div>
                   </div>
                 );

@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/services/supabase-server";
 import { appSubmitSchema, displayNameSchema } from "@/lib/validation/vendor";
 import { detectLogoMimeType } from "@/lib/utils/magic-bytes";
+import { setResellerOpenness } from "@/lib/services/reseller";
+import { z } from "zod";
 
 export type ActionResult =
   | { success: true }
@@ -170,5 +172,29 @@ export async function updateDisplayNameAction(
 
   revalidatePath("/vendor");
   revalidatePath("/marketplace");
+  return { success: true };
+}
+
+const resellerOpennessSchema = z.object({
+  openness: z.enum(["closed", "open_to_resellers", "open_to_wl"]),
+});
+
+export async function setResellerOpennessAction(
+  _prev: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  const { user, authed } = await requireVendor();
+  if (!authed) return { error: "Not authenticated as a vendor" };
+
+  const parsed = resellerOpennessSchema.safeParse({ openness: formData.get("openness") });
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors as Record<string, string[]> };
+
+  try {
+    await setResellerOpenness(user!.id, parsed.data.openness);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to update reseller openness" };
+  }
+
+  revalidatePath("/vendor");
   return { success: true };
 }

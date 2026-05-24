@@ -11,7 +11,7 @@ A multi-sided marketplace where developers list SaaS apps and sell them on subsc
 **Economics at a glance:**
 - **Vendor (direct sale):** platform takes 12%/8%/5%/3% by trailing monthly net tier ($0–$1k / $1k–$3k / $3k–$10k / $10k+). Computed on net amount (after Stripe fees). **No flat fee.**
 - **Affiliate (referral):** vendor sets `affiliate_commission_bps` per app (20–80%). On affiliate sales: platform takes **5% of net**, affiliate gets their set %, vendor keeps the rest. Affiliate tier: 20%/25%/30% at $0/$5k/$20k active MRR generated. Commission snapshotted at subscribe time — tier changes only affect new subs.
-- **Reseller (storefront):** pays **$19/month** for platform access (30-day free trial). On each sale: vendor gets `min_price` floor, platform takes **5% of the markup** (not gross), reseller keeps the rest.
+- **Reseller (storefront):** pays **$19/month** for platform access (30-day free trial). On each sale: vendor gets `min_price` floor, platform takes **5% of markup** (Tier 1) or **2.5% of markup** (Tier 2 WL), reseller keeps the rest. Vendor with `open_to_wl` gets 33% kickback on platform commission (both tiers).
 
 ## Commands (available after #1 bootstraps the project)
 ```bash
@@ -42,7 +42,7 @@ lib/
     buyer.ts         # getBuyerSubscriptions() — joins subscriptions + apps for the dashboard
     admin.ts         # getPlatformStats, getPendingApps, getVendors, getAllSubscriptions, getAuditLog, getChurnAlerts, dispatchChurnAlerts, getVendorsWithCutInfo, setVendorCutOverride, writeAuditLog
     affiliate.ts     # createAffiliateLink, getAffiliateLinks, validateAffiliateCode, getAffiliateStats, recordAttribution; getLeaderboard, getAffiliatePublicProfile, getEarnedBadges, getBadgeProgress, updateAffiliateProfile, computeEarnedBadgeIds (pure)
-    reseller.ts      # createOffer, getOffers, getStorefrontOffer, upsertResellerSubscription, pauseOffersOnLapse, getResellerDashboard
+    reseller.ts      # createOffer, getOffers, getStorefrontOffer, upsertResellerSubscription, pauseOffersOnLapse, getResellerDashboard, upgradeOfferToWLTier2, cancelWLTier2, setResellerGlobalBranding, clearResellerGlobalBranding, getWLStorefrontOffer, getWLStorefrontOffers, setResellerOpenness
     reconciliation.ts  # runReconciliation(), getReconciliationRuns() — Stripe↔DB drift detection
     supabase.ts      # Supabase admin client (service role)
     supabase-server.ts  # Supabase server client (cookie-based session)
@@ -52,7 +52,7 @@ lib/
     anon-user.ts     # anonymous user token helpers
     billing.ts       # computeTier() pure function — 4 tiers: 1200/800/500/300 bps at $0/$1k/$3k/$10k net
     client.ts        # Stripe SDK singleton
-    connect.ts       # Connect onboarding helpers (vendor + affiliate + reseller)
+    connect.ts       # Connect onboarding helpers (vendor + affiliate + reseller); syncResellerConnectBranding
     customers.ts     # Stripe Customer helpers
     entitlements.ts  # stripeStatusToSubscriptionStatus()
     products.ts      # product/price helpers
@@ -65,6 +65,7 @@ lib/
     env.ts           # boot-time Zod env validation
     vendor.ts        # vendor input schemas
     reseller.ts      # reseller slug + offer schemas
+    wl-brand.ts      # homoglyph deny-list + validateWLBrand() + WL_COLOR_REGEX (used for both global and per-offer WL brand validation)
   utils/
     magic-bytes.ts   # file type detection by magic bytes (upload validation)
     rate-limit.ts    # simple in-memory rate limiter for API routes
@@ -108,11 +109,19 @@ app/
       _components/
         CreateOfferForm.tsx
     page.tsx           # reseller dashboard: billing status, Connect status, MRR by offer, lifetime payouts
-    actions.ts         # createOfferAction, updateOfferStatusAction
+    actions.ts         # createOfferAction, updateOfferStatusAction, upgradeOfferToWLTier2Action, cancelWLTier2Action
   r/
     [reseller-slug]/
       [offer-slug]/
-        page.tsx       # public storefront: app info + offer price + Subscribe button
+        page.tsx       # public storefront: app info + offer price + Subscribe button; Tier 1 global mini-branding band
+  _wl/
+    [reseller-slug]/
+      page.tsx         # WL subdomain landing: list active Tier 2 offers (subdomain rewrite target from proxy.ts)
+      [offer-slug]/
+        page.tsx       # WL storefront offer page: brand header + no platform attribution (except "Hosted by" legal)
+  reseller/
+    brand/
+      page.tsx         # global mini-branding settings (Tier 1, free: logo + color + display name)
   admin/
     page.tsx             # admin dashboard: stats, approvals, vendors, subscriptions, audit log, churn
     actions.ts           # approveAppAction, rejectAppAction, syncVendorStripeAction
@@ -125,7 +134,7 @@ components/
   ui/               # shadcn-style primitives: Button, Card, Input, Select, Label, Badge, Modal, Toast, Table, Skeleton
   layout/           # DashboardShell, Sidebar, Topbar, PageHeader — opt-in wrapper for dashboard pages
 next.config.ts       # security headers (CSP report-only, HSTS, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP, CORP)
-proxy.ts             # Next.js middleware: auth enforcement, role routing, ?aff= cookie capture (30d HTTP-only)
+proxy.ts             # Next.js middleware: auth enforcement, role routing, ?aff= cookie capture (30d HTTP-only), subdomain rewrite (<slug>.<base> → /_wl/<slug>/)
 supabase/
   migrations/        # all schema changes — never manual dashboard edits
   functions/
@@ -136,6 +145,13 @@ types/
 scripts/
   set-weekly-payouts.ts   # one-shot: configure weekly Friday payout schedule on all connected accounts
 ```
+
+## Reseller data model (as of #29)
+- `profiles.reseller_openness` (`closed | open_to_resellers | open_to_wl`; default `open_to_resellers`) — vendor-set toggle. Only affects reseller sales. Direct sales always use 4-tier system.
+- `profiles.wl_global_logo_url / wl_global_brand_color / wl_global_display_name` — Tier 1 global mini-branding (free, all-or-nothing CHECK; shown on `/r/<slug>/<offer>` storefront band).
+- `reseller_offers.wl_tier` (1|2), `wl_status` (trialing|active|past_due|canceled), `wl_stripe_subscription_id` (UNIQUE per offer), `wl_logo_url / wl_brand_color / wl_display_name` (Tier 2 per-offer branding), `wl_trial_end`, `wl_last_sale_at`.
+- `subscriptions.reseller_wl_tier_snapshot / vendor_openness_snapshot` — immutable after subscribe. Existing subs grandfathered at `(1, open_to_resellers)`.
+- `VENDOR_WL_KICKBACK_BPS = 3333` in `lib/stripe/transfers.ts` — 33.33% of platform reseller commission goes to vendor if `open_to_wl`. Tunable const, never inline.
 
 ## Affiliate data model (as of #25)
 - `profiles.affiliate_active_mrr_cents` — current active MRR (drives commission tier + leaderboard rank). Set by `increment_affiliate_mrr` RPC on `invoice.paid`; decremented on refund.
@@ -168,6 +184,7 @@ JWT_PUBLIC_KEY=                        # RS256 public key (PEM); served via /.we
 JWT_KEY_ID=                            # `kid` for the active key, so keys can rotate without breaking vendors
 CHURN_ALERT_THRESHOLD_BPS=2000         # 20% — vendor monthly cancellation rate above this is flagged in #10
 STRIPE_RESELLER_PLAN_PRICE_ID=         # required from #14 — Stripe Price id (recurring $19/mo, USD) the reseller subscribes to on the platform account
+STRIPE_WL_TIER2_PRICE_ID=             # required from #29 — $29/mo recurring Stripe Price for Tier 2 per-offer WL upgrades
 UPSTASH_REDIS_REST_URL=               # required from #28 in production — distributed rate limiter
 UPSTASH_REDIS_REST_TOKEN=             # required from #28 in production — distributed rate limiter
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=       # required from #28 (P1) — Cloudflare Turnstile CAPTCHA
@@ -237,7 +254,7 @@ Wave 6 — docs:
 **Phase 4 — Wave 7** (sequential: #27 → #28 → #29):
 - [x] #27 Manual per-vendor commission override (admin-set bps, audit log, vendor trigger guard)
 - [x] #28 Security hardening v2 (CSP, audit log helper, rate limiting)
-- [ ] #29 White-label Tier 2 (vendor toggle, reseller subdomain storefront, per-offer WL branding)
+- [x] #29 White-label Tier 2 (vendor toggle, reseller subdomain storefront, per-offer WL branding)
 
 ## Guardrails
 - Never expose buyer email, name, or card data to vendors, resellers, or affiliates — the anonymous token model (SPEC §6) and the `vendor_subscription_stats` / `reseller_sale_stats` / `affiliate_stats` boundaries (SPEC §7) are non-negotiable. None of these roles gets a read path to `subscriptions.buyer_id`.
@@ -255,3 +272,10 @@ Wave 6 — docs:
 - Webhook endpoints are exempt from rate limiting — Stripe retry logic depends on it. Idempotency is the dedupe mechanism.
 - `checkRateLimit()` is async (Upstash Redis in production, in-memory fallback in dev). Always `await` it. Never add it to the webhook route.
 - CSP rolls out report-only first (header: `Content-Security-Policy-Report-Only`). After 1 week of clean reports, switch to `Content-Security-Policy`. Never add `unsafe-eval`; tighten `unsafe-inline` with nonces in a future pass.
+- Vendor cut on **direct sales** always uses the 4-tier system (12/8/5/3%) plus any admin override. The `reseller_openness` toggle does NOT affect direct sales.
+- Vendor never pays a per-sale tax on reseller sales. Income = `floor` (`open_to_resellers`) or `floor + 33% × platform_commission` (`open_to_wl`). `vendor_openness_snapshot` is immutable after subscribe — vendor flipping later does not retroactively change live subs.
+- Tier 2 subscribe requires live check: `vendor.reseller_openness='open_to_wl'` at checkout time. `computeResellerSplit` enforces: (1) Tier 2 → openness must be `open_to_wl`; (2) sum invariant `vendor+platform+reseller===amount`; (3) `platformCut >= 0`. Throws on violation.
+- `VENDOR_WL_KICKBACK_BPS = 3333` exported const in `lib/stripe/transfers.ts`. Never inline. CI fuzz test (1000 iters) must always satisfy sum invariant + non-negative platform cut.
+- Brand uploads: PNG/JPG/WebP only (no SVG — XSS risk), 1MB max, magic-bytes verified. Display name passes homoglyph-normalized deny-list in `lib/validation/wl-brand.ts`.
+- Subdomain enumeration: non-existent or inactive Tier 2 → 404. Buyer dashboard (`/buyer`) NEVER WL-branded — redirect to canonical domain from subdomain (anti-poaching).
+- Reserved subdomains in `proxy.ts`: www/api/admin/auth/app/dashboard/support/help/mail/email/ftp/ns1/ns2/staging/dev/test/prod — hardcoded; add any new ops subdomain here before creating a reseller slug with that name.

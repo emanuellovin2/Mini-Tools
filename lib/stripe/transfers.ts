@@ -117,50 +117,98 @@ export async function transferAffiliateShare({
   return { transferId: transfer.id, affiliateShareCents };
 }
 
-// ── Reseller money split (SPEC §4b, §11) ────────────────────────────────────
-// `availableCents` is the amount actually distributable (net of Stripe fees at webhook time,
-// or gross sell-price at modelling time — same math). Vendor always gets their full floor;
-// platform takes 5% of the remaining markup; reseller keeps the other 95%.
-//
-// Offer validity (sell_price >= vendor_floor) is enforced at offer creation in
-// services/reseller.ts. At webhook time, however, Stripe processing fees can push the
-// distributable net below the gross floor — when that happens, the vendor still receives
-// their full floor and the platform absorbs the deficit (markup share = 0 for both
-// platform and reseller). Stripe Connect settles transfers against the platform's
-// global balance, so a single thin charge is covered by accumulated balance.
-export function computeResellerSplit(
-  availableCents: number,
-  vendorFloorCents: number
-): { vendorShareCents: number; platformFeeCents: number; resellerShareCents: number } {
-  const markup = availableCents - vendorFloorCents;
-  if (markup <= 0) {
-    return { vendorShareCents: vendorFloorCents, platformFeeCents: 0, resellerShareCents: 0 };
-  }
-  const platformFeeCents = Math.floor((markup * 500) / 10_000);
-  const resellerShareCents = markup - platformFeeCents;
-  return { vendorShareCents: vendorFloorCents, platformFeeCents, resellerShareCents };
+// ── Reseller money split (SPEC §4b, #29) ────────────────────────────────────
+// WL kickback rate: vendor receives 1/3 of platform's reseller-side commission on open_to_wl sales.
+// Exposed as an exported const for tunability — DO NOT inline.
+export const VENDOR_WL_KICKBACK_BPS = 3333; // 33.33% (one third)
+
+export interface ResellerSplit {
+  vendorShareCents: number;    // = floor + kickback (or = amount in Stripe-fee edge case)
+  platformCutCents: number;    // = platformCommission − kickback
+  resellerShareCents: number;  // = amount − vendor − platform (residual; absorbs rounding)
 }
 
-// Transfer the vendor's fixed floor amount for a reseller-sold invoice.
+// Single-stream split with optional WL kickback to vendor.
+//
+// Tier 1: platform takes 5% of markup; Tier 2: platform takes 2.5% of markup.
+// On open_to_wl, platform redistributes 1/3 of its commission to vendor as kickback.
+// Reseller's share is the residual — it absorbs all rounding, so vendor + platform + reseller === amount always.
+//
+// Stripe-fee edge: when net < floor on tiny invoices (#17), vendor gets full amount, others 0.
+// Offer validity (sell_price >= floor) is enforced at offer creation; the edge case only arises
+// because Stripe processing fees can push the distributable net below the gross floor.
+export function computeResellerSplit(args: {
+  amountCents: number;
+  vendorFloorCents: number;
+  wlTier: 1 | 2;
+  vendorOpenness: "open_to_resellers" | "open_to_wl";
+}): ResellerSplit {
+  const { amountCents, vendorFloorCents, wlTier, vendorOpenness } = args;
+
+  // Stripe-fee edge: net < floor — give 100% to vendor, others get 0.
+  if (amountCents < vendorFloorCents) {
+    return { vendorShareCents: amountCents, platformCutCents: 0, resellerShareCents: 0 };
+  }
+
+  // Invariant guard: Tier 2 sales require vendor opted into WL.
+  if (wlTier === 2 && vendorOpenness !== "open_to_wl") {
+    throw new Error(
+      `invariant: Tier 2 sale requires vendorOpenness=open_to_wl, got ${vendorOpenness}`
+    );
+  }
+
+  const markup = amountCents - vendorFloorCents;
+  const resellerSideBps = wlTier === 2 ? 250 : 500; // 2.5% Tier 2, 5% Tier 1
+
+  const platformCommission = Math.floor((markup * resellerSideBps) / 10_000);
+
+  const vendorKickback =
+    vendorOpenness === "open_to_wl"
+      ? Math.floor((platformCommission * VENDOR_WL_KICKBACK_BPS) / 10_000)
+      : 0;
+
+  const vendorShare = vendorFloorCents + vendorKickback;
+  const platformCut = platformCommission - vendorKickback;
+  const resellerShare = amountCents - vendorShare - platformCut;
+
+  if (resellerShare < 0) {
+    throw new Error(
+      `computeResellerSplit: negative reseller share (amount=${amountCents}, vendor=${vendorShare}, platform=${platformCut})`
+    );
+  }
+  if (platformCut < 0) {
+    throw new Error(`computeResellerSplit: negative platform cut (kickback > commission)`);
+  }
+  if (vendorShare + platformCut + resellerShare !== amountCents) {
+    throw new Error(
+      `computeResellerSplit: sum invariant broken (sum=${vendorShare + platformCut + resellerShare}, expected=${amountCents})`
+    );
+  }
+
+  return { vendorShareCents: vendorShare, platformCutCents: platformCut, resellerShareCents: resellerShare };
+}
+
+// Transfer the vendor's share (floor + optional WL kickback) for a reseller-sold invoice.
+// Callers must pass the vendorShareCents from computeResellerSplit — no internal recomputation.
 export async function transferResellerVendorFloor({
   invoiceId,
-  vendorFloorCents,
+  vendorShareCents,
   vendorId,
   stripeAccountId,
 }: {
   invoiceId: string;
-  vendorFloorCents: number;
+  vendorShareCents: number;
   vendorId: string;
   stripeAccountId: string;
 }): Promise<{ transferId: string }> {
   const stripe = getStripe();
   const transfer = await stripe.transfers.create(
     {
-      amount: vendorFloorCents,
+      amount: vendorShareCents,
       currency: "usd",
       destination: stripeAccountId,
       transfer_group: `invoice_${invoiceId}`,
-      metadata: { invoice_id: invoiceId, vendor_id: vendorId, type: "vendor_floor" },
+      metadata: { invoice_id: invoiceId, vendor_id: vendorId, type: "vendor_share" },
     },
     { idempotencyKey: `transfer:invoice_${invoiceId}:vendor_floor:${vendorId}` }
   );

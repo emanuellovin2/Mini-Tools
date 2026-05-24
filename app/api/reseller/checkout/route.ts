@@ -44,25 +44,51 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const { offer_id } = parsed.data;
   const admin = createAdminClient();
 
-  const { data: offer } = await admin
+  type OfferWithWL = {
+    id: string; reseller_id: string; app_id: string; slug: string;
+    sell_price_cents: number; vendor_floor_snapshot_cents: number;
+    stripe_price_id: string; status: string; wl_tier: number; wl_status: string;
+    apps: { id: string; name: string; auth_url: string | null; vendor_id: string; profiles: { reseller_openness: string } | null } | null;
+    reseller: { slug: string | null } | null;
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: offer } = await (admin as any)
     .from("reseller_offers")
     .select(
       `id, reseller_id, app_id, slug, sell_price_cents, vendor_floor_snapshot_cents, stripe_price_id, status,
-       apps (id, name, auth_url, vendor_id),
+       wl_tier, wl_status,
+       apps (id, name, auth_url, vendor_id,
+             profiles!apps_vendor_id_fkey (reseller_openness)),
        reseller:profiles!reseller_offers_reseller_id_fkey (slug)`
     )
     .eq("id", offer_id)
     .eq("status", "active")
-    .maybeSingle();
+    .maybeSingle() as { data: OfferWithWL | null };
 
   if (!offer) {
     return NextResponse.json({ error: "Offer not found or not active" }, { status: 404 });
   }
 
-  const resellerProfile = offer.reseller as { slug: string | null } | null;
+  const resellerProfile = offer.reseller;
   const resellerSlug = resellerProfile?.slug;
   if (!resellerSlug) {
     return NextResponse.json({ error: "Reseller has no public slug" }, { status: 500 });
+  }
+
+  // Resolve WL tier and vendor openness for snapshot at subscribe time.
+  const wlTier: number = offer.wl_tier ?? 1;
+  const wlStatus: string = offer.wl_status ?? "inactive";
+  const appWithVendor = offer.apps;
+  const vendorOpenness: string = appWithVendor?.profiles?.reseller_openness ?? "open_to_resellers";
+
+  // For Tier 2 offers: vendor must be open_to_wl and WL sub must be active.
+  if (wlTier === 2) {
+    if (vendorOpenness !== "open_to_wl") {
+      return NextResponse.json({ error: "Vendor has not opted into white-label" }, { status: 400 });
+    }
+    if (wlStatus !== "trialing" && wlStatus !== "active") {
+      return NextResponse.json({ error: "White-label subscription for this offer is not active" }, { status: 400 });
+    }
   }
 
   // Self-resell guard: buyer cannot be the reseller.
@@ -86,7 +112,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Offer has no Stripe Price configured" }, { status: 500 });
   }
 
-  const apps = offer.apps as { id: string; name: string; auth_url: string | null; vendor_id: string } | null;
+  const apps = appWithVendor as { id: string; name: string; auth_url: string | null; vendor_id: string } | null;
   if (!apps) return NextResponse.json({ error: "App not found" }, { status: 500 });
 
   const customerId = await getOrCreateStripeCustomer(user.id, user.email ?? "");
@@ -110,6 +136,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       reseller_id: offer.reseller_id,
       reseller_offer_id: offer.id,
       vendor_floor_snapshot_cents: String(offer.vendor_floor_snapshot_cents),
+      reseller_wl_tier: String(wlTier),
+      vendor_openness: vendorOpenness,
     },
     subscription_data: {
       metadata: {

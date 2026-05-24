@@ -18,6 +18,7 @@ import { getVendorCutBps } from "@/lib/stripe/transfers";
 import AppForm from "./_components/AppForm";
 import AffiliateCommissionForm from "./_components/AffiliateCommissionForm";
 import ProfileForm from "./_components/ProfileForm";
+import ResellerOpennessForm from "./_components/ResellerOpennessForm";
 import StripeConnect from "./_components/StripeConnect";
 import MRRCard from "./_components/MRRCard";
 import MRRWaterfallChart from "./_components/MRRWaterfallChart";
@@ -132,11 +133,14 @@ export default async function VendorDashboard({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const admin = (await import("@/lib/services/supabase")).createAdminClient();
+  type VendorProfile = { role: string; display_name: string | null; stripe_account_id: string | null; charges_enabled: boolean | null; payouts_enabled: boolean | null; vendor_cut_bps_override: number | null; reseller_openness: string | null };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: profile } = await (admin as any)
     .from("profiles")
-    .select("role, display_name, stripe_account_id, charges_enabled, payouts_enabled, vendor_cut_bps_override")
+    .select("role, display_name, stripe_account_id, charges_enabled, payouts_enabled, vendor_cut_bps_override, reseller_openness")
     .eq("id", user.id)
-    .single();
+    .single() as { data: VendorProfile | null };
 
   if (profile?.role !== "vendor") redirect("/login");
 
@@ -208,6 +212,16 @@ export default async function VendorDashboard({
                   — {(effectiveCutBps / 100).toFixed(2)}%
                 </p>
               )}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+              <h2 className="font-semibold mb-1">Reseller Openness</h2>
+              <p className="text-xs text-gray-400 mb-3">
+                Controls whether resellers can list or white-label your app.
+              </p>
+              <ResellerOpennessForm
+                current={(profile.reseller_openness ?? "open_to_resellers") as "closed" | "open_to_resellers" | "open_to_wl"}
+              />
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
