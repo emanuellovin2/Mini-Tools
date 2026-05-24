@@ -177,3 +177,43 @@ registerHandler("webhook_delivery", async (payload, ctx) => {
 
   return { statusCode: res.status };
 });
+
+// ── #50: orphan auto-archive ─────────────────────────────────────────────────
+// Enqueued by pg_cron daily; archives orphaned deployments older than 90 days.
+// pg_cron handles the SQL directly, so this handler is for service-layer fanout
+// (cache invalidation, audit log) after the batch UPDATE.
+registerHandler("deployment.orphan_archive", async (payload, _ctx) => {
+  const { deploymentIds } = payload as { deploymentIds: string[] };
+  if (!Array.isArray(deploymentIds) || deploymentIds.length === 0) return { archived: 0 };
+
+  const { invalidateEffectiveConfig } = await import("@/lib/services/deployments");
+  const { createAdminClient } = await import("@/lib/services/supabase");
+  const { writeAuditLog } = await import("@/lib/services/admin");
+  const admin = createAdminClient();
+
+  const now = new Date().toISOString();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (admin as any)
+    .from("solution_deployments")
+    .update({ status: "archived", archived_at: now })
+    .in("id", deploymentIds)
+    .eq("status", "orphaned");
+
+  await Promise.all(
+    deploymentIds.map((id) =>
+      Promise.all([
+        invalidateEffectiveConfig(id),
+        writeAuditLog({
+          actorId: null,
+          actorRole: "system",
+          action: "deployment.orphan_archived",
+          entityType: "solution_deployment",
+          entityId: id,
+          metadata: { reason: "90_day_orphan_auto_archive" },
+        }),
+      ])
+    )
+  );
+
+  return { archived: deploymentIds.length };
+});

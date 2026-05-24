@@ -32,7 +32,7 @@ stripe listen --forward-to localhost:3000/api/webhooks
 
 ## Key file locations
 ```
-lib/services/          # service layer (apps.ts, solutions.ts, vendor.ts, buyer.ts, admin.ts, affiliate.ts, reseller.ts, org.ts, analytics.ts, reconciliation.ts, api-keys.ts, notifications.ts, onboarding.ts, export.ts, vendor-webhooks.ts)
+lib/services/          # service layer (apps.ts, solutions.ts, vendor.ts, buyer.ts, admin.ts, affiliate.ts, reseller.ts, org.ts, analytics.ts, reconciliation.ts, api-keys.ts, notifications.ts, onboarding.ts, export.ts, vendor-webhooks.ts, agency.ts, deployments.ts)
 lib/stripe/            # billing.ts (computeTier), transfers.ts, webhook-handlers.ts, connect.ts, products.ts, with-retry.ts
 lib/auth/              # permissions.ts (can()), jwt.ts, roles.ts, sdk.ts
 lib/jobs/              # queue.ts (enqueueJob/claimJobs), handlers.ts
@@ -82,8 +82,8 @@ supabase/migrations/   # all schema changes — never manual dashboard edits
 - `affiliate_badges` — static lookup; earned badges via `affiliate_earned_badges(p_affiliate_id)` RPC.
 - Public MRR must be **rounded** (nearest $100) — exact figures expose subscriber counts.
 
-**Organizations (as of #47)**
-- `organizations`: `id, name, slug (nullable for personal), type (personal|team)`. Stripe Connect columns live here (not profiles).
+**Organizations (as of #47 + #50)**
+- `organizations`: `id, name, slug (nullable for personal), type (personal|team|agency|client)`, `region text DEFAULT 'us-east-1'`. Stripe Connect columns live here (not profiles).
 - `org_members`: `(org_id, user_id)` UNIQUE, `role (owner|admin|member)`. Index: `(user_id, org_id) INCLUDE (role)`.
 - `jobs`: durable async queue — erasure, export, analytics rollup, settlement, webhook delivery.
 - `org_quotas`: default-deny for every new resource type. Every creatable resource MUST have quota + enforcement.
@@ -95,6 +95,14 @@ supabase/migrations/   # all schema changes — never manual dashboard edits
 - `analytics_daily`: rollup kept indefinitely. `analytics-rollup-cron` (0 3 * * *) → `rollup_analytics_day(date)` RPC.
 - `POST /api/events`: batched (max 20), rate-limited 60/min/IP, bot-filtered.
 - `ANALYTICS_SALT_SECRET` required env var (falls back to `dev-salt-not-for-production` with warning).
+
+**Agency ↔ Client + Deployments (as of #50)**
+- `organizations.type` extended: `'agency'` (operators) and `'client'` (SMB end-buyers). `type='personal'` orgs are unchanged.
+- `client_relationships`: agency↔client binding. Partial unique index `(client_org_id) WHERE status='active'` — one active agency per client. Status: `invited|active|paused|ended`. Ending cascades deployments to `'orphaned'` (trigger). `lib/services/agency.ts` for invite/accept/pause/end lifecycle.
+- `solution_deployments`: operational unit for `solution_type IN ('agent','workflow','bundle')` (SaaS keeps subscriptions). Key columns: `agency_org_id` (nullable — NULL = marketplace-direct), `client_org_id`, `runtime_config_override jsonb`, `region text` (immutable, denormalized from client org at insert), `tenant_shard_id smallint DEFAULT 0` (sharding seam). Trigger prevents SaaS solutions. Trigger requires active relationship when `agency_org_id` is set.
+- `getEffectiveConfig(deploymentId)` in `lib/services/deployments.ts` — merges `solutions.runtime_config` + `runtime_config_override`. Redis-cached (5 min) + in-process LRU (30 s). **#41 and #42 must ONLY read config via this function, never raw rows.**
+- RLS: client reads own deployments, agency reads operated deployments, vendor reads aggregate via `get_vendor_deployment_stats()` RPC only (no raw rows). No cross-tenant reads.
+- Orphaned deployments: can be adopted (`operated_by=NULL`), transferred to new agency, or archived. Auto-archived after 90 days via pg_cron.
 
 **Solutions abstraction (as of #49)**
 - `solutions` table (renamed from `apps`). Legacy `CREATE VIEW apps AS SELECT * FROM solutions` — existing code works unchanged.
@@ -127,7 +135,7 @@ Repositioning: infrastructure agencies use to build agent-powered businesses for
 - [x] #46 Analytics event capture — `analytics_events` (monthly partition, privacy-safe), rollup cron, real funnels (affiliate EPC, reseller traffic, vendor impression)
 - [x] #49 Solutions abstraction — `apps→solutions` rename + legacy view, `solution_type` enum, `runtime_config`, `template_of_id`, `solution_versions`, search interface, `SOLUTIONS_NON_SAAS_ENABLED` flag
 - [x] #54 Wave 9 scale invariants — `lib/search/index.ts` interface + Postgres impl, `lib/db/with-replica.ts` + `with-region.ts`, `organizations.region` + `custom_domain`, `settlement_batches`, `idempotency_keys_v2` TTL partitions, tenant noisy-neighbor (pg_cron kill + `tenant_query_stats` mview), `lib/reserved-slugs.ts` single source, `lib/cold-storage/index.ts` stub, `CUSTOM_DOMAINS_ENABLED` flag, ENGINEERING.md §12 + k6 Wave 9 scenarios
-- [ ] #50 Agency ↔ Client + Deployments — `organization_type` extended (`agency`|`client`), `client_relationships` (one active agency per client), `solution_deployments` as op unit for non-SaaS (SaaS keeps subscriptions), `getEffectiveConfig` Redis-cached (5min + 30s LRU), RLS trust boundaries. **BLOCKS #51–#53, refits #40–#44.**
+- [x] #50 Agency ↔ Client + Deployments — `organization_type` extended (`agency`|`client`), `client_relationships` (one active agency per client), `solution_deployments` as op unit for non-SaaS (SaaS keeps subscriptions), `getEffectiveConfig` Redis-cached (5min + 30s LRU), RLS trust boundaries. **BLOCKS #51–#53, refits #40–#44.**
 - [ ] #51 Outcome metrics seam — `deployment_metrics` (daily partition, append-only), `emitMetric` idempotent, reserved namespaces (`lead.*`/`meeting.*`/`task.*`/`time.*`/`revenue.*`/`cost.*`/`quality.*`), k≥5 anonymity on benchmarks, PII dimension guard, incremental 15-min rollup with watermark.
 - [ ] #40 Usage metering + billing — `usage_events.deployment_id` refit, prepaid `credit_wallets`, settlement cron, `computeUsageSplit` pure fn (vendor/agency/platform/reseller/affiliate). **BLOCKS #41–#44.**
 - [ ] #41 AI Gateway (BYOK) — per-deployment key routing (vendor/agency/client BYOK), spend caps, encrypted `provider_keys` vault, `/api/gateway/[provider]` metered proxy.

@@ -7,7 +7,7 @@ import { cookies } from "next/headers";
 // Types
 // ---------------------------------------------------------------------------
 
-export type OrgType = "personal" | "team";
+export type OrgType = "personal" | "team" | "agency" | "client";
 export type OrgRole = "owner" | "admin" | "member";
 
 export interface Organization {
