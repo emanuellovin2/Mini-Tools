@@ -12,6 +12,8 @@ interface DashboardShellProps {
   breadcrumbs?: Breadcrumb[];
   testMode?: boolean;
   notificationBell?: ReactNode;
+  /** Org switcher rendered before the email chip in the Topbar */
+  orgSwitcher?: ReactNode;
 }
 
 export function DashboardShell({
@@ -21,6 +23,7 @@ export function DashboardShell({
   breadcrumbs,
   testMode,
   notificationBell,
+  orgSwitcher,
 }: DashboardShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -94,6 +97,7 @@ export function DashboardShell({
           breadcrumbs={breadcrumbs}
           testMode={testMode}
           notificationBell={notificationBell}
+          actions={orgSwitcher}
         />
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>

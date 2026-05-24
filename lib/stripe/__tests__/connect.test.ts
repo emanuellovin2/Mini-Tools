@@ -27,14 +27,25 @@ import { getOrCreateConnectAccount, createOnboardingLink, syncConnectStatus } fr
 
 // Helper to build chainable Supabase mock
 function buildQuery(result: unknown) {
-  const q = { select: vi.fn(), eq: vi.fn(), update: vi.fn(), single: vi.fn() };
+  const q: Record<string, ReturnType<typeof vi.fn>> = {
+    select: vi.fn(),
+    eq: vi.fn(),
+    update: vi.fn(),
+    single: vi.fn(),
+    maybeSingle: vi.fn(),
+  };
   q.select.mockReturnValue(q);
   q.eq.mockReturnValue(q);
   q.update.mockReturnValue(q);
   q.single.mockResolvedValue(result);
-  q.eq.mockImplementation(() => q);
+  q.maybeSingle.mockResolvedValue(result);
   q.update.mockImplementation(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }));
   return q;
+}
+
+// Chainable query that returns null from maybeSingle (no org found — safe no-op)
+function buildNullQuery() {
+  return buildQuery({ data: null, error: null });
 }
 
 beforeEach(() => {
@@ -52,19 +63,23 @@ describe("getOrCreateConnectAccount", () => {
   });
 
   it("creates new account when none exists and stores it", async () => {
-    // First call: profile lookup → no account
+    // call 1: profiles select (no account)
     const selectQuery = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: { stripe_account_id: null }, error: null }),
     };
-    const updateQuery = {
+    // call 2: profiles update (store account id)
+    const updateProfilesQuery = {
       update: vi.fn().mockReturnThis(),
       eq: vi.fn().mockResolvedValue({ error: null }),
     };
+    // call 3: org_members select (no personal org — safe no-op)
+    const orgMembersQuery = buildNullQuery();
     mockAdminFrom
       .mockReturnValueOnce(selectQuery)
-      .mockReturnValueOnce(updateQuery);
+      .mockReturnValueOnce(updateProfilesQuery)
+      .mockReturnValueOnce(orgMembersQuery);
 
     mockStripeAccountsCreate.mockResolvedValue({ id: "acct_new" });
 
@@ -85,9 +100,11 @@ describe("getOrCreateConnectAccount", () => {
     const updateQuery = {
       update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
     };
+    const orgMembersQuery = buildNullQuery();
     mockAdminFrom
       .mockReturnValueOnce(selectQuery)
-      .mockReturnValueOnce(updateQuery);
+      .mockReturnValueOnce(updateQuery)
+      .mockReturnValueOnce(orgMembersQuery);
 
     mockStripeAccountsCreate.mockResolvedValue({ id: "acct_idempotent" });
 
@@ -109,7 +126,7 @@ describe("createOnboardingLink", () => {
 });
 
 describe("syncConnectStatus", () => {
-  it("updates charges_enabled and payouts_enabled from Stripe", async () => {
+  it("updates charges_enabled and payouts_enabled on profiles and organizations", async () => {
     mockStripeAccountsRetrieve.mockResolvedValue({
       charges_enabled: true,
       payouts_enabled: false,
@@ -117,6 +134,7 @@ describe("syncConnectStatus", () => {
 
     const updateEq = vi.fn().mockResolvedValue({ error: null });
     const updateQuery = { update: vi.fn().mockReturnValue({ eq: updateEq }) };
+    // Both profiles and organizations updates use the same mock shape
     mockAdminFrom.mockReturnValue(updateQuery);
 
     const result = await syncConnectStatus("vendor-uuid", "acct_abc");

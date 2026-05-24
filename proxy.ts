@@ -13,7 +13,7 @@ const RESERVED_SUBDOMAINS = new Set([
 // Note: each prefix is matched with `startsWith`, so a bare "/r" would also match
 // "/reseller" (the reseller dashboard) and silently bypass auth. Storefront URLs are
 // always /r/<reseller-slug>/<offer-slug> so the trailing slash form is exact enough.
-const PUBLIC_PATHS = ["/login", "/signup", "/api/auth", "/api/webhooks", "/api/verify", "/.well-known", "/marketplace", "/app", "/r/", "/affiliates", "/_wl/"];
+const PUBLIC_PATHS = ["/login", "/signup", "/api/auth", "/api/webhooks", "/api/verify", "/.well-known", "/marketplace", "/app", "/r/", "/affiliates", "/_wl/", "/invite/"];
 const AUTH_ONLY_PUBLIC = ["/login", "/signup"];
 
 // Capture ?aff=<code> on any public page visit and set an HTTP-only attribution cookie.

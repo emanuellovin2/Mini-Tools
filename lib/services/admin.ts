@@ -8,12 +8,14 @@ import type { Json } from "@/types/supabase";
 // ---------------------------------------------------------------------------
 
 export async function writeAuditLog(args: {
-  actorId: string;
+  actorId: string | null;
   actorRole: string;
   action: string;
   entityType: string;
   entityId: string;
   metadata?: Record<string, unknown>;
+  /** Org that performed the action — stamped on every member-driven mutation. */
+  actorOrgId?: string | null;
 }): Promise<void> {
   const admin = createAdminClient();
   const { error } = await admin.from("audit_log").insert({
@@ -23,6 +25,7 @@ export async function writeAuditLog(args: {
     entity_type: args.entityType,
     entity_id: args.entityId,
     metadata: (args.metadata ?? {}) as unknown as Json,
+    actor_org_id: args.actorOrgId ?? null,
   });
   if (error) throw new Error(`writeAuditLog: ${error.message}`);
 }

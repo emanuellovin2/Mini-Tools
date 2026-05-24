@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/services/supabase";
 export async function getOrCreateConnectAccount(vendorId: string): Promise<string> {
   const admin = createAdminClient();
 
-  // Return existing account if already stored
+  // Return existing account if already stored on profile (backward compat)
   const { data: profile } = await admin
     .from("profiles")
     .select("stripe_account_id")
@@ -19,11 +19,22 @@ export async function getOrCreateConnectAccount(vendorId: string): Promise<strin
     { idempotencyKey: `acct_create:vendor_${vendorId}` }
   );
 
-  const { error } = await admin
-    .from("profiles")
-    .update({ stripe_account_id: account.id })
-    .eq("id", vendorId);
-  if (error) throw new Error(`Failed to store stripe_account_id: ${error.message}`);
+  // Write to profiles (backward compat) AND to the user's personal org (canonical post-#47)
+  await admin.from("profiles").update({ stripe_account_id: account.id }).eq("id", vendorId);
+
+  // Update org — look up personal org by owner membership
+  const { data: membership } = await admin
+    .from("org_members")
+    .select("org_id, organizations!inner(type)")
+    .eq("user_id", vendorId)
+    .eq("organizations.type", "personal")
+    .maybeSingle();
+  if (membership?.org_id) {
+    await admin
+      .from("organizations")
+      .update({ stripe_account_id: account.id })
+      .eq("id", membership.org_id);
+  }
 
   return account.id;
 }
@@ -99,11 +110,18 @@ export async function syncConnectStatus(
   const payouts_enabled = account.payouts_enabled ?? false;
 
   const admin = createAdminClient();
+
+  // Dual-write: profiles (backward compat) + organizations (canonical post-#47)
   const { error } = await admin
     .from("profiles")
     .update({ charges_enabled, payouts_enabled })
     .eq("id", vendorId);
-  if (error) throw new Error(`Failed to sync Connect status: ${error.message}`);
+  if (error) throw new Error(`Failed to sync Connect status on profiles: ${error.message}`);
+
+  await admin
+    .from("organizations")
+    .update({ charges_enabled, payouts_enabled })
+    .eq("stripe_account_id", accountId);
 
   return { charges_enabled, payouts_enabled };
 }

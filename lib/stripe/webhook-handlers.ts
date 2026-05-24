@@ -1219,6 +1219,15 @@ export async function handleAccountUpdated(
     })
     .eq("stripe_account_id", account.id);
 
+  // Dual-write to organizations (canonical post-#47)
+  await admin
+    .from("organizations")
+    .update({
+      charges_enabled: account.charges_enabled ?? false,
+      payouts_enabled: account.payouts_enabled ?? false,
+    })
+    .eq("stripe_account_id", account.id);
+
   // Set weekly Friday payout schedule the first time charges become enabled
   if (account.charges_enabled && !existing?.charges_enabled) {
     const stripe = getStripe();
@@ -1250,6 +1259,11 @@ export async function handleAccountDeauthorized(
 ): Promise<void> {
   await admin
     .from("profiles")
+    .update({ charges_enabled: false, payouts_enabled: false })
+    .eq("stripe_account_id", connectedAccountId);
+
+  await admin
+    .from("organizations")
     .update({ charges_enabled: false, payouts_enabled: false })
     .eq("stripe_account_id", connectedAccountId);
 

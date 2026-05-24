@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from "@/lib/services/supabase-server";
 import { appSubmitSchema, displayNameSchema } from "@/lib/validation/vendor";
 import { detectLogoMimeType } from "@/lib/utils/magic-bytes";
 import { setResellerOpenness } from "@/lib/services/reseller";
+import { getPersonalOrgId } from "@/lib/services/org";
 import { z } from "zod";
 
 export type ActionResult =
@@ -104,8 +105,11 @@ export async function submitAppAction(
       ? Math.round(parsed.data.min_price_dollars * 100)
       : null;
 
+  const orgId = await getPersonalOrgId(user!.id);
+
   const { error: insertErr } = await supabase.from("apps").insert({
     vendor_id: user!.id,
+    org_id: orgId,
     name: parsed.data.name,
     description: parsed.data.description ?? null,
     category: parsed.data.category ?? null,

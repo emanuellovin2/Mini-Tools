@@ -117,6 +117,7 @@ export type Database = {
           code: string
           created_at: string
           id: string
+          org_id: string
         }
         Insert: {
           affiliate_id: string
@@ -124,6 +125,7 @@ export type Database = {
           code: string
           created_at?: string
           id?: string
+          org_id?: string
         }
         Update: {
           affiliate_id?: string
@@ -131,6 +133,7 @@ export type Database = {
           code?: string
           created_at?: string
           id?: string
+          org_id?: string
         }
         Relationships: [
           {
@@ -176,6 +179,7 @@ export type Database = {
           stripe_product_id: string | null
           updated_at: string
           vendor_id: string
+          org_id: string
         }
         Insert: {
           affiliate_commission_bps?: number | null
@@ -196,6 +200,7 @@ export type Database = {
           stripe_product_id?: string | null
           updated_at?: string
           vendor_id: string
+          org_id?: string
         }
         Update: {
           affiliate_commission_bps?: number | null
@@ -238,6 +243,7 @@ export type Database = {
         Row: {
           action: string
           actor_id: string | null
+          actor_org_id: string | null
           actor_role: string | null
           created_at: string
           entity_id: string | null
@@ -248,6 +254,7 @@ export type Database = {
         Insert: {
           action: string
           actor_id?: string | null
+          actor_org_id?: string | null
           actor_role?: string | null
           created_at?: string
           entity_id?: string | null
@@ -258,6 +265,7 @@ export type Database = {
         Update: {
           action?: string
           actor_id?: string | null
+          actor_org_id?: string | null
           actor_role?: string | null
           created_at?: string
           entity_id?: string | null
@@ -266,6 +274,125 @@ export type Database = {
           metadata?: Json | null
         }
         Relationships: []
+      }
+      organizations: {
+        Row: {
+          id: string
+          name: string
+          slug: string | null
+          type: "personal" | "team"
+          stripe_account_id: string | null
+          charges_enabled: boolean
+          payouts_enabled: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug?: string | null
+          type?: "personal" | "team"
+          stripe_account_id?: string | null
+          charges_enabled?: boolean
+          payouts_enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string | null
+          type?: "personal" | "team"
+          stripe_account_id?: string | null
+          charges_enabled?: boolean
+          payouts_enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      org_members: {
+        Row: {
+          id: string
+          org_id: string
+          user_id: string
+          role: "owner" | "admin" | "member"
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          user_id: string
+          role?: "owner" | "admin" | "member"
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          user_id?: string
+          role?: "owner" | "admin" | "member"
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_members_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      org_invitations: {
+        Row: {
+          id: string
+          org_id: string
+          email: string
+          role: "admin" | "member"
+          token_hash: string
+          invited_by: string
+          expires_at: string
+          accepted_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          email: string
+          role?: "admin" | "member"
+          token_hash: string
+          invited_by: string
+          expires_at?: string
+          accepted_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          email?: string
+          role?: "admin" | "member"
+          token_hash?: string
+          invited_by?: string
+          expires_at?: string
+          accepted_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_invitations_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       pending_transfers: {
         Row: {

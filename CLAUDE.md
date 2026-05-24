@@ -60,7 +60,22 @@ lib/
     webhook-handlers.ts  # all Stripe event handlers (+ structured logging, receipt/dunning emails)
   email/
     resend.ts        # sendSubscriptionReceipt, sendPaymentFailedNotice, sendChurnAlert, sendReconciliationDigest — all degrade gracefully on Resend outage
-  auth/              # JWT mint/verify logic
+  auth/
+    permissions.ts   # (planned #47) can(memberRole, action) — pure fn; one source of truth for org-role checks
+                     # JWT mint/verify logic also lives here
+  services/
+    org.ts           # (planned #47) createPersonalOrg, createTeamOrg, inviteMember, acceptInvite, listMembers, getActiveOrg
+  jobs/
+    queue.ts         # (planned #48) enqueueJob, claimJobs, completeJob, failJob — durable async queue
+    handlers.ts      # (planned #48) handler registry: handlers[type] = (payload, ctx) => result
+  quotas/
+    enforce.ts       # (planned #48) enforceQuota(orgId, resource) — throws QUOTA_EXCEEDED
+  db/
+    with-timeout.ts  # (planned #48) withStatementTimeout(ms, fn) — SET LOCAL statement_timeout
+  stripe/
+    with-retry.ts    # (planned #48) withStripeRetry(fn) — 429/5xx backoff for cron-path Stripe calls
+  cache/
+    revalidate.ts    # (planned #48) revalidateMarketplace/App/Storefront — tagged ISR invalidation
   validation/
     env.ts           # boot-time Zod env validation
     vendor.ts        # vendor input schemas
@@ -178,6 +193,16 @@ scripts/
 - `affiliate_leaderboard` — public view; excludes profiles where `slug IS NULL` or `affiliate_lifetime_mrr_cents = 0`.
 - Public MRR display must be **rounded** (to nearest $100 or banded) — exact figures let competitors back-calculate subscriber counts.
 
+## Organizations & async foundations data model (as of #47)
+- `organizations` — `id`, `name`, `slug` (UNIQUE, nullable for personal), `type` (`personal|team`). Stripe Connect / payout columns (`stripe_account_id`, `charges_enabled`, `payouts_enabled`) **move here from `profiles`** — payouts are org-level.
+- `org_members` — `(org_id, user_id)` UNIQUE; `role` (`owner|admin|member`). Required index: `(user_id, org_id) INCLUDE (role)`. `owner` = billing + delete; `admin` = manage products/members; `member` = operate, no billing.
+- `org_invitations` — email + hashed token + role + `expires_at` + `accepted_at`. Token is single-use; expired/used tokens rejected.
+- `jobs` — durable async queue (`type`, `payload`, `status` queued/running/succeeded/failed/dead, `attempts`, `locked_by`, `locked_until`, `idempotency_key`). Worker atomically claims via `FOR UPDATE SKIP LOCKED`. Paths that migrate here: erasure, export, analytics rollup, usage settlement, outbound webhook delivery.
+- `org_quotas` — per-org caps: `max_offers`, `max_api_keys`, `max_workflows`, `api_rps`, etc. Default-deny for new resource types — every creatable resource MUST have a quota + enforcement.
+- `audit_log.actor_org_id` — `writeAuditLog` MUST stamp this on every mutation going forward. Org admins read their org's rows at `/settings/organization/activity`; cross-org reads blocked by RLS.
+- **Ownership shift:** `apps`, `reseller_offers`, `affiliate_links`, `reseller_subscriptions`, `vendor_billing`, `vendor_revenue_events` gain `org_id`. `profiles.role` stays as platform role (vendor/affiliate/reseller/buyer/admin); `org_members.role` governs within-org permissions. No `owner_type` discriminator — one ownership type: `org_id`.
+- **Active-org context:** `getActiveOrg(session)` resolves the current org + caller's role; every service-layer call is scoped by it. Org switcher in the topbar (personal ↔ teams).
+
 ## How to work in this repo
 - Build one numbered prompt at a time. Do not jump ahead.
 - After finishing a prompt, tick it in the **Progress** checklist below.
@@ -288,7 +313,7 @@ Wave 6 — docs:
 - [ ] #39 Cross-role: notifications bell + preferences, account settings (2FA/sessions/data export/delete), onboarding checklist per role, CSV export everywhere, vendor webhook subscribers
 
 **Phase 6 — Wave 9 (Usage economy — the "4 kitchens" + foundations)** — design constraint: **BYOK + prepaid credits = zero/minimal compute cost to platform**; usage-based earnings for vendor/reseller/affiliate. **Foundation-first ordering: #47 → #48 → #46 → kitchens → #45.** #47/#48/#46 capture decisions that cannot be reconstructed retroactively — never defer.
-- [ ] #47 Organizations & multi-seat (the ownership model) — `organizations`, `org_members`, personal-org bootstrap + backfill, RLS rewrite via `is_org_member` (STABLE SECURITY DEFINER + `org_members(user_id, org_id) INCLUDE (role)` index), payouts move to org, `audit_log.actor_org_id` + team activity feed — **BLOCKS #48** (pre-launch clean-break, retrofit cost explodes after launch)
+- [x] #47 Organizations & multi-seat (the ownership model) — `organizations`, `org_members`, personal-org bootstrap + backfill, RLS rewrite via `is_org_member` (STABLE SECURITY DEFINER + `org_members(user_id, org_id) INCLUDE (role)` index), payouts move to org, `audit_log.actor_org_id` + team activity feed — **BLOCKS #48** (pre-launch clean-break, retrofit cost explodes after launch)
 - [ ] #48 Scale & resilience foundation — durable `jobs` table + tick worker, `org_quotas` + enforce, `statement_timeout` middleware, outbound webhook delivery worker, partition/retention/RLS-perf conventions in ENGINEERING.md, edge caching policy (ISR + on-demand revalidation), k6 smoke harness, Stripe 429 retry wrapper, PITR restore runbook — **BLOCKS #46/#40+** (they consume these primitives from day 1)
 - [ ] #46 Engagement & analytics event capture — append-only `analytics_events` (monthly partition, salted daily-rotating visitor hash, no PII, DNT), beacon + server capture, rollup cron via jobs queue, REAL funnels (affiliate EPC + click→sale, reseller traffic→conversion, vendor impression→install) — **capture-now, depends on #47 + #48**
 - [ ] #40 Usage metering ledger + usage-based billing (the meter) — generic `usage_events` ledger, prepaid `credit_wallets`, settlement cron, `computeUsageSplit` pure fn — **BLOCKS #41–#44**
@@ -325,3 +350,6 @@ Wave 6 — docs:
 - Brand uploads: PNG/JPG/WebP only (no SVG — XSS risk), 1MB max, magic-bytes verified. Display name passes homoglyph-normalized deny-list in `lib/validation/wl-brand.ts`.
 - Subdomain enumeration: non-existent or inactive Tier 2 → 404. Buyer dashboard (`/buyer`) NEVER WL-branded — redirect to canonical domain from subdomain (anti-poaching).
 - Reserved subdomains in `proxy.ts`: www/api/admin/auth/app/dashboard/support/help/mail/email/ftp/ns1/ns2/staging/dev/test/prod — hardcoded; add any new ops subdomain here before creating a reseller slug with that name.
+- **RLS performance (load-bearing from #47+):** `is_org_member(org_id, min_role)` and any RLS helper that hits a lookup table MUST be `STABLE SECURITY DEFINER` so Postgres caches it per query (not per row). On hot tables prefer `org_id = ANY(SELECT my_org_ids())` over per-row scalar `is_org_member` calls. `my_org_ids()` is a `STABLE SETOF uuid` helper the planner inlines once. Never use `auth.uid()` in a subquery that runs per-row on large tables.
+- **Migration safety on hot tables:** never `ALTER TABLE ADD COLUMN NOT NULL DEFAULT <expr>` (full rewrite + AccessExclusiveLock). Never `CREATE INDEX` without `CONCURRENTLY`. Never `ADD CONSTRAINT` without `NOT VALID` + `VALIDATE CONSTRAINT`. Pattern: (1) add nullable column — instant; (2) backfill in batches (`UPDATE ... WHERE id IN (... LIMIT 10000)` looped, or as a `jobs` row); (3) set `NOT NULL` once verified.
+- **Every new creatable resource** (offer, api_key, workflow, connector, webhook endpoint) MUST add a quota row in `org_quotas` + call `enforceQuota()` in the creation path. Default-deny stance; never silently allow unbounded resource creation.
