@@ -61,10 +61,12 @@ lib/
   email/
     resend.ts        # sendSubscriptionReceipt, sendPaymentFailedNotice, sendChurnAlert, sendReconciliationDigest — all degrade gracefully on Resend outage
   auth/
-    permissions.ts   # (planned #47) can(memberRole, action) — pure fn; one source of truth for org-role checks
-                     # JWT mint/verify logic also lives here
+    permissions.ts   # can(memberRole, action) — pure fn; one source of truth for org-role checks
+    jwt.ts           # mintAccessToken, verifyAccessToken (RS256 via jose)
+    roles.ts         # UserRole type, ROLE_DASHBOARDS map
+    sdk.ts           # @platform/auth vendor-side token verification helper (JWKS-backed)
   services/
-    org.ts           # (planned #47) createPersonalOrg, createTeamOrg, inviteMember, acceptInvite, listMembers, getActiveOrg
+    org.ts           # createPersonalOrg, createTeamOrg, inviteMember, acceptInvite, listMembers, getActiveOrg
   jobs/
     queue.ts         # enqueueJob, claimJobs, completeJob, failJob, replayJob — durable async queue
     handlers.ts      # handler registry: handlers[type] = (payload, ctx) => result; built-in: erasure, export, webhook_delivery
