@@ -29,6 +29,46 @@ export async function runJob(job: Job, workerId: string): Promise<unknown> {
 
 // ── Built-in handlers ────────────────────────────────────────────────────────
 
+// Churn alert email — sends a churn notice + records an audit_log row.
+// Enqueued by dispatchChurnAlerts; one job per (vendor, month).
+registerHandler("churn_alert_email", async (payload, _ctx) => {
+  const {
+    vendorId,
+    vendorName,
+    rateBps,
+    canceled,
+    activeAtStart,
+    month,
+  } = payload as {
+    vendorId: string;
+    vendorName: string | null;
+    rateBps: number;
+    canceled: number;
+    activeAtStart: number;
+    month: string;
+  };
+
+  const [{ sendChurnAlert }, { createAdminClient }] = await Promise.all([
+    import("@/lib/email/resend"),
+    import("@/lib/services/supabase"),
+  ]);
+
+  await sendChurnAlert({ vendorName, vendorId, rateBps, canceled, activeAtStart, month });
+
+  const admin = createAdminClient();
+  await admin.from("audit_log").insert({
+    actor_id: null,
+    actor_role: "system",
+    action: "churn.alert_sent",
+    entity_type: "profiles",
+    entity_id: vendorId,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    metadata: { month, rate_bps: rateBps } as any,
+  });
+
+  return { vendorId, month };
+});
+
 // Stub: erasure fan-out (#45 will populate)
 registerHandler("erasure", async (payload, _ctx) => {
   const { userId } = payload as { userId: string };

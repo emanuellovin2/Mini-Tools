@@ -7,6 +7,9 @@ import { createAdminClient } from "@/lib/services/supabase";
 import { createOffer, updateOfferStatus, setResellerSlug, isSlugAvailable, upgradeOfferToWLTier2, cancelWLTier2 } from "@/lib/services/reseller";
 import { createOfferSchema, slugSchema } from "@/lib/validation/reseller";
 import { getStripe } from "@/lib/stripe/client";
+import { enforceQuota, QuotaExceededError } from "@/lib/quotas/enforce";
+import { getPersonalOrgId } from "@/lib/services/org";
+import { withStandardTimeout } from "@/lib/db/with-timeout";
 import type { Database } from "@/types/supabase";
 
 type ResellerOfferStatus = Database["public"]["Enums"]["reseller_offer_status"];
@@ -76,6 +79,25 @@ export async function createOfferAction(
 
   const sellPriceCents = Math.round(parsed.data.sell_price_dollars * 100);
 
+  // Default-deny quota check: every creatable resource must enforce its org quota (#48).
+  try {
+    const orgId = await getPersonalOrgId(user!.id);
+    await enforceQuota(orgId, "offers");
+  } catch (e) {
+    if (e instanceof QuotaExceededError) {
+      return {
+        error: `You've reached your offers quota (${e.used}/${e.limit}). Contact support to raise it.`,
+      };
+    }
+    // Quota lookup failure must not block legitimate offer creation
+    console.warn(JSON.stringify({
+      event: "quota.lookup_failed",
+      resource: "offers",
+      user_id: user!.id,
+      error: e instanceof Error ? e.message : String(e),
+    }));
+  }
+
   // Fetch the app to get its Stripe Product ID (needed to create a Price)
   const admin = createAdminClient();
   const { data: app } = await admin
@@ -108,13 +130,17 @@ export async function createOfferAction(
   }
 
   try {
-    await createOffer({
-      resellerId: user!.id,
-      appId: parsed.data.app_id,
-      slug: parsed.data.slug,
-      sellPriceCents,
-      stripePriceId,
-    });
+    // Bound the DB work to 30s; unbounded waits on a busy node are how stuck
+    // server actions tie up RPC slots indefinitely.
+    await withStandardTimeout(() =>
+      createOffer({
+        resellerId: user!.id,
+        appId: parsed.data.app_id,
+        slug: parsed.data.slug,
+        sellPriceCents,
+        stripePriceId,
+      })
+    );
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to create offer" };
   }

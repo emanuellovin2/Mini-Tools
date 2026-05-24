@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/services/supabase";
+import { withFastTimeout } from "@/lib/db/with-timeout";
 
 export const MARKETPLACE_PAGE_SIZE = 12;
 
@@ -38,21 +39,25 @@ export async function listMarketplaceApps({
 } = {}): Promise<MarketplaceListResult> {
   const admin = createAdminClient();
 
-  const { data, error } = await admin.rpc("list_marketplace_apps", {
-    p_page: page,
-    p_page_size: pageSize,
-    p_category: category ?? undefined,
-    p_search: search ?? undefined,
+  // Marketplace is a hot read path — bound to 5s so a misbehaving query plan
+  // can't tie up requests and slow down every browser tab on the page.
+  return withFastTimeout(async () => {
+    const { data, error } = await admin.rpc("list_marketplace_apps", {
+      p_page: page,
+      p_page_size: pageSize,
+      p_category: category ?? undefined,
+      p_search: search ?? undefined,
+    });
+
+    if (error) throw new Error(`listMarketplaceApps: ${error.message}`);
+
+    const total = data && data.length > 0 ? Number(data[0].total_count) : 0;
+    const apps: MarketplaceApp[] = (data ?? []).map(
+      ({ total_count: _tc, ...rest }) => rest
+    );
+
+    return { apps, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
   });
-
-  if (error) throw new Error(`listMarketplaceApps: ${error.message}`);
-
-  const total = data && data.length > 0 ? Number(data[0].total_count) : 0;
-  const apps: MarketplaceApp[] = (data ?? []).map(
-    ({ total_count: _tc, ...rest }) => rest
-  );
-
-  return { apps, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
 }
 
 export async function getMarketplaceApp(
@@ -71,10 +76,11 @@ export async function getMarketplaceApp(
 export async function listMarketplaceCategories(): Promise<string[]> {
   const admin = createAdminClient();
 
-  const { data, error } = await admin.rpc("list_marketplace_categories");
-
-  if (error) throw new Error(`listMarketplaceCategories: ${error.message}`);
-  return (data ?? []).map((r) => r.category).filter((c): c is string => !!c);
+  return withFastTimeout(async () => {
+    const { data, error } = await admin.rpc("list_marketplace_categories");
+    if (error) throw new Error(`listMarketplaceCategories: ${error.message}`);
+    return (data ?? []).map((r) => r.category).filter((c): c is string => !!c);
+  });
 }
 
 export function formatPrice(cents: number, currency = "usd"): string {

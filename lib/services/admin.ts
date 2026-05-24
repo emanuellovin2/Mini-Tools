@@ -1,6 +1,5 @@
 import { createAdminClient } from "@/lib/services/supabase";
 import { formatPrice } from "@/lib/services/apps";
-import { sendChurnAlert } from "@/lib/email/resend";
 import type { Json } from "@/types/supabase";
 
 // ---------------------------------------------------------------------------
@@ -446,9 +445,12 @@ export async function setVendorCutOverride({
   if (error) throw new Error(`setVendorCutOverride: ${error.message}`);
 }
 
-// Send churn alert emails for newly-flagged vendors and record in audit_log
+// Dispatch churn alerts. Each alert is enqueued as a durable `churn_alert_email`
+// job (handler in lib/jobs/handlers.ts) — Resend outages or transient email
+// failures retry with exponential backoff rather than dropping the alert on
+// the floor or blocking the calling cron. Idempotent via job idempotency_key.
 export async function dispatchChurnAlerts(alerts: ChurnAlert[]): Promise<void> {
-  const admin = createAdminClient();
+  const { enqueueJob } = await import("@/lib/jobs/queue");
 
   const now = new Date();
   const periodStart = new Date(
@@ -459,22 +461,20 @@ export async function dispatchChurnAlerts(alerts: ChurnAlert[]): Promise<void> {
   const newAlerts = alerts.filter((a) => !a.already_alerted);
 
   for (const alert of newAlerts) {
-    await sendChurnAlert({
-      vendorName: alert.vendor_name,
-      vendorId: alert.vendor_id,
-      rateBps: alert.rate_bps,
-      canceled: alert.canceled,
-      activeAtStart: alert.active_at_start,
-      month: monthKey,
-    });
-
-    await admin.from("audit_log").insert({
-      actor_id: null,
-      actor_role: "system",
-      action: "churn.alert_sent",
-      entity_type: "profiles",
-      entity_id: alert.vendor_id,
-      metadata: { month: monthKey, rate_bps: alert.rate_bps } as unknown as Json,
-    });
+    await enqueueJob(
+      "churn_alert_email",
+      {
+        vendorId: alert.vendor_id,
+        vendorName: alert.vendor_name,
+        rateBps: alert.rate_bps,
+        canceled: alert.canceled,
+        activeAtStart: alert.active_at_start,
+        month: monthKey,
+      },
+      {
+        // One alert per (vendor, month) — duplicate enqueues return the existing job.
+        idempotencyKey: `churn_alert:${alert.vendor_id}:${monthKey}`,
+      }
+    );
   }
 }

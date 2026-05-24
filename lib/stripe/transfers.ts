@@ -1,4 +1,5 @@
 import { getStripe } from "./client";
+import { withStripeRetry } from "./with-retry";
 import { createAdminClient } from "@/lib/services/supabase";
 
 // ── Affiliate split (SPEC §4a, #18) ─────────────────────────────────────────
@@ -78,15 +79,18 @@ export async function transferVendorShare({
 }): Promise<{ transferId: string; vendorShareCents: number }> {
   const vendorShareCents = overrideVendorShareCents ?? Math.floor((amountCents * (10_000 - cutBps)) / 10_000);
   const stripe = getStripe();
-  const transfer = await stripe.transfers.create(
-    {
-      amount: vendorShareCents,
-      currency: "usd",
-      destination: stripeAccountId,
-      transfer_group: `invoice_${invoiceId}`,
-      metadata: { invoice_id: invoiceId, vendor_id: vendorId },
-    },
-    { idempotencyKey: `transfer:invoice_${invoiceId}:vendor_${vendorId}` }
+  // Idempotent (idempotencyKey set) — safe to retry on 429/5xx via withStripeRetry.
+  const transfer = await withStripeRetry(() =>
+    stripe.transfers.create(
+      {
+        amount: vendorShareCents,
+        currency: "usd",
+        destination: stripeAccountId,
+        transfer_group: `invoice_${invoiceId}`,
+        metadata: { invoice_id: invoiceId, vendor_id: vendorId },
+      },
+      { idempotencyKey: `transfer:invoice_${invoiceId}:vendor_${vendorId}` }
+    )
   );
   return { transferId: transfer.id, vendorShareCents };
 }
@@ -104,15 +108,17 @@ export async function transferAffiliateShare({
   stripeAccountId: string;
 }): Promise<{ transferId: string; affiliateShareCents: number }> {
   const stripe = getStripe();
-  const transfer = await stripe.transfers.create(
-    {
-      amount: affiliateShareCents,
-      currency: "usd",
-      destination: stripeAccountId,
-      transfer_group: `invoice_${invoiceId}`,
-      metadata: { invoice_id: invoiceId, affiliate_id: affiliateId },
-    },
-    { idempotencyKey: `transfer:invoice_${invoiceId}:affiliate_${affiliateId}` }
+  const transfer = await withStripeRetry(() =>
+    stripe.transfers.create(
+      {
+        amount: affiliateShareCents,
+        currency: "usd",
+        destination: stripeAccountId,
+        transfer_group: `invoice_${invoiceId}`,
+        metadata: { invoice_id: invoiceId, affiliate_id: affiliateId },
+      },
+      { idempotencyKey: `transfer:invoice_${invoiceId}:affiliate_${affiliateId}` }
+    )
   );
   return { transferId: transfer.id, affiliateShareCents };
 }
@@ -202,15 +208,17 @@ export async function transferResellerVendorFloor({
   stripeAccountId: string;
 }): Promise<{ transferId: string }> {
   const stripe = getStripe();
-  const transfer = await stripe.transfers.create(
-    {
-      amount: vendorShareCents,
-      currency: "usd",
-      destination: stripeAccountId,
-      transfer_group: `invoice_${invoiceId}`,
-      metadata: { invoice_id: invoiceId, vendor_id: vendorId, type: "vendor_share" },
-    },
-    { idempotencyKey: `transfer:invoice_${invoiceId}:vendor_floor:${vendorId}` }
+  const transfer = await withStripeRetry(() =>
+    stripe.transfers.create(
+      {
+        amount: vendorShareCents,
+        currency: "usd",
+        destination: stripeAccountId,
+        transfer_group: `invoice_${invoiceId}`,
+        metadata: { invoice_id: invoiceId, vendor_id: vendorId, type: "vendor_share" },
+      },
+      { idempotencyKey: `transfer:invoice_${invoiceId}:vendor_floor:${vendorId}` }
+    )
   );
   return { transferId: transfer.id };
 }
@@ -228,15 +236,17 @@ export async function transferResellerShare({
   stripeAccountId: string;
 }): Promise<{ transferId: string }> {
   const stripe = getStripe();
-  const transfer = await stripe.transfers.create(
-    {
-      amount: resellerShareCents,
-      currency: "usd",
-      destination: stripeAccountId,
-      transfer_group: `invoice_${invoiceId}`,
-      metadata: { invoice_id: invoiceId, reseller_id: resellerId, type: "reseller_markup" },
-    },
-    { idempotencyKey: `transfer:invoice_${invoiceId}:reseller:${resellerId}` }
+  const transfer = await withStripeRetry(() =>
+    stripe.transfers.create(
+      {
+        amount: resellerShareCents,
+        currency: "usd",
+        destination: stripeAccountId,
+        transfer_group: `invoice_${invoiceId}`,
+        metadata: { invoice_id: invoiceId, reseller_id: resellerId, type: "reseller_markup" },
+      },
+      { idempotencyKey: `transfer:invoice_${invoiceId}:reseller:${resellerId}` }
+    )
   );
   return { transferId: transfer.id };
 }
@@ -252,13 +262,17 @@ export async function reverseTransfers({
   chargeId: string;
 }): Promise<void> {
   const stripe = getStripe();
-  const transfers = await stripe.transfers.list({ transfer_group: `invoice_${invoiceId}` });
+  const transfers = await withStripeRetry(() =>
+    stripe.transfers.list({ transfer_group: `invoice_${invoiceId}` })
+  );
   for (const transfer of transfers.data) {
     if (transfer.reversed) continue;
-    await stripe.transfers.createReversal(
-      transfer.id,
-      { metadata: { charge_id: chargeId, invoice_id: invoiceId } },
-      { idempotencyKey: `reversal:transfer_${transfer.id}:charge_${chargeId}` }
+    await withStripeRetry(() =>
+      stripe.transfers.createReversal(
+        transfer.id,
+        { metadata: { charge_id: chargeId, invoice_id: invoiceId } },
+        { idempotencyKey: `reversal:transfer_${transfer.id}:charge_${chargeId}` }
+      )
     );
   }
 }
@@ -275,14 +289,18 @@ export async function reverseVendorTransfers({
   chargeId: string;
 }): Promise<void> {
   const stripe = getStripe();
-  const transfers = await stripe.transfers.list({ transfer_group: `invoice_${invoiceId}` });
+  const transfers = await withStripeRetry(() =>
+    stripe.transfers.list({ transfer_group: `invoice_${invoiceId}` })
+  );
   for (const transfer of transfers.data) {
     if (transfer.reversed) continue;
     if (!transfer.metadata?.vendor_id) continue; // skip affiliate and reseller markup transfers
-    await stripe.transfers.createReversal(
-      transfer.id,
-      { metadata: { charge_id: chargeId, invoice_id: invoiceId, policy: "vendor_only" } },
-      { idempotencyKey: `reversal:vendor:transfer_${transfer.id}:charge_${chargeId}` }
+    await withStripeRetry(() =>
+      stripe.transfers.createReversal(
+        transfer.id,
+        { metadata: { charge_id: chargeId, invoice_id: invoiceId, policy: "vendor_only" } },
+        { idempotencyKey: `reversal:vendor:transfer_${transfer.id}:charge_${chargeId}` }
+      )
     );
   }
 }
