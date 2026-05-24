@@ -890,6 +890,36 @@ export async function handleInvoicePaymentFailed(
   }
 }
 
+// Compute the net delta to decrement for a refund event.
+//
+// On a full refund (cumulative gross-refunded == original charge amount), drain the
+// remaining net exactly so accumulated floor() drift can't leave phantom MRR or
+// inflated net_amount_cents totals. Otherwise return a proportional floor.
+async function computeRefundNetDelta(
+  admin: AdminClient,
+  invoiceId: string,
+  refundAmountCents: number,
+  originalGross: number,
+  originalNet: number,
+  isFullRefund: boolean
+): Promise<number> {
+  if (originalGross <= 0) return refundAmountCents;
+  if (!isFullRefund) {
+    return Math.floor((refundAmountCents * originalNet) / originalGross);
+  }
+  // Full refund: drain the exact remainder. Sum prior negative-net refund rows.
+  const { data: priorRefunds } = await admin
+    .from("vendor_revenue_events")
+    .select("net_amount_cents")
+    .eq("stripe_invoice_id", invoiceId)
+    .lt("net_amount_cents", 0);
+  const priorNetAbs = (priorRefunds ?? []).reduce(
+    (s, r) => s + Math.abs(r.net_amount_cents),
+    0
+  );
+  return Math.max(0, originalNet - priorNetAbs);
+}
+
 export async function handleChargeRefunded(
   charge: Stripe.Charge,
   admin: AdminClient,
@@ -918,6 +948,11 @@ export async function handleChargeRefunded(
   const refundAmountCents = (charge.refunds as { data?: Array<{ amount: number }> } | null)
     ?.data?.[0]?.amount ?? charge.amount_refunded;
 
+  // A "full refund" is when cumulative gross-refunded equals the original charge amount.
+  // On full refund we drain MRR/net exactly to avoid accumulated floor() drift (≤1¢ per
+  // partial otherwise; symmetric across charge + decrement so vendor totals stay honest).
+  const isFullRefund = charge.amount_refunded >= charge.amount;
+
   // Look up vendor context from the invoice.paid revenue event (already recorded).
   // If not found (edge: refund arrived before invoice.paid was processed), skip the event.
   // We also pull the original gross+net so we can decrement affiliate lifetime MRR
@@ -929,9 +964,23 @@ export async function handleChargeRefunded(
     .gt("amount_cents", 0)
     .maybeSingle();
 
+  // Single source of truth for the net delta: both the affiliate MRR decrement and
+  // the vendor_revenue_events refund row use this value so they never diverge.
+  const refundNetDelta =
+    revenueRow && revenueRow.amount_cents > 0
+      ? await computeRefundNetDelta(
+          admin,
+          invoiceId,
+          refundAmountCents,
+          revenueRow.amount_cents,
+          revenueRow.net_amount_cents,
+          isFullRefund
+        )
+      : refundAmountCents;
+
   // Decrement affiliate lifetime MRR to keep the badge counter honest (build prompt #25 caution).
   // Credit at invoice.paid was net_amount_cents; here we proportionally subtract using
-  // (refundAmount / originalGross) * originalNet so partial refunds stay balanced.
+  // the shared refundNetDelta computed above.
   try {
     const stripeInvoice = await stripe.invoices.retrieve(invoiceId);
     const invoiceParent = stripeInvoice.parent as Stripe.Invoice.Parent | null;
@@ -946,15 +995,9 @@ export async function handleChargeRefunded(
         .eq("stripe_subscription_id", stripeSubId)
         .maybeSingle();
       if (subForAffiliate?.affiliate_id) {
-        let mrrDelta = refundAmountCents;
-        if (revenueRow && revenueRow.amount_cents > 0) {
-          mrrDelta = Math.floor(
-            (refundAmountCents * revenueRow.net_amount_cents) / revenueRow.amount_cents
-          );
-        }
         await admin.rpc("increment_affiliate_lifetime_mrr", {
           p_affiliate_id: subForAffiliate.affiliate_id,
-          p_amount_cents: -mrrDelta,
+          p_amount_cents: -refundNetDelta,
         });
       }
     }
@@ -965,10 +1008,7 @@ export async function handleChargeRefunded(
   if (revenueRow) {
     // Mirror the proportional net-back-out used for affiliate MRR so monthly tier
     // computation (which sums net_amount_cents) stays consistent across refunds.
-    const proportionalNetCents =
-      revenueRow.amount_cents > 0
-        ? Math.floor((refundAmountCents * revenueRow.net_amount_cents) / revenueRow.amount_cents)
-        : refundAmountCents;
+    const proportionalNetCents = refundNetDelta;
 
     await admin.from("vendor_revenue_events").upsert(
       {
