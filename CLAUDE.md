@@ -256,6 +256,18 @@ Wave 6 — docs:
 - [x] #28 Security hardening v2 (CSP, audit log helper, rate limiting)
 - [x] #29 White-label Tier 2 (vendor toggle, reseller subdomain storefront, per-offer WL branding)
 
+**Phase 5 — Wave 8** (sequential: #30 + #31 first, then #32–#39 parallel-able)
+- [ ] #30 App screenshots gallery (3–7/app, lightbox, drag-reorder, marketplace preview)
+- [ ] #31 Design system v2 (Stripe-density tokens, drawer/sparkline/cmdk/skeleton/empty-state/toast/bell/onboarding primitives, mobile responsive, dark mode)
+- [ ] #32 Vendor dashboard v2 (channel mix, Stripe Connect balance, dunning queue, refund/dispute feed, per-app drill-down drawer, openness panel with kickback earnings, transparent fee breakdown)
+- [ ] #33 Affiliate dashboard v2 (conversion funnel, apps-to-promote catalog, earnings per app, Connect status, payout history, pending earnings, refund clawbacks, sticky referrals, share kit with QR)
+- [ ] #34 Reseller dashboard v2 (resellable apps catalog, per-offer analytics drawer, vendor change alerts, Tier 2 WL panel, markup simulator, kickback transparency)
+- [ ] #35 Buyer dashboard v2 (upcoming charges calendar, payment methods, invoice history, per-sub drawer, cancel-with-reason, pause-until date picker, privacy panel)
+- [ ] #36 Admin dashboard v2 (system health, take-rate trend, channel mix, concentration risk, payout obligation, webhook health + DLQ, drill-downs, manual support tools, feature flags, JWT rotation, tax export)
+- [ ] #37 Marketplace v2 (search, category nav, filters, sort, screenshot cards, featured carousel, SEO)
+- [ ] #38 Fee transparency layer (live calculators in vendor/reseller/affiliate forms, optional buyer breakdown, canonical `/legal/fees` page)
+- [ ] #39 Cross-role: notifications bell + preferences, account settings (2FA/sessions/data export/delete), onboarding checklist per role, CSV export everywhere, vendor webhook subscribers
+
 ## Guardrails
 - Never expose buyer email, name, or card data to vendors, resellers, or affiliates — the anonymous token model (SPEC §6) and the `vendor_subscription_stats` / `reseller_sale_stats` / `affiliate_stats` boundaries (SPEC §7) are non-negotiable. None of these roles gets a read path to `subscriptions.buyer_id`.
 - A user can never change their own `role` (privilege-escalation guard, RLS — SPEC §8).

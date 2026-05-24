@@ -1,0 +1,1081 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Platform — UI mockups</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root{
+    --bg:#ffffff; --soft:#fafbfc; --softer:#f4f5f7;
+    --border:#e6e8eb; --border-soft:#eef0f3;
+    --ink:#0a0e27; --muted:#697386; --muted-2:#8792a2;
+    --accent:#635bff; --accent-soft:#f0eeff; --accent-ink:#3a32c7;
+    --ok:#00a86b; --ok-soft:#e6f7ef;
+    --warn:#ff8a00; --warn-soft:#fff3e0;
+    --bad:#df1b41; --bad-soft:#ffeef0;
+  }
+  html,body{background:var(--soft);color:var(--ink);font-feature-settings:"ss01","cv11";}
+  body{font-family:ui-sans-serif,-apple-system,"Inter","Segoe UI",sans-serif;font-size:13px;line-height:1.45;letter-spacing:-0.005em;-webkit-font-smoothing:antialiased;}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";}
+  .ring-focus:focus{outline:none;box-shadow:0 0 0 3px rgba(99,91,255,.18);border-color:var(--accent);}
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 1px 1px rgba(10,14,39,.02);}
+  .chip{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:6px;font-size:11px;font-weight:500;line-height:18px;}
+  .chip-ok{background:var(--ok-soft);color:#0a7a4d;}
+  .chip-warn{background:var(--warn-soft);color:#a35200;}
+  .chip-bad{background:var(--bad-soft);color:#a01030;}
+  .chip-muted{background:var(--softer);color:var(--muted);}
+  .chip-accent{background:var(--accent-soft);color:var(--accent-ink);}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;font-weight:500;font-size:13px;border:1px solid transparent;transition:all .12s;cursor:pointer;}
+  .btn-primary{background:var(--accent);color:#fff;box-shadow:0 1px 1px rgba(99,91,255,.3),inset 0 -1px 0 rgba(0,0,0,.08);}
+  .btn-primary:hover{background:#5249ec;}
+  .btn-ghost{color:var(--ink);background:transparent;border-color:var(--border);}
+  .btn-ghost:hover{background:var(--softer);}
+  .btn-quiet{color:var(--muted);background:transparent;}
+  .btn-quiet:hover{background:var(--softer);color:var(--ink);}
+  .row{display:grid;grid-template-columns:var(--cols);align-items:center;padding:10px 16px;border-top:1px solid var(--border-soft);font-size:13px;}
+  .row:hover{background:var(--soft);}
+  .row.head{color:var(--muted);font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;background:var(--soft);border-top:none;padding:8px 16px;}
+  .divider{height:1px;background:var(--border-soft);}
+  .sidelink{display:flex;align-items:center;gap:9px;padding:6px 10px;border-radius:6px;color:#3c4257;font-weight:500;font-size:13px;cursor:pointer;}
+  .sidelink:hover{background:var(--softer);}
+  .sidelink.active{background:var(--accent-soft);color:var(--accent-ink);}
+  .sidelink.active svg{color:var(--accent);}
+  .kpi-val{font-size:24px;font-weight:600;letter-spacing:-0.02em;}
+  .spark{display:block;}
+  .focus-ring{box-shadow:0 0 0 3px rgba(99,91,255,.15);}
+  .dot{width:6px;height:6px;border-radius:99px;display:inline-block;}
+  .scrollbar::-webkit-scrollbar{width:8px;height:8px;}
+  .scrollbar::-webkit-scrollbar-thumb{background:#d3d6dc;border-radius:99px;}
+  .draggable{cursor:grab;}
+  .draggable:active{cursor:grabbing;}
+  .drag-over{outline:2px dashed var(--accent);outline-offset:-2px;background:var(--accent-soft);}
+  .checker{background-image:linear-gradient(45deg,#eef0f3 25%,transparent 25%),linear-gradient(-45deg,#eef0f3 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#eef0f3 75%),linear-gradient(-45deg,transparent 75%,#eef0f3 75%);background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0;}
+  .nav-pill{padding:5px 10px;border-radius:6px;font-size:12.5px;font-weight:500;color:var(--muted);cursor:pointer;}
+  .nav-pill.active{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(10,14,39,.06),0 0 0 1px var(--border);}
+  .kbd{font-family:ui-monospace,SFMono-Regular,monospace;font-size:10.5px;padding:1px 5px;border-radius:4px;background:var(--softer);border:1px solid var(--border);color:var(--muted);}
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:520px;background:#fff;border-left:1px solid var(--border);box-shadow:-12px 0 32px rgba(10,14,39,.08);transform:translateX(100%);transition:transform .25s cubic-bezier(.2,.8,.2,1);z-index:60;display:flex;flex-direction:column;}
+  .drawer.open{transform:translateX(0);}
+  .overlay{position:fixed;inset:0;background:rgba(10,14,39,.32);opacity:0;pointer-events:none;transition:opacity .2s;z-index:55;}
+  .overlay.open{opacity:1;pointer-events:auto;}
+  .grad-band{background:linear-gradient(135deg,#635bff 0%,#9747ff 50%,#ec4899 100%);}
+  .grad-soft{background:linear-gradient(180deg,#f7f6ff 0%,#fafbfc 100%);}
+  .stripe-progress{height:6px;background:var(--softer);border-radius:99px;overflow:hidden;}
+  .stripe-progress > div{height:100%;background:linear-gradient(90deg,#635bff,#9747ff);border-radius:99px;}
+  .gallery-thumb{position:relative;overflow:hidden;border-radius:8px;border:1px solid var(--border);cursor:zoom-in;}
+  .gallery-thumb::after{content:"";position:absolute;inset:0;background:rgba(10,14,39,0);transition:background .12s;}
+  .gallery-thumb:hover::after{background:rgba(10,14,39,.04);}
+  .lightbox{position:fixed;inset:0;background:rgba(10,14,39,.92);display:none;align-items:center;justify-content:center;z-index:80;flex-direction:column;}
+  .lightbox.open{display:flex;}
+  .placeholder-img{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;letter-spacing:-.01em;}
+  .img-1{background:linear-gradient(135deg,#635bff,#9747ff);}
+  .img-2{background:linear-gradient(135deg,#0ea5e9,#22d3ee);}
+  .img-3{background:linear-gradient(135deg,#10b981,#34d399);}
+  .img-4{background:linear-gradient(135deg,#f59e0b,#fbbf24);}
+  .img-5{background:linear-gradient(135deg,#ec4899,#f472b6);}
+  .img-6{background:linear-gradient(135deg,#6366f1,#a78bfa);}
+  .img-7{background:linear-gradient(135deg,#0f172a,#334155);}
+  .cmdk-overlay{position:fixed;inset:0;background:rgba(10,14,39,.4);display:none;align-items:flex-start;justify-content:center;padding-top:120px;z-index:90;}
+  .cmdk-overlay.open{display:flex;}
+  .cmdk{width:560px;background:#fff;border-radius:12px;box-shadow:0 24px 64px rgba(10,14,39,.25);overflow:hidden;}
+  .tooltip{position:relative;}
+  .tooltip:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#0a0e27;color:#fff;padding:4px 8px;border-radius:5px;font-size:11px;white-space:nowrap;}
+</style>
+</head>
+<body>
+
+<!-- =================== APP SHELL =================== -->
+<div class="flex min-h-screen">
+  <!-- Sidebar -->
+  <aside class="w-[232px] shrink-0 border-r" style="border-color:var(--border);background:#fff;">
+    <div class="p-4 flex items-center gap-2">
+      <div class="w-7 h-7 rounded-md grad-band flex items-center justify-center text-white font-bold text-sm">P</div>
+      <div class="font-semibold tracking-tight">Platform</div>
+      <div class="ml-auto"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-400"><path d="M6 9l6 6 6-6"/></svg></div>
+    </div>
+    <div class="px-3 mb-3">
+      <button onclick="openCmdK()" class="w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-md border" style="border-color:var(--border);color:var(--muted);">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <span class="text-[12.5px]">Search…</span>
+        <span class="ml-auto kbd">⌘K</span>
+      </button>
+    </div>
+
+    <nav class="px-3 space-y-0.5" id="sidenav"></nav>
+
+    <div class="px-3 mt-5">
+      <div class="text-[10.5px] font-semibold uppercase tracking-wider text-gray-400 px-2 mb-1">Preview pages</div>
+      <div class="space-y-0.5" id="sidenav-extra"></div>
+    </div>
+
+    <div class="absolute bottom-0 w-[232px] p-3 border-t" style="border-color:var(--border);">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-pink-500 flex items-center justify-center text-white text-[11px] font-semibold">EL</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-[12.5px] font-medium truncate">Emanuel Lovin</div>
+          <div class="text-[11px] text-gray-500 truncate">Founder</div>
+        </div>
+        <button class="btn-quiet p-1 rounded-md"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 min-w-0">
+    <header class="h-14 px-6 border-b flex items-center gap-4 bg-white sticky top-0 z-30" style="border-color:var(--border);">
+      <div class="flex items-center gap-2 text-[13px]">
+        <span class="text-gray-500" id="bc-role">Vendor</span>
+        <span class="text-gray-300">/</span>
+        <span class="font-medium" id="bc-page">Overview</span>
+      </div>
+      <div class="ml-auto flex items-center gap-2">
+        <span class="chip chip-muted"><span class="dot bg-amber-400"></span>Test mode</span>
+        <button class="btn btn-ghost"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Feedback</button>
+        <button class="btn btn-primary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>New</button>
+      </div>
+    </header>
+
+    <div id="view-root" class="p-6"></div>
+  </main>
+</div>
+
+<!-- Drawer -->
+<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="px-5 py-4 border-b flex items-center gap-3" style="border-color:var(--border);">
+    <div class="w-9 h-9 rounded-lg img-1 placeholder-img text-xs">SP</div>
+    <div class="flex-1 min-w-0">
+      <div class="font-semibold">sub_1Q9aBcEmanuel…</div>
+      <div class="text-[11.5px] text-gray-500">SplitPay · $49.00 / month · active since Mar 4</div>
+    </div>
+    <button onclick="closeDrawer()" class="btn-quiet p-1 rounded-md"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="overflow-y-auto scrollbar p-5 space-y-5 flex-1">
+    <div class="grid grid-cols-2 gap-3">
+      <div class="card p-3"><div class="text-[11px] text-gray-500">MRR</div><div class="num text-lg font-semibold">$49.00</div></div>
+      <div class="card p-3"><div class="text-[11px] text-gray-500">Lifetime</div><div class="num text-lg font-semibold">$294.00</div></div>
+    </div>
+    <div>
+      <div class="text-[11.5px] font-semibold uppercase tracking-wider text-gray-500 mb-2">Timeline</div>
+      <div class="space-y-3">
+        <div class="flex gap-3"><div class="w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5"></div><div class="flex-1"><div class="text-[12.5px]"><span class="font-medium">invoice.paid</span> · $49.00</div><div class="text-[11px] text-gray-500">2 hours ago · ch_3QzWeR…</div></div></div>
+        <div class="flex gap-3"><div class="w-1.5 h-1.5 rounded-full bg-gray-300 mt-1.5"></div><div class="flex-1"><div class="text-[12.5px]">customer.subscription.updated</div><div class="text-[11px] text-gray-500">2 days ago</div></div></div>
+        <div class="flex gap-3"><div class="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1.5"></div><div class="flex-1"><div class="text-[12.5px]"><span class="font-medium">checkout.completed</span> · via affiliate <span class="chip chip-accent ml-1">XYZ12345</span></div><div class="text-[11px] text-gray-500">Mar 4 · $49.00</div></div></div>
+      </div>
+    </div>
+    <div>
+      <div class="text-[11.5px] font-semibold uppercase tracking-wider text-gray-500 mb-2">Anonymous user token</div>
+      <div class="card p-3 font-mono text-[11.5px] break-all text-gray-700">eyJhbGciOiJSUzI1NiIsImtpZCI6IjIwMjYtMDUta2V5MSJ9.eyJzdWIiOiJhbm9uXzgyNGZkOSIsImFwcCI6ImFwcF9zcGxpdHBheSIsImV4cCI6MTc2MDAwMDAwMH0.…</div>
+    </div>
+  </div>
+  <div class="px-5 py-3 border-t flex items-center gap-2" style="border-color:var(--border);">
+    <button class="btn btn-ghost">Pause</button>
+    <button class="btn btn-ghost text-red-600 border-red-200">Cancel</button>
+    <button class="btn btn-primary ml-auto">View in Stripe</button>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <div class="absolute top-4 right-4 flex items-center gap-2">
+    <span class="text-white/70 text-[12px] num" id="lb-counter">1 / 5</span>
+    <button class="text-white/70 hover:text-white p-2"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="placeholder-img img-1 rounded-xl" style="width:min(80vw,1100px);height:min(70vh,720px);font-size:48px;" id="lb-img">Screenshot 1</div>
+  <div class="mt-4 flex gap-2" id="lb-thumbs"></div>
+</div>
+
+<!-- Command palette -->
+<div class="cmdk-overlay" id="cmdk" onclick="if(event.target.id==='cmdk')closeCmdK()">
+  <div class="cmdk">
+    <div class="flex items-center gap-2 px-4 py-3 border-b" style="border-color:var(--border);">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-400"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input autofocus placeholder="Search apps, buyers, offers, settings…" class="flex-1 outline-none text-[14px] bg-transparent" />
+      <span class="kbd">ESC</span>
+    </div>
+    <div class="py-1.5">
+      <div class="px-4 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">Suggestions</div>
+      <div class="px-3 py-2 mx-1 rounded-md flex items-center gap-2.5 hover:bg-gray-50" style="background:var(--accent-soft);">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
+        <span>Go to app · <strong>SplitPay</strong></span>
+        <span class="ml-auto text-[11px] text-gray-500">Apps</span>
+      </div>
+      <div class="px-3 py-2 mx-1 rounded-md flex items-center gap-2.5 hover:bg-gray-50">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        <span>Create new app</span>
+        <span class="ml-auto kbd">N</span>
+      </div>
+      <div class="px-3 py-2 mx-1 rounded-md flex items-center gap-2.5 hover:bg-gray-50">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span>Show today's payouts</span>
+      </div>
+      <div class="px-4 py-1 mt-2 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">Navigate</div>
+      <div class="px-3 py-2 mx-1 rounded-md flex items-center gap-2.5 hover:bg-gray-50">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span>Vendor dashboard</span>
+        <span class="ml-auto text-[11px] text-gray-500">G then V</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== nav setup ===== */
+const ROLES = [
+  {id:'vendor',  label:'Vendor',    icon:'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'},
+  {id:'affiliate',label:'Affiliate',icon:'<path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.72"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'},
+  {id:'reseller',label:'Reseller',  icon:'<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>'},
+  {id:'buyer',   label:'Buyer',     icon:'<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/>'},
+  {id:'admin',   label:'Admin',     icon:'<path d="M12 2 4 5v6c0 5 3.5 9.7 8 11 4.5-1.3 8-6 8-11V5z"/>'},
+];
+const EXTRA = [
+  {id:'app',      label:'App detail (lightbox)',icon:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>'},
+  {id:'newapp',   label:'Vendor · New app form',icon:'<path d="M12 5v14M5 12h14"/>'},
+  {id:'marketplace',label:'Marketplace (public)',icon:'<path d="M3 21h18M5 21V9l7-6 7 6v12"/>'},
+];
+
+function renderSidenav(){
+  document.getElementById('sidenav').innerHTML = ROLES.map(r=>`
+    <div class="sidelink" data-view="${r.id}" onclick="show('${r.id}')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${r.icon}</svg>
+      ${r.label}
+    </div>`).join('');
+  document.getElementById('sidenav-extra').innerHTML = EXTRA.map(r=>`
+    <div class="sidelink" data-view="${r.id}" onclick="show('${r.id}')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${r.icon}</svg>
+      ${r.label}
+    </div>`).join('');
+}
+
+/* ===== sparkline helper ===== */
+function spark(points,{w=120,h=32,color='#635bff',fill='#635bff14'}={}){
+  const max=Math.max(...points),min=Math.min(...points),rng=max-min||1;
+  const step=w/(points.length-1);
+  const pts=points.map((p,i)=>[i*step,h-((p-min)/rng)*(h-4)-2]);
+  const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const area=line+` L ${w} ${h} L 0 ${h} Z`;
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><path d="${area}" fill="${fill}"/><path d="${line}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+/* ===== views ===== */
+const views = {};
+
+views.vendor = () => {
+  const mrr = [3200,3400,3380,3600,3920,4100,4250,4400,4720,4900,5100,5380];
+  const churn = [1.8,1.6,1.9,2.1,1.7,1.4,1.5,1.2,1.3,1.1,1.0,0.9];
+  return `
+  <div class="space-y-5">
+    <div class="flex items-end justify-between">
+      <div>
+        <h1 class="text-[22px] font-semibold tracking-tight">Welcome back, Emanuel</h1>
+        <div class="text-gray-500 text-[13px]">Here's what's happening with your 4 apps today.</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="flex bg-white border rounded-md p-0.5" style="border-color:var(--border);">
+          <span class="nav-pill">Today</span><span class="nav-pill">7d</span><span class="nav-pill active">30d</span><span class="nav-pill">90d</span><span class="nav-pill">12m</span>
+        </div>
+        <button class="btn btn-ghost"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M3 21h18"/></svg>Export</button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-4 gap-4">
+      ${kpi({label:'Net MRR',val:'$5,380',delta:'+9.7%',deltaOk:true,sub:'vs prior 30d',spark:spark(mrr)})}
+      ${kpi({label:'Active subs',val:'214',delta:'+12',deltaOk:true,sub:'18 new · 6 churned',spark:spark([180,185,190,189,192,196,200,202,206,208,211,214])})}
+      ${kpi({label:'Monthly churn',val:'0.9%',delta:'-0.2pp',deltaOk:true,sub:'5 cancellations',spark:spark(churn,{color:'#00a86b',fill:'#00a86b14'})})}
+      ${kpi({label:'LTV / customer',val:'$612',delta:'+$48',deltaOk:true,sub:'12-mo cohort',spark:spark([520,540,535,560,580,575,590,600,605,608,610,612])})}
+    </div>
+
+    <div class="grid grid-cols-3 gap-4">
+      <div class="card col-span-2">
+        <div class="px-5 py-3.5 flex items-center justify-between border-b" style="border-color:var(--border-soft);">
+          <div>
+            <div class="font-semibold">MRR waterfall</div>
+            <div class="text-[11.5px] text-gray-500">New · Expansion · Contraction · Churn — last 30 days</div>
+          </div>
+          <div class="flex items-center gap-3 text-[11.5px]">
+            <span class="flex items-center gap-1.5"><span class="dot" style="background:#635bff"></span>New $1,840</span>
+            <span class="flex items-center gap-1.5"><span class="dot" style="background:#22c55e"></span>Expansion $312</span>
+            <span class="flex items-center gap-1.5"><span class="dot" style="background:#f59e0b"></span>Contraction -$98</span>
+            <span class="flex items-center gap-1.5"><span class="dot" style="background:#ef4444"></span>Churn -$574</span>
+          </div>
+        </div>
+        <div class="p-5">
+          <svg viewBox="0 0 600 200" class="w-full h-[220px]">
+            <defs><linearGradient id="g1" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#635bff" stop-opacity=".25"/><stop offset="1" stop-color="#635bff" stop-opacity="0"/></linearGradient></defs>
+            ${(()=>{ const pts=mrr;const max=Math.max(...pts),min=Math.min(...pts)-300,rng=max-min;const step=600/(pts.length-1);const xy=pts.map((p,i)=>[i*step,200-((p-min)/rng)*180-10]);const line=xy.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');return `<path d="${line} L 600 200 L 0 200 Z" fill="url(#g1)"/><path d="${line}" fill="none" stroke="#635bff" stroke-width="2"/>`+xy.map((p,i)=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.5" fill="#fff" stroke="#635bff" stroke-width="1.5"/>`).join('');})()}
+          </svg>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="px-5 py-3.5 border-b flex items-center justify-between" style="border-color:var(--border-soft);">
+          <div class="font-semibold">Commission tier</div>
+          <span class="chip chip-accent">8% band</span>
+        </div>
+        <div class="p-5 space-y-4">
+          <div>
+            <div class="flex justify-between text-[12px] mb-1.5"><span class="text-gray-500">$3,180 net / $10,000</span><span class="font-medium">5% next</span></div>
+            <div class="stripe-progress"><div style="width:31.8%"></div></div>
+            <div class="flex justify-between mt-1.5 text-[10.5px] text-gray-400 num"><span>$0</span><span>$1k</span><span>$3k</span><span>$10k</span></div>
+          </div>
+          <div class="divider"></div>
+          <div class="space-y-2 text-[12.5px]">
+            <div class="flex justify-between"><span class="text-gray-500">This month gross</span><span class="num font-medium">$5,380</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Stripe fees</span><span class="num">-$184</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Platform cut (8%)</span><span class="num">-$416</span></div>
+            <div class="flex justify-between border-t pt-2" style="border-color:var(--border-soft);"><span class="font-medium">Your payout</span><span class="num font-semibold text-green-700">$4,780</span></div>
+          </div>
+          <button class="btn btn-ghost w-full justify-center">View payout history →</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="px-5 py-3.5 flex items-center justify-between border-b" style="border-color:var(--border-soft);">
+        <div>
+          <div class="font-semibold">Your apps</div>
+          <div class="text-[11.5px] text-gray-500">4 apps · 2 published · 1 in review</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="btn btn-ghost"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M6 12h12M10 18h4"/></svg>Filter</button>
+          <button class="btn btn-primary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>New app</button>
+        </div>
+      </div>
+      <div style="--cols:32px 2.2fr 1fr 1fr 1fr 1.2fr 80px;">
+        <div class="row head"><div></div><div>App</div><div>Status</div><div>Price</div><div>Subs</div><div>MRR · 30d</div><div></div></div>
+        ${[
+          {n:1,name:'SplitPay',desc:'Group expense splitter API',cls:'img-1',st:'live',price:'$49/mo',subs:'118',mrr:'$5,780',trend:[100,110,115,120,118]},
+          {n:2,name:'Inboxly',desc:'AI email triage & summaries',cls:'img-2',st:'live',price:'$19/mo',subs:'62',mrr:'$1,180',trend:[40,50,55,58,62]},
+          {n:3,name:'Cohortly',desc:'No-code cohort retention',cls:'img-3',st:'review',price:'$39/mo',subs:'—',mrr:'—',trend:[0,0,0,0,0]},
+          {n:4,name:'PingHQ',desc:'Uptime monitor for solo devs',cls:'img-4',st:'paused',price:'$9/mo',subs:'34',mrr:'$306',trend:[40,38,36,35,34]},
+        ].map(a=>`
+          <div class="row" onclick="openDrawer()" style="--cols:32px 2.2fr 1fr 1fr 1fr 1.2fr 80px;">
+            <div class="w-7 h-7 rounded-md ${a.cls} placeholder-img text-[10px]">${a.name[0]}</div>
+            <div><div class="font-medium">${a.name}</div><div class="text-[11.5px] text-gray-500">${a.desc}</div></div>
+            <div>${a.st==='live'?'<span class="chip chip-ok"><span class="dot bg-green-500"></span>Live</span>':a.st==='review'?'<span class="chip chip-warn">In review</span>':'<span class="chip chip-muted">Paused</span>'}</div>
+            <div class="num">${a.price}</div>
+            <div class="num">${a.subs}</div>
+            <div class="flex items-center gap-2"><span class="num">${a.mrr}</span>${a.trend[0]?spark(a.trend,{w:60,h:20}):''}</div>
+            <div class="text-right"><button class="btn-quiet p-1 rounded-md"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button></div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div class="card">
+        <div class="px-5 py-3.5 border-b font-semibold" style="border-color:var(--border-soft);">Cohort retention</div>
+        <div class="p-5">
+          ${cohortGrid()}
+        </div>
+      </div>
+      <div class="card">
+        <div class="px-5 py-3.5 border-b flex items-center justify-between" style="border-color:var(--border-soft);">
+          <div class="font-semibold">Recent events</div>
+          <button class="btn-quiet text-[12px]">View all →</button>
+        </div>
+        <div class="p-2">
+          ${[
+            ['invoice.paid','SplitPay · $49.00','3 min ago','ok'],
+            ['checkout.completed','Inboxly · via reseller acme/inboxly-pro','12 min ago','accent'],
+            ['customer.subscription.deleted','PingHQ · churned','41 min ago','bad'],
+            ['invoice.payment_failed','SplitPay · retrying in 24h','2 h ago','warn'],
+            ['charge.dispute.created','SplitPay · $49.00','5 h ago','bad'],
+          ].map(e=>`
+            <div class="flex items-center gap-3 p-2.5 rounded-md hover:bg-gray-50">
+              <span class="dot bg-${e[3]==='ok'?'green':e[3]==='warn'?'amber':e[3]==='bad'?'red':'indigo'}-500"></span>
+              <div class="flex-1 min-w-0">
+                <div class="text-[12.5px] font-medium truncate">${e[0]}</div>
+                <div class="text-[11.5px] text-gray-500 truncate">${e[1]}</div>
+              </div>
+              <span class="text-[11px] text-gray-400 num">${e[2]}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+};
+
+function kpi({label,val,delta,deltaOk,sub,spark}){
+  return `<div class="card p-4">
+    <div class="flex justify-between items-start mb-2">
+      <div class="text-[11.5px] text-gray-500 font-medium">${label}</div>
+      <span class="chip ${deltaOk?'chip-ok':'chip-bad'}">${delta}</span>
+    </div>
+    <div class="flex items-end justify-between gap-3">
+      <div>
+        <div class="kpi-val num">${val}</div>
+        <div class="text-[11.5px] text-gray-500 mt-0.5">${sub}</div>
+      </div>
+      <div>${spark}</div>
+    </div>
+  </div>`;
+}
+
+function cohortGrid(){
+  const rows=['Dec','Jan','Feb','Mar','Apr','May'];
+  const data=[
+    [100,92,88,84,80,78],
+    [100,90,85,82,80,null],
+    [100,94,90,87,null,null],
+    [100,91,88,null,null,null],
+    [100,93,null,null,null,null],
+    [100,null,null,null,null,null],
+  ];
+  let html=`<div class="grid grid-cols-7 gap-1 text-[10.5px] text-gray-400 mb-1"><div></div>${rows.map((_,i)=>`<div class="text-center">M${i}</div>`).join('')}</div>`;
+  data.forEach((row,i)=>{
+    html+=`<div class="grid grid-cols-7 gap-1 mb-1 items-center"><div class="text-[10.5px] text-gray-500">${rows[i]}</div>`;
+    row.forEach(v=>{
+      if(v===null){html+=`<div class="h-7 rounded bg-gray-50"></div>`;return;}
+      const alpha=v/100;
+      html+=`<div class="h-7 rounded flex items-center justify-center text-[10.5px] font-medium num ${v>=90?'text-white':'text-indigo-900'}" style="background:rgba(99,91,255,${alpha*.85+.05})">${v}%</div>`;
+    });
+    html+=`</div>`;
+  });
+  return html;
+}
+
+views.affiliate = () => {
+  return `
+  <div class="space-y-5">
+    <div class="card overflow-hidden">
+      <div class="grad-band p-6 text-white relative">
+        <div class="absolute inset-0 opacity-20" style="background-image:radial-gradient(circle at 80% 20%,#fff 0%,transparent 40%)"></div>
+        <div class="relative flex items-center justify-between">
+          <div>
+            <div class="text-[12px] uppercase tracking-wider opacity-80 font-medium">Active MRR generated</div>
+            <div class="text-4xl font-semibold tracking-tight num mt-1">$8,420<span class="text-xl opacity-70">.00</span></div>
+            <div class="flex items-center gap-2 mt-2 text-[12.5px]">
+              <span class="px-2 py-0.5 rounded-md bg-white/20 backdrop-blur">Tier 2 · 25% commission</span>
+              <span class="opacity-80">→ $11,580 to next tier (30%)</span>
+            </div>
+            <div class="mt-3 w-80 h-1.5 bg-white/20 rounded-full overflow-hidden"><div class="h-full bg-white rounded-full" style="width:42%"></div></div>
+          </div>
+          <div class="text-right">
+            <div class="text-[11.5px] opacity-80 uppercase tracking-wider">Leaderboard rank</div>
+            <div class="text-3xl font-semibold num mt-1">#14</div>
+            <div class="text-[12px] opacity-80">↑ 3 spots this week</div>
+            <button class="mt-3 btn bg-white text-indigo-700 hover:bg-white/90">View public profile →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-4 gap-4">
+      ${kpi({label:'Lifetime earned',val:'$2,140',delta:'+$316',deltaOk:true,sub:'paid out via Stripe',spark:spark([800,920,1100,1280,1500,1700,1900,2140])})}
+      ${kpi({label:'Active referrals',val:'34',delta:'+5',deltaOk:true,sub:'across 6 apps',spark:spark([20,22,25,27,29,31,33,34])})}
+      ${kpi({label:'Clicks · 30d',val:'1,284',delta:'+18%',deltaOk:true,sub:'42 conversions (3.3%)',spark:spark([800,900,1000,1100,1180,1220,1260,1284])})}
+      ${kpi({label:'Next payout',val:'$486',delta:'Fri',deltaOk:true,sub:'in 2 days',spark:spark([100,200,300,486],{color:'#00a86b',fill:'#00a86b14'})})}
+    </div>
+
+    <div class="grid grid-cols-3 gap-4">
+      <div class="card col-span-2">
+        <div class="px-5 py-3.5 border-b flex items-center justify-between" style="border-color:var(--border-soft);">
+          <div>
+            <div class="font-semibold">Your links</div>
+            <div class="text-[11.5px] text-gray-500">8-char codes · 30-day attribution window</div>
+          </div>
+          <button class="btn btn-primary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Generate link</button>
+        </div>
+        <div style="--cols:2fr 1fr 1fr 1fr 80px;">
+          <div class="row head"><div>App</div><div>Code</div><div>Clicks</div><div>Active MRR</div><div></div></div>
+          ${[
+            ['SplitPay','img-1','SP7AB9CD','428','$4,200'],
+            ['Inboxly','img-2','IN3KZ8XL','312','$2,100'],
+            ['Cohortly','img-3','CH9QM2RT','198','$1,560'],
+            ['PingHQ','img-4','PG5XR8YT','346','$560'],
+          ].map(l=>`
+            <div class="row" style="--cols:2fr 1fr 1fr 1fr 80px;">
+              <div class="flex items-center gap-2.5"><div class="w-6 h-6 rounded ${l[1]} placeholder-img text-[10px]">${l[0][0]}</div><div class="font-medium">${l[0]}</div></div>
+              <div><code class="text-[12px] px-1.5 py-0.5 rounded" style="background:var(--accent-soft);color:var(--accent-ink);">${l[2]}</code></div>
+              <div class="num">${l[3]}</div>
+              <div class="num font-medium">${l[4]}</div>
+              <div class="flex gap-1 justify-end">
+                <button class="btn-quiet p-1 rounded-md tooltip" data-tip="Copy link"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                <button class="btn-quiet p-1 rounded-md tooltip" data-tip="QR code"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3M21 14v7h-7"/></svg></button>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="px-5 py-3.5 border-b flex items-center justify-between" style="border-color:var(--border-soft);">
+          <div class="font-semibold">Badges</div>
+          <span class="text-[11.5px] text-gray-500">5 of 12 earned</span>
+        </div>
+        <div class="p-4 grid grid-cols-3 gap-3">
+          ${[
+            ['🚀','First sale','earned'],
+            ['💎','$1k MRR','earned'],
+            ['🔥','30 day streak','earned'],
+            ['🏆','Top 25','earned'],
+            ['⚡','100 clicks','earned'],
+            ['🌟','$5k MRR','locked'],
+            ['👑','Top 10','locked'],
+            ['🎯','Conversion 5%','locked'],
+            ['💰','$10k MRR','locked'],
+          ].map(b=>`
+            <div class="aspect-square rounded-lg flex flex-col items-center justify-center text-center p-2 ${b[2]==='earned'?'bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100':'bg-gray-50 opacity-50'}">
+              <div class="text-xl ${b[2]==='locked'?'grayscale':''}">${b[0]}</div>
+              <div class="text-[10px] font-medium mt-1 leading-tight">${b[1]}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+};
+
+views.reseller = () => `
+  <div class="space-y-5">
+    <div class="card p-4 flex items-center gap-4 border-l-4" style="border-left-color:var(--accent);">
+      <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background:var(--accent-soft);color:var(--accent);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      </div>
+      <div class="flex-1">
+        <div class="font-semibold">22 days left in your free trial</div>
+        <div class="text-[12px] text-gray-500">Then $19/month for unlimited offers. No credit card required to keep testing.</div>
+      </div>
+      <button class="btn btn-ghost">Manage billing</button>
+      <button class="btn btn-primary">Add card →</button>
+    </div>
+
+    <div class="grid grid-cols-4 gap-4">
+      ${kpi({label:'Storefront MRR',val:'$1,840',delta:'+22%',deltaOk:true,sub:'across 6 offers',spark:spark([900,1050,1200,1350,1500,1650,1750,1840])})}
+      ${kpi({label:'Markup earned',val:'$1,108',delta:'+$210',deltaOk:true,sub:'after vendor + 5%',spark:spark([400,520,640,760,880,980,1050,1108])})}
+      ${kpi({label:'Active offers',val:'6 / 8',delta:'2 paused',deltaOk:false,sub:'1 WL Tier 2',spark:spark([6,7,7,8,8,7,7,6])})}
+      ${kpi({label:'Total buyers',val:'48',delta:'+9',deltaOk:true,sub:'from 6 storefronts',spark:spark([30,33,36,39,42,44,46,48])})}
+    </div>
+
+    <div class="grid grid-cols-3 gap-4">
+      <div class="card col-span-2">
+        <div class="px-5 py-3.5 border-b flex items-center justify-between" style="border-color:var(--border-soft);">
+          <div>
+            <div class="font-semibold">Your offers</div>
+            <div class="text-[11.5px] text-gray-500">Resold from <code class="text-[11px] px-1 rounded" style="background:var(--softer)">acme.platform.app</code></div>
+          </div>
+          <button class="btn btn-primary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>New offer</button>
+        </div>
+        <div class="p-4 grid grid-cols-2 gap-3">
+          ${[
+            {name:'SplitPay Pro',app:'SplitPay',cls:'img-1',floor:'$49',price:'$79',mrr:'$948',wl:true,subs:12},
+            {name:'Inboxly Business',app:'Inboxly',cls:'img-2',floor:'$19',price:'$39',mrr:'$468',wl:false,subs:12},
+            {name:'Cohortly Team',app:'Cohortly',cls:'img-3',floor:'$39',price:'$49',mrr:'$294',wl:false,subs:6},
+            {name:'PingHQ Bundle',app:'PingHQ',cls:'img-4',floor:'$9',price:'$15',mrr:'$130',wl:false,subs:9,paused:true},
+          ].map(o=>`
+            <div class="border rounded-lg p-3 hover:border-indigo-200 hover:shadow-sm transition cursor-pointer ${o.paused?'opacity-60':''}" style="border-color:var(--border);">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-md ${o.cls} placeholder-img text-xs">${o.app[0]}</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-medium text-[13px] truncate">${o.name}</div>
+                  <div class="text-[11px] text-gray-500 truncate">${o.app} · ${o.subs} active</div>
+                </div>
+                ${o.wl?'<span class="chip chip-accent">WL · Tier 2</span>':''}
+                ${o.paused?'<span class="chip chip-muted">Paused</span>':''}
+              </div>
+              <div class="mt-3 flex items-center justify-between text-[12px]">
+                <div class="flex items-center gap-1.5"><span class="text-gray-400 num">${o.floor}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-300"><path d="M5 12h14M13 5l7 7-7 7"/></svg><span class="font-semibold num">${o.price}</span><span class="text-gray-400">/mo</span></div>
+                <div class="num font-semibold text-green-700">${o.mrr}</div>
+              </div>
+              ${!o.wl?`<button class="mt-2 w-full text-[11.5px] py-1.5 rounded text-indigo-700 hover:bg-indigo-50 border border-dashed border-indigo-200">⚡ Upgrade to White-label · $29/mo</button>`:''}
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="px-5 py-3.5 border-b font-semibold" style="border-color:var(--border-soft);">Mini-brand (Tier 1)</div>
+        <div class="p-5 space-y-4">
+          <div class="rounded-lg border overflow-hidden" style="border-color:var(--border);">
+            <div class="px-4 py-2.5 flex items-center gap-2 text-white text-[12px]" style="background:#0ea5e9;">
+              <div class="w-5 h-5 rounded bg-white/20 flex items-center justify-center text-[10px] font-bold">A</div>
+              <span class="font-semibold">Acme Resells</span>
+              <span class="ml-auto opacity-70">storefront preview</span>
+            </div>
+            <div class="p-3 bg-gray-50 text-[11.5px] text-gray-500">App content shows here →</div>
+          </div>
+          <div class="space-y-2.5">
+            <div><label class="text-[11.5px] text-gray-500">Display name</label><input value="Acme Resells" class="ring-focus w-full mt-1 px-2.5 py-1.5 border rounded-md text-[13px]" style="border-color:var(--border);"/></div>
+            <div><label class="text-[11.5px] text-gray-500">Brand color</label>
+              <div class="flex gap-2 mt-1">
+                <input type="color" value="#0ea5e9" class="w-9 h-9 rounded border" style="border-color:var(--border);"/>
+                <input value="#0ea5e9" class="ring-focus flex-1 px-2.5 py-1.5 border rounded-md text-[13px] font-mono" style="border-color:var(--border);"/>
+              </div>
+            </div>
+            <div><label class="text-[11.5px] text-gray-500">Logo</label>
+              <div class="mt-1 border border-dashed rounded-md p-3 text-center text-[11.5px] text-gray-500 hover:bg-gray-50 cursor-pointer" style="border-color:var(--border);">PNG, JPG, WebP · max 1MB</div>
+            </div>
+          </div>
+          <button class="btn btn-primary w-full justify-center">Save mini-brand</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+views.buyer = () => `
+  <div class="space-y-5">
+    <div class="flex items-end justify-between">
+      <div>
+        <h1 class="text-[22px] font-semibold tracking-tight">My subscriptions</h1>
+        <div class="text-gray-500 text-[13px]">3 active · $87/month · next charge May 28</div>
+      </div>
+      <button class="btn btn-ghost"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V9l7-6 7 6v12"/></svg>Browse marketplace</button>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      ${[
+        {name:'SplitPay',cls:'img-1',price:'$49',renews:'May 28',status:'active',vendor:'by Acme Labs'},
+        {name:'Inboxly',cls:'img-2',price:'$19',renews:'Jun 4',status:'active',vendor:'by Acme Labs'},
+        {name:'Cohortly',cls:'img-3',price:'$19',renews:'paused · Jun 30',status:'paused',vendor:'by Acme Labs'},
+      ].map(s=>`
+        <div class="card overflow-hidden">
+          <div class="flex">
+            <div class="w-32 ${s.cls} placeholder-img text-2xl">${s.name[0]}</div>
+            <div class="flex-1 p-4">
+              <div class="flex items-start justify-between">
+                <div>
+                  <div class="font-semibold text-[15px]">${s.name}</div>
+                  <div class="text-[11.5px] text-gray-500">${s.vendor}</div>
+                </div>
+                ${s.status==='active'?'<span class="chip chip-ok"><span class="dot bg-green-500"></span>Active</span>':'<span class="chip chip-warn">Paused</span>'}
+              </div>
+              <div class="mt-3 flex items-end justify-between">
+                <div>
+                  <div class="text-[11.5px] text-gray-500">Renews</div>
+                  <div class="text-[12.5px] font-medium">${s.renews}</div>
+                </div>
+                <div class="num font-semibold">${s.price}<span class="text-[11.5px] font-normal text-gray-500">/mo</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="border-t flex" style="border-color:var(--border-soft);">
+            <button class="flex-1 py-2.5 text-[12.5px] font-medium hover:bg-gray-50 flex items-center justify-center gap-1.5" style="color:var(--accent-ink);">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/></svg>
+              Launch
+            </button>
+            <div class="w-px bg-gray-100"></div>
+            <button class="flex-1 py-2.5 text-[12.5px] text-gray-600 hover:bg-gray-50">${s.status==='active'?'Pause':'Resume'}</button>
+            <div class="w-px bg-gray-100"></div>
+            <button class="flex-1 py-2.5 text-[12.5px] text-gray-600 hover:bg-gray-50">Cancel</button>
+          </div>
+        </div>`).join('')}
+    </div>
+
+    <div class="card p-5">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 4 12 14.01l-3-3"/></svg>
+        </div>
+        <div class="flex-1">
+          <div class="font-medium">You're saving $44/month</div>
+          <div class="text-[12px] text-gray-500">Bundling Inboxly + SplitPay through Acme Labs saved you ~33% vs individual subs.</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+views.admin = () => `
+  <div class="space-y-5">
+    <div class="flex items-end justify-between">
+      <div>
+        <h1 class="text-[22px] font-semibold tracking-tight">Platform overview</h1>
+        <div class="text-gray-500 text-[13px]">All metrics across all vendors · refreshed 2 min ago</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="chip chip-ok"><span class="dot bg-green-500"></span>All systems normal</span>
+        <button class="btn btn-ghost">Run reconciliation</button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-5 gap-3">
+      ${[
+        ['Platform GMV','$48,290','+18%','30d net'],
+        ['Platform cut','$3,910','+12%','8.1% take rate'],
+        ['Active vendors','24','+3','2 onboarding'],
+        ['Active subs','614','+42','-9 churned'],
+        ['Reconciliation drift','$0','clean','last run 1h ago'],
+      ].map(k=>`
+        <div class="card p-3">
+          <div class="text-[11px] text-gray-500 font-medium">${k[0]}</div>
+          <div class="num text-[20px] font-semibold mt-0.5">${k[1]}</div>
+          <div class="flex items-center gap-1.5 mt-1 text-[11px]">
+            <span class="text-${k[2].startsWith('+')?'green':k[2]==='clean'?'green':'gray'}-600 font-medium">${k[2]}</span>
+            <span class="text-gray-400">·</span>
+            <span class="text-gray-500">${k[3]}</span>
+          </div>
+        </div>`).join('')}
+    </div>
+
+    <div class="grid grid-cols-3 gap-4">
+      <div class="card col-span-2">
+        <div class="px-5 py-3.5 border-b flex items-center justify-between" style="border-color:var(--border-soft);">
+          <div>
+            <div class="font-semibold flex items-center gap-2">Pending app approvals <span class="chip chip-warn">3</span></div>
+            <div class="text-[11.5px] text-gray-500">Oldest: 4h 12m ago · SLA: 24h</div>
+          </div>
+          <button class="btn btn-ghost">Review queue</button>
+        </div>
+        <div style="--cols:32px 2fr 1.2fr 1fr 160px;">
+          <div class="row head"><div></div><div>App</div><div>Vendor</div><div>Submitted</div><div></div></div>
+          ${[
+            ['Cohortly','img-3','acme@labs.io','4h 12m ago'],
+            ['DocSign Lite','img-5','team@docly.com','2h 30m ago'],
+            ['ZapBoard','img-6','founder@zap.io','18 min ago'],
+          ].map(a=>`
+            <div class="row" style="--cols:32px 2fr 1.2fr 1fr 160px;">
+              <div class="w-7 h-7 rounded ${a[1]} placeholder-img text-[10px]">${a[0][0]}</div>
+              <div class="font-medium">${a[0]}</div>
+              <div class="text-gray-600">${a[2]}</div>
+              <div class="text-gray-500">${a[3]}</div>
+              <div class="flex gap-1.5 justify-end">
+                <button class="btn btn-ghost text-red-600 border-red-200">Reject</button>
+                <button class="btn btn-primary">Approve</button>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="px-5 py-3.5 border-b font-semibold flex items-center justify-between" style="border-color:var(--border-soft);">
+          <span>Churn alerts</span>
+          <span class="chip chip-bad">2 over threshold</span>
+        </div>
+        <div class="p-4 space-y-3">
+          <div class="border-l-4 border-red-400 pl-3">
+            <div class="font-medium text-[13px]">PingHQ · 26% monthly churn</div>
+            <div class="text-[11.5px] text-gray-500">Vendor notified 3 days ago · 12 cancellations</div>
+          </div>
+          <div class="border-l-4 border-amber-400 pl-3">
+            <div class="font-medium text-[13px]">DocSign · 22% monthly churn</div>
+            <div class="text-[11.5px] text-gray-500">Vendor notified 1 day ago · 4 cancellations</div>
+          </div>
+          <button class="btn btn-ghost w-full justify-center">Send digest now</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="px-5 py-3.5 border-b flex items-center justify-between" style="border-color:var(--border-soft);">
+        <div class="font-semibold">Vendor commission overrides</div>
+        <button class="btn btn-ghost">+ Add override</button>
+      </div>
+      <div style="--cols:1.5fr 1fr 1fr 1fr 1.5fr 80px;">
+        <div class="row head"><div>Vendor</div><div>Auto tier</div><div>Override</div><div>Set by</div><div>Reason</div><div></div></div>
+        ${[
+          ['Acme Labs','8% ($3.2k net)','5% (-300bps)','admin@platform','Strategic partner Q2'],
+          ['DocSign Co','12% ($340 net)','10% (-200bps)','admin@platform','Migration credit · 90d'],
+        ].map(o=>`
+          <div class="row" style="--cols:1.5fr 1fr 1fr 1fr 1.5fr 80px;">
+            <div class="font-medium">${o[0]}</div>
+            <div class="text-gray-500 num">${o[1]}</div>
+            <div><span class="chip chip-accent">${o[2]}</span></div>
+            <div class="text-gray-500 text-[12px]">${o[3]}</div>
+            <div class="text-gray-600 truncate">${o[4]}</div>
+            <div class="text-right"><button class="btn-quiet text-[12px]">Edit</button></div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div class="card">
+        <div class="px-5 py-3.5 border-b font-semibold" style="border-color:var(--border-soft);">Audit log</div>
+        <div class="p-2">
+          ${[
+            ['admin@platform','set_vendor_cut_override','Acme Labs · 800→500bps','12 min ago'],
+            ['admin@platform','approve_app','Cohortly','1 h ago'],
+            ['system','reconciliation_run','no drift detected','1 h ago'],
+            ['admin@platform','reject_app','Spammy SaaS · missing screenshots','3 h ago'],
+            ['system','churn_alert_sent','PingHQ to vendor','1 d ago'],
+          ].map(l=>`
+            <div class="flex items-start gap-3 p-2.5 rounded-md hover:bg-gray-50">
+              <div class="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0">${l[0][0].toUpperCase()}</div>
+              <div class="flex-1 min-w-0">
+                <div class="text-[12.5px]"><span class="font-medium">${l[0]}</span> · <code class="text-[11px] px-1 rounded" style="background:var(--softer);color:var(--accent-ink)">${l[1]}</code></div>
+                <div class="text-[11.5px] text-gray-500">${l[2]}</div>
+              </div>
+              <span class="text-[11px] text-gray-400 num">${l[3]}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="px-5 py-3.5 border-b font-semibold" style="border-color:var(--border-soft);">Reconciliation runs</div>
+        <div class="p-2">
+          ${[
+            ['1 h ago','clean','0 drift items · 614 subs verified'],
+            ['1 d ago','clean','0 drift items · 612 subs verified'],
+            ['2 d ago','warn','1 drift · sub_3Q… missing in DB'],
+            ['3 d ago','clean','0 drift items · 608 subs verified'],
+          ].map(r=>`
+            <div class="flex items-center gap-3 p-2.5 rounded-md hover:bg-gray-50">
+              <span class="chip ${r[1]==='clean'?'chip-ok':'chip-warn'}">${r[1]}</span>
+              <div class="flex-1 text-[12.5px]">${r[2]}</div>
+              <span class="text-[11px] text-gray-400 num">${r[0]}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+views.app = () => `
+  <div class="space-y-5 max-w-5xl">
+    <div class="flex items-center gap-2 text-[12.5px] text-gray-500">
+      <span class="hover:underline cursor-pointer">Marketplace</span>
+      <span class="text-gray-300">›</span>
+      <span class="hover:underline cursor-pointer">Productivity</span>
+      <span class="text-gray-300">›</span>
+      <span class="text-gray-900">SplitPay</span>
+    </div>
+
+    <div class="grid grid-cols-3 gap-5">
+      <div class="col-span-2 space-y-4">
+        <!-- Hero gallery -->
+        <div class="grid grid-cols-4 gap-2">
+          <div class="col-span-4 gallery-thumb h-[360px] img-1 placeholder-img text-3xl" onclick="openLightbox(0)">Screenshot 1 · Dashboard</div>
+          ${['img-2','img-3','img-4','img-5'].map((c,i)=>`
+            <div class="gallery-thumb h-[88px] ${c} placeholder-img text-sm" onclick="openLightbox(${i+1})">${i+2}</div>`).join('')}
+        </div>
+
+        <div class="card p-5">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl img-1 placeholder-img">SP</div>
+            <div class="flex-1">
+              <h1 class="text-[20px] font-semibold tracking-tight">SplitPay</h1>
+              <div class="text-[13px] text-gray-500">Group expense splitter with payment links</div>
+            </div>
+            <span class="chip chip-ok"><span class="dot bg-green-500"></span>Verified vendor</span>
+          </div>
+          <div class="mt-4 flex flex-wrap gap-2">
+            ${['Payments','Groups','Webhooks','Stripe-native','Multi-currency'].map(t=>`<span class="chip chip-muted">${t}</span>`).join('')}
+          </div>
+
+          <div class="mt-5 grid grid-cols-3 gap-4 text-center">
+            <div><div class="num font-semibold text-lg">214</div><div class="text-[11.5px] text-gray-500">active users</div></div>
+            <div><div class="num font-semibold text-lg">4.8 <span class="text-amber-400 text-sm">★</span></div><div class="text-[11.5px] text-gray-500">48 reviews</div></div>
+            <div><div class="num font-semibold text-lg">2.1k</div><div class="text-[11.5px] text-gray-500">API calls/day</div></div>
+          </div>
+
+          <div class="divider my-5"></div>
+
+          <div class="prose prose-sm max-w-none text-gray-700 text-[13.5px] leading-relaxed">
+            <p>SplitPay turns any group expense into a Stripe payment link in two taps. Built for couples, roommates, and small teams who want to split a bill without juggling Venmo screenshots.</p>
+            <p class="mt-2"><strong>How it works:</strong> Add an expense, pick who owes what, send links. Money lands in your Stripe account directly. No app to download for the people paying — just a URL.</p>
+            <ul class="mt-3 space-y-1.5">
+              <li>✓ Stripe Connect — funds go straight to your account</li>
+              <li>✓ Multi-currency with auto-conversion</li>
+              <li>✓ Webhook API for Zapier / n8n / your own backend</li>
+              <li>✓ White-label storefront support</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="space-y-4">
+        <div class="card p-5 sticky top-20">
+          <div class="text-[11.5px] text-gray-500 uppercase tracking-wider font-medium">Subscribe</div>
+          <div class="mt-1.5 flex items-baseline gap-1.5">
+            <span class="text-[28px] font-semibold tracking-tight num">$49</span>
+            <span class="text-gray-500">/ month</span>
+          </div>
+          <div class="text-[11.5px] text-gray-500 mt-0.5">Cancel anytime · 7-day refund</div>
+          <button class="mt-4 btn btn-primary w-full justify-center py-2.5 text-[14px]">Subscribe with Stripe →</button>
+          <button class="mt-2 btn btn-ghost w-full justify-center">Try free for 7 days</button>
+          <div class="divider my-4"></div>
+          <div class="space-y-2.5 text-[12.5px]">
+            <div class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>Instant access after payment</div>
+            <div class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>Vendor never sees your email</div>
+            <div class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>Anonymous token authentication</div>
+          </div>
+        </div>
+
+        <div class="card p-5">
+          <div class="text-[11.5px] text-gray-500 uppercase tracking-wider font-medium mb-3">By Acme Labs</div>
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-full grad-band placeholder-img text-xs">AL</div>
+            <div class="flex-1 min-w-0">
+              <div class="font-medium text-[13px]">Acme Labs</div>
+              <div class="text-[11px] text-gray-500">4 apps · joined Jan 2026</div>
+            </div>
+          </div>
+          <button class="mt-3 btn btn-ghost w-full justify-center text-[12px]">View all apps →</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+views.newapp = () => `
+  <div class="max-w-3xl space-y-5">
+    <div>
+      <div class="text-[12.5px] text-gray-500"><span class="hover:underline cursor-pointer">Vendor</span> › <span class="hover:underline cursor-pointer">Apps</span> › <span class="text-gray-900">New app</span></div>
+      <h1 class="text-[22px] font-semibold tracking-tight mt-1">Create a new app</h1>
+      <div class="text-[13px] text-gray-500">Step 2 of 3 · Screenshots & branding</div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <div class="flex-1 flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full bg-green-500 text-white flex items-center justify-center text-xs">✓</div>
+        <div class="text-[12.5px] font-medium">Basic info</div>
+      </div>
+      <div class="w-12 h-px bg-gray-200"></div>
+      <div class="flex-1 flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full text-white flex items-center justify-center text-xs num" style="background:var(--accent)">2</div>
+        <div class="text-[12.5px] font-medium">Screenshots</div>
+      </div>
+      <div class="w-12 h-px bg-gray-200"></div>
+      <div class="flex-1 flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xs num">3</div>
+        <div class="text-[12.5px] text-gray-500">Pricing</div>
+      </div>
+    </div>
+
+    <div class="card p-6">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <div class="font-semibold">Screenshots</div>
+          <div class="text-[12.5px] text-gray-500">Upload 3–7 images. First image is the marketplace preview. Drag to reorder.</div>
+        </div>
+        <span class="chip chip-accent num" id="img-count">4 / 7</span>
+      </div>
+
+      <div class="grid grid-cols-4 gap-3" id="upload-grid">
+        <!-- preview tile (the "first") -->
+        <div class="relative aspect-square draggable rounded-lg overflow-hidden border-2 ring-2 ring-indigo-200 img-1 placeholder-img text-sm" draggable="true" data-idx="0" ondragstart="dragStart(event,0)" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="dragDrop(event,0)" style="border-color:var(--accent);">
+          <div class="absolute top-1.5 left-1.5"><span class="chip chip-accent">Preview</span></div>
+          <div class="absolute top-1.5 right-1.5 flex gap-1">
+            <button class="w-6 h-6 rounded bg-black/50 text-white text-xs flex items-center justify-center hover:bg-black/70">✕</button>
+          </div>
+          <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/50 to-transparent p-1.5 text-[11px] text-white">dashboard.png · 248kb</div>
+        </div>
+        ${[2,3,4].map((n,i)=>`
+          <div class="relative aspect-square draggable rounded-lg overflow-hidden border img-${n} placeholder-img text-sm" draggable="true" data-idx="${i+1}" ondragstart="dragStart(event,${i+1})" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="dragDrop(event,${i+1})" style="border-color:var(--border);">
+            <div class="absolute top-1.5 left-1.5"><span class="chip" style="background:rgba(0,0,0,.5);color:#fff;">${i+2}</span></div>
+            <div class="absolute top-1.5 right-1.5"><button class="w-6 h-6 rounded bg-black/50 text-white text-xs flex items-center justify-center hover:bg-black/70">✕</button></div>
+            <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/50 to-transparent p-1.5 text-[11px] text-white">screen-${n}.png</div>
+          </div>`).join('')}
+        <!-- empty add tile -->
+        <label class="aspect-square rounded-lg border-2 border-dashed flex flex-col items-center justify-center text-gray-400 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-500 cursor-pointer transition" style="border-color:var(--border);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+          <span class="text-[11.5px] mt-1 font-medium">Add image</span>
+          <span class="text-[10.5px] text-gray-400">PNG · JPG · WebP</span>
+        </label>
+        ${[2,3].map(()=>`<div class="aspect-square rounded-lg border border-dashed bg-gray-50/50" style="border-color:var(--border);"></div>`).join('')}
+      </div>
+
+      <div class="mt-4 flex items-center gap-2 p-3 rounded-md text-[12px]" style="background:var(--accent-soft);color:var(--accent-ink);">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span><strong>Tip:</strong> Use 1600×1000 PNG for crispest results. SVG is blocked for security. Max 1MB per image.</span>
+      </div>
+    </div>
+
+    <div class="card p-6">
+      <div class="font-semibold">Brand icon</div>
+      <div class="text-[12.5px] text-gray-500 mb-3">Shown next to your app name in cards and tables.</div>
+      <div class="flex items-center gap-4">
+        <div class="w-20 h-20 rounded-xl img-1 placeholder-img text-2xl">SP</div>
+        <div class="flex-1">
+          <button class="btn btn-ghost">Replace</button>
+          <button class="btn btn-quiet text-red-600">Remove</button>
+          <div class="text-[11.5px] text-gray-500 mt-2">PNG or JPG · 256×256 minimum · 1MB max</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between">
+      <button class="btn btn-ghost">← Back</button>
+      <div class="flex items-center gap-2">
+        <button class="btn btn-quiet">Save as draft</button>
+        <button class="btn btn-primary">Continue to pricing →</button>
+      </div>
+    </div>
+  </div>`;
+
+views.marketplace = () => `
+  <div class="space-y-5">
+    <div class="flex items-end justify-between">
+      <div>
+        <h1 class="text-[24px] font-semibold tracking-tight">Discover SaaS</h1>
+        <div class="text-gray-500 text-[13px]">24 apps · subscribe in one click · vendor never sees your data</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="relative">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input placeholder="Search apps" class="ring-focus pl-8 pr-3 py-1.5 border rounded-md text-[13px] w-64" style="border-color:var(--border);"/>
+        </div>
+        <select class="ring-focus py-1.5 px-2.5 border rounded-md text-[13px]" style="border-color:var(--border);"><option>All categories</option></select>
+      </div>
+    </div>
+
+    <div class="flex gap-1.5">
+      ${['Trending','Productivity','Developer tools','Marketing','Finance','AI','New'].map((t,i)=>`<span class="nav-pill ${i===0?'active':''}">${t}</span>`).join('')}
+    </div>
+
+    <div class="grid grid-cols-4 gap-4">
+      ${[
+        ['SplitPay','Group expense splitter','img-1','$49','4.8','214'],
+        ['Inboxly','AI email triage','img-2','$19','4.6','62'],
+        ['Cohortly','No-code cohorts','img-3','$39','4.9','38'],
+        ['PingHQ','Uptime monitor','img-4','$9','4.4','34'],
+        ['DocSign Lite','PDF signatures','img-5','$15','4.7','89'],
+        ['ZapBoard','Dashboards','img-6','$29','4.5','24'],
+        ['NightShade','Dark mode SDK','img-7','$5','4.9','412'],
+        ['Cohortly','No-code cohorts','img-3','$39','4.9','38'],
+      ].map(a=>`
+        <div class="card overflow-hidden hover:shadow-md transition cursor-pointer" onclick="show('app')">
+          <div class="aspect-[16/10] ${a[2]} placeholder-img text-2xl">${a[0][0]}</div>
+          <div class="p-4">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="font-semibold text-[14px]">${a[0]}</div>
+                <div class="text-[11.5px] text-gray-500">${a[1]}</div>
+              </div>
+              <div class="text-right"><div class="num font-semibold">${a[3]}</div><div class="text-[10.5px] text-gray-500">/month</div></div>
+            </div>
+            <div class="mt-3 flex items-center gap-3 text-[11.5px] text-gray-500">
+              <span>★ ${a[4]}</span><span>·</span><span>${a[5]} users</span>
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>
+  </div>`;
+
+/* ===== switcher ===== */
+function show(id){
+  document.querySelectorAll('.sidelink').forEach(el=>el.classList.toggle('active',el.dataset.view===id));
+  const view = views[id];
+  if(!view) return;
+  document.getElementById('view-root').innerHTML = view();
+  const r = [...ROLES,...EXTRA].find(x=>x.id===id);
+  document.getElementById('bc-role').textContent = r?.label||'';
+  document.getElementById('bc-page').textContent = id==='vendor'||id==='admin'?'Overview':id==='app'?'Detail':id==='newapp'?'New app':id==='marketplace'?'Browse':'Dashboard';
+  window.scrollTo(0,0);
+}
+
+function openDrawer(){document.getElementById('drawer').classList.add('open');document.getElementById('overlay').classList.add('open');}
+function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('overlay').classList.remove('open');}
+function openLightbox(i){
+  const lb=document.getElementById('lightbox');
+  const img=document.getElementById('lb-img');
+  const cls=['img-1','img-2','img-3','img-4','img-5'][i]||'img-1';
+  img.className=`placeholder-img ${cls} rounded-xl`;
+  img.style.cssText='width:min(80vw,1100px);height:min(70vh,720px);font-size:48px;';
+  img.textContent=`Screenshot ${i+1}`;
+  document.getElementById('lb-counter').textContent=`${i+1} / 5`;
+  document.getElementById('lb-thumbs').innerHTML=[0,1,2,3,4].map(n=>`<div onclick="event.stopPropagation();openLightbox(${n})" class="w-16 h-12 rounded ${['img-1','img-2','img-3','img-4','img-5'][n]} placeholder-img text-[10px] cursor-pointer ${n===i?'ring-2 ring-white':'opacity-50 hover:opacity-100'}">${n+1}</div>`).join('');
+  lb.classList.add('open');
+}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('open');}
+function openCmdK(){document.getElementById('cmdk').classList.add('open');}
+function closeCmdK(){document.getElementById('cmdk').classList.remove('open');}
+document.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openCmdK();}
+  if(e.key==='Escape'){closeDrawer();closeLightbox();closeCmdK();}
+});
+
+/* drag-reorder no-op for mockup */
+let dragIdx=null;
+function dragStart(e,i){dragIdx=i;e.dataTransfer.effectAllowed='move';}
+function dragDrop(e,i){e.preventDefault();e.currentTarget.classList.remove('drag-over');}
+
+renderSidenav();
+show('vendor');
+</script>
+</body>
+</html>

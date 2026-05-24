@@ -51,3 +51,23 @@ Every prompt inherits the **Definition of Done** from `ENGINEERING.md` (strict T
 
 ### Wave 6 — Final docs
 - [#21 — Final docs sync (SPEC.md §3/§4/§8/§11, CLAUDE.md, BUILD_PROMPTS.md)](build_prompts/21-docs-sync.md)
+
+## Phase 4 — Wave 7 (sequential: #27 → #28 → #29)
+- [#27 — Manual per-vendor commission override](build_prompts/27-manual-vendor-commission-override.md)
+- [#28 — Security hardening v2 (CSP, audit log helper, rate limiting)](build_prompts/28-security-hardening-v2.md)
+- [#29 — White-label Tier 2](build_prompts/29-white-label-tier-2.md)
+
+## Phase 5 — Wave 8 — UI overhaul + transparency + cross-cutting
+
+Sequential: ship **#30 and #31 first** (both block all dashboards), then **#32–#39 are parallel-able**. **#38** (transparency) is a thin layer woven into each dashboard task; ship the calculator functions early so #32–#35 can consume them.
+
+- [#30 — App screenshots gallery (3–7/app, lightbox, drag-reorder)](build_prompts/30-app-screenshots-gallery.md)
+- [#31 — Design system v2 (Stripe-density tokens + primitives + responsive)](build_prompts/31-design-system-v2.md)
+- [#32 — Vendor dashboard v2 (channel mix, cash flow, drill-down)](build_prompts/32-vendor-dashboard-v2.md)
+- [#33 — Affiliate dashboard v2 (funnel, discover apps, earnings per app)](build_prompts/33-affiliate-dashboard-v2.md)
+- [#34 — Reseller dashboard v2 (browse apps, per-offer analytics, alerts)](build_prompts/34-reseller-dashboard-v2.md)
+- [#35 — Buyer dashboard v2 (calendar, payment methods, invoices, privacy)](build_prompts/35-buyer-dashboard-v2.md)
+- [#36 — Admin dashboard v2 (system health, drill-downs, support tools)](build_prompts/36-admin-dashboard-v2.md)
+- [#37 — Marketplace v2 (search, filters, sort, categories)](build_prompts/37-marketplace-v2.md)
+- [#38 — Fee transparency layer (live calculators + `/legal/fees` page)](build_prompts/38-fee-transparency-layer.md)
+- [#39 — Cross-role: notifications, account settings, onboarding, CSV, vendor webhooks](build_prompts/39-cross-role-notifications-accounts.md)
