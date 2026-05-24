@@ -42,6 +42,12 @@ const serverEnvSchema = z.object({
     process.env.NODE_ENV === "production"
       ? z.string().min(1)
       : z.string().min(1).optional(),
+  // #49 — gates agent/workflow/bundle solution types in vendor onboarding
+  SOLUTIONS_NON_SAAS_ENABLED: z
+    .string()
+    .optional()
+    .default("false")
+    .transform((v) => v === "true"),
 });
 
 export type Env = z.infer<typeof serverEnvSchema>;

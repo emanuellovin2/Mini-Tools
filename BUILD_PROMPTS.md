@@ -72,15 +72,38 @@ Sequential: ship **#30 and #31 first** (both block all dashboards), then **#32�
 - [#38 — Fee transparency layer (live calculators + `/legal/fees` page)](build_prompts/38-fee-transparency-layer.md)
 - [#39 — Cross-role: notifications, account settings, onboarding, CSV, vendor webhooks](build_prompts/39-cross-role-notifications-accounts.md)
 
-## Phase 6 — Wave 9 — Usage economy (the "4 kitchens")
+## Phase 6 — Wave 9 — Stripe + Shopify for AI agencies
 
-The pivot from "billing rail" to "system of operation for AI agencies." Designed around **BYOK + prepaid credits = zero/minimal compute cost to the platform**, and **usage-based earnings for vendor / reseller / affiliate** so all three roles are pulled in.
+The pivot from "marketplace of SaaS" to **"infrastructure agencies use to build agent-powered businesses for SMB clients."** Designed around **BYOK + prepaid credits = zero/minimal compute cost to the platform**, the **agency↔client relationship** as the primary unit of operation, and **deployments** (not subscriptions) as the operational instance for agents/workflows. Vendor/reseller/affiliate roles continue to earn — agencies are the new high-LTV operator role on top.
 
-**Strictly sequential where money depends on money: #40 → #41 → #42 → #43 → #44.** #43 can overlap #42 once the step interface is fixed; #44 can start partially after #41.
+**Execution order — foundation first, then refit existing kitchens, then surfaces:**
 
-- [#40 — Usage metering ledger + usage-based billing (the meter)](build_prompts/40-usage-metering-billing.md) — **BLOCKS #41–#44**
-- [#41 — AI Gateway (BYOK) (the door)](build_prompts/41-ai-gateway-byok.md) — first usage revenue, zero compute cost
-- [#42 — Workflow / automation engine (the recipe book)](build_prompts/42-workflow-engine.md) — start of lock-in
-- [#43 — Connectors / integrations (the lock-in)](build_prompts/43-connectors.md) — the moat
-- [#44 — Usage-product distribution across vendor / reseller / affiliate](build_prompts/44-usage-product-distribution.md) — makes the kitchens profitable for every role
-- [#45 — Partner-client data lifecycle & DPA](build_prompts/45-partner-client-data-lifecycle.md) — legal foundation for §13 (export/erasure across all kitchens); ship with the kitchens, depends on #40/#41/#43
+```
+#49 Solutions abstraction  →  #50 Agency+Deployments  →  #51 Outcomes (parallel)
+                                     ↓
+       #40 (refit) → #41 → #42 → #43 → #44 (refit)
+                                     ↓
+                           #52 Agency dash  +  #53 Client portal
+                                     ↓
+                                    #45 DPA
+```
+
+**Foundation (build first — schema seams that block everything else):**
+- [#49 — Solutions abstraction (apps → typed solutions)](build_prompts/49-solutions-abstraction.md) — `saas | agent | workflow | bundle` types, runtime_config, templates, version retention, sharding seam, search abstraction declared. **BLOCKS #50–#53, reshapes #40–#44.**
+- [#50 — Agency ↔ Client relationships + Solution deployments](build_prompts/50-agency-client-deployments.md) — `org.type='agency'|'client'`, `client_relationships`, `solution_deployments` as the new operational unit; region column + sharding seam + Redis-cached effective config + orphaned status. **BLOCKS #51–#53, refits #40–#44.**
+- [#51 — Outcome metrics seam (deployment ROI proof)](build_prompts/51-outcome-metrics.md) — daily-partitioned time-series KPIs, cardinality budget, async-default at high volume, incremental rollup with watermark, cold-storage seam. Parallel-able with #40.
+- [#54 — Wave 9 scale invariants & operational seams](build_prompts/54-scale-invariants.md) — search abstraction, read-replica + region routing, settlement batching, OAuth refresh stampede mitigation, hot-wallet sharding seam, idempotency dedupe table, custom-domain SSL strategy. **Cross-cutting — declared seams that #40–#53 consume.**
+
+**Usage economy (refit to deployments as they're built):**
+- [#40 — Usage metering ledger + usage-based billing (the meter)](build_prompts/40-usage-metering-billing.md) — refit: `usage_events.deployment_id`; splits via deployment's `(vendor, agency, platform)`. **BLOCKS #41–#44**
+- [#41 — AI Gateway (BYOK) (the door)](build_prompts/41-ai-gateway-byok.md) — refit: keys per-deployment (vendor/agency/client BYOK), per-deployment spend caps
+- [#42 — Workflow / automation engine (the recipe book)](build_prompts/42-workflow-engine.md) — refit: runs scoped to deployments
+- [#43 — Connectors / integrations (the lock-in)](build_prompts/43-connectors.md) — refit: OAuth owned by client_org, delegated to deployment
+- [#44 — Usage-product distribution + solution templates](build_prompts/44-usage-product-distribution.md) — refit: agency forks vendor templates, customises, deploys
+
+**Agency + client surfaces:**
+- [#52 — Agency operations dashboard](build_prompts/52-agency-operations-dashboard.md) — client-centric (N managed clients), health board, drill-down drawer, agency billing
+- [#53 — Client portal (WL-branded SMB-facing UI)](build_prompts/53-client-portal.md) — SMB sees own deployments + outcomes + billing under agency brand; subdomain WL; replaces buyer dashboard for agency-operated clients
+
+**Legal:**
+- [#45 — Partner-client data lifecycle & DPA](build_prompts/45-partner-client-data-lifecycle.md) — `partner_clients`, export/erasure across deployments, retention, `/legal/dpa`. Depends on #40/#41/#43/#50.

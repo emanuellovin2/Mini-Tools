@@ -1,13 +1,13 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import {
-  listMarketplaceApps,
   listMarketplaceCategories,
   getFeaturedApps,
   formatPrice,
   formatRating,
   MARKETPLACE_PAGE_SIZE,
 } from "@/lib/services/apps";
+import { solutionsIndex } from "@/lib/search/solutions";
 import {
   parseMarketplaceParams,
   buildMarketplaceHref,
@@ -46,19 +46,11 @@ export default async function MarketplacePage({ searchParams }: Props) {
   const params = parseMarketplaceParams(raw);
   const { page, category, search, sort, priceMin, priceMax, ratingMin, hasAffiliate, hasTrial } = params;
 
-  const [{ apps, total, totalPages }, categories, featured] = await Promise.all([
-    listMarketplaceApps({
-      page,
-      pageSize: MARKETPLACE_PAGE_SIZE,
-      category,
-      search,
-      sort,
-      priceMin,
-      priceMax,
-      ratingMin,
-      hasAffiliate,
-      hasTrial,
-    }),
+  const [{ rows: apps, total, totalPages }, categories, featured] = await Promise.all([
+    solutionsIndex.search(
+      { category, search, sort, priceMin, priceMax, ratingMin, hasAffiliate, hasTrial },
+      { page, pageSize: MARKETPLACE_PAGE_SIZE }
+    ),
     listMarketplaceCategories(),
     // Only fetch featured when on the default landing (no filters active)
     !search && !category && !priceMin && !priceMax && !ratingMin && !hasAffiliate && !hasTrial && page === 1
