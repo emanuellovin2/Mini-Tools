@@ -31,7 +31,7 @@ export async function subscribeAction(appId: string): Promise<SubscribeResult> {
   const ip =
     ((await headers()).get("x-forwarded-for") ?? "").split(",")[0].trim() ||
     `user:${user.id}`;
-  const { allowed } = checkRateLimit(
+  const { allowed } = await checkRateLimit(
     `subscribe:${ip}`,
     SUBSCRIBE_RATE_LIMIT,
     SUBSCRIBE_RATE_WINDOW_MS

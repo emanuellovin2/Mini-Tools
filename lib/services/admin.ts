@@ -4,6 +4,30 @@ import { sendChurnAlert } from "@/lib/email/resend";
 import type { Json } from "@/types/supabase";
 
 // ---------------------------------------------------------------------------
+// Audit log helper
+// ---------------------------------------------------------------------------
+
+export async function writeAuditLog(args: {
+  actorId: string;
+  actorRole: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin.from("audit_log").insert({
+    actor_id: args.actorId,
+    actor_role: args.actorRole,
+    action: args.action,
+    entity_type: args.entityType,
+    entity_id: args.entityId,
+    metadata: (args.metadata ?? {}) as unknown as Json,
+  });
+  if (error) throw new Error(`writeAuditLog: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
 // Platform stats
 // ---------------------------------------------------------------------------
 

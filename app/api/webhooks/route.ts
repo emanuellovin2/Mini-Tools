@@ -68,11 +68,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "STRIPE_WEBHOOK_SECRET not set" }, { status: 500 });
   }
 
+  // 5-minute tolerance — rejects replayed webhooks with a stale timestamp
+  const STRIPE_TIMESTAMP_TOLERANCE_SECONDS = 300;
+
   let event: Stripe.Event;
   try {
-    event = getStripe().webhooks.constructEvent(rawBody, sig, webhookSecret);
+    event = getStripe().webhooks.constructEvent(
+      rawBody,
+      sig,
+      webhookSecret,
+      STRIPE_TIMESTAMP_TOLERANCE_SECONDS
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Signature verification failed";
+    logWebhookEvent({ event_id: "unknown", event_type: "unknown", outcome: "failed", latency_ms: 0, error: msg });
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 

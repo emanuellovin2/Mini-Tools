@@ -40,7 +40,7 @@ lib/
     apps.ts          # app CRUD + listing queries
     vendor.ts        # vendor-scoped data access
     buyer.ts         # getBuyerSubscriptions() — joins subscriptions + apps for the dashboard
-    admin.ts         # getPlatformStats, getPendingApps, getVendors, getAllSubscriptions, getAuditLog, getChurnAlerts, dispatchChurnAlerts, getVendorsWithCutInfo, setVendorCutOverride
+    admin.ts         # getPlatformStats, getPendingApps, getVendors, getAllSubscriptions, getAuditLog, getChurnAlerts, dispatchChurnAlerts, getVendorsWithCutInfo, setVendorCutOverride, writeAuditLog
     affiliate.ts     # createAffiliateLink, getAffiliateLinks, validateAffiliateCode, getAffiliateStats, recordAttribution; getLeaderboard, getAffiliatePublicProfile, getEarnedBadges, getBadgeProgress, updateAffiliateProfile, computeEarnedBadgeIds (pure)
     reseller.ts      # createOffer, getOffers, getStorefrontOffer, upsertResellerSubscription, pauseOffersOnLapse, getResellerDashboard
     reconciliation.ts  # runReconciliation(), getReconciliationRuns() — Stripe↔DB drift detection
@@ -124,6 +124,7 @@ app/
 components/
   ui/               # shadcn-style primitives: Button, Card, Input, Select, Label, Badge, Modal, Toast, Table, Skeleton
   layout/           # DashboardShell, Sidebar, Topbar, PageHeader — opt-in wrapper for dashboard pages
+next.config.ts       # security headers (CSP report-only, HSTS, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP, CORP)
 proxy.ts             # Next.js middleware: auth enforcement, role routing, ?aff= cookie capture (30d HTTP-only)
 supabase/
   migrations/        # all schema changes — never manual dashboard edits
@@ -167,6 +168,14 @@ JWT_PUBLIC_KEY=                        # RS256 public key (PEM); served via /.we
 JWT_KEY_ID=                            # `kid` for the active key, so keys can rotate without breaking vendors
 CHURN_ALERT_THRESHOLD_BPS=2000         # 20% — vendor monthly cancellation rate above this is flagged in #10
 STRIPE_RESELLER_PLAN_PRICE_ID=         # required from #14 — Stripe Price id (recurring $19/mo, USD) the reseller subscribes to on the platform account
+UPSTASH_REDIS_REST_URL=               # required from #28 in production — distributed rate limiter
+UPSTASH_REDIS_REST_TOKEN=             # required from #28 in production — distributed rate limiter
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=       # required from #28 (P1) — Cloudflare Turnstile CAPTCHA
+TURNSTILE_SECRET_KEY=                 # required from #28 (P1) — server-only, never expose to client
+NEXT_PUBLIC_SENTRY_DSN=               # required from #28 (P1) — error tracking
+SENTRY_AUTH_TOKEN=                    # required from #28 (P1) — sourcemap upload at build
+SENTRY_ORG=
+SENTRY_PROJECT=
 ```
 
 Generate the RS256 key pair once with:
@@ -227,7 +236,7 @@ Wave 6 — docs:
 
 **Phase 4 — Wave 7** (sequential: #27 → #28 → #29):
 - [x] #27 Manual per-vendor commission override (admin-set bps, audit log, vendor trigger guard)
-- [ ] #28 Security hardening v2 (CSP, audit log helper, rate limiting)
+- [x] #28 Security hardening v2 (CSP, audit log helper, rate limiting)
 - [ ] #29 White-label Tier 2 (vendor toggle, reseller subdomain storefront, per-offer WL branding)
 
 ## Guardrails
@@ -242,3 +251,7 @@ Wave 6 — docs:
 - Use Stripe test mode (+ Stripe CLI for webhooks) until the full flow is verified end to end.
 - Webhook handlers and any path that writes to ≥2 tables (subscribe, refund, cron) MUST run inside a single DB transaction (Supabase RPC or explicit `BEGIN/COMMIT`) — half-written state is the #1 source of subtle billing bugs.
 - `anon_user_id` is **stable per `(buyer_id, app_id)` across resubscriptions** (SPEC §6) — on a new subscription, always look up a prior id for that pair before generating a new one.
+- All admin state mutations write to `audit_log` in the same transaction as the mutation. Use the `writeAuditLog` helper in `lib/services/admin.ts`. `audit_log` is immutable (no UPDATE/DELETE policy) and admin-read-only via RLS.
+- Webhook endpoints are exempt from rate limiting — Stripe retry logic depends on it. Idempotency is the dedupe mechanism.
+- `checkRateLimit()` is async (Upstash Redis in production, in-memory fallback in dev). Always `await` it. Never add it to the webhook route.
+- CSP rolls out report-only first (header: `Content-Security-Policy-Report-Only`). After 1 week of clean reports, switch to `Content-Security-Policy`. Never add `unsafe-eval`; tighten `unsafe-inline` with nonces in a future pass.

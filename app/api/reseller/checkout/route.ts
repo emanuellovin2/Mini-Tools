@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/services/supabase";
 import { getStripe } from "@/lib/stripe/client";
 import { getOrCreateStripeCustomer } from "@/lib/stripe/customers";
 import { lookupOrGenerateAnonUserId } from "@/lib/stripe/anon-user";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -15,6 +16,13 @@ const bodySchema = z.object({
 // POST /api/reseller/checkout
 // Creates a Stripe Checkout session for a buyer subscribing via a reseller offer.
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  // 20 checkout attempts per IP per minute — prevents checkout flood
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const { allowed: ipAllowed } = await checkRateLimit(`reseller-checkout:${ip}`, 20, 60_000);
+  if (!ipAllowed) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },

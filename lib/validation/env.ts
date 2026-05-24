@@ -31,6 +31,15 @@ const serverEnvSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
   // Required from #14 — Stripe Price id for the reseller's $19/mo platform subscription
   STRIPE_RESELLER_PLAN_PRICE_ID: z.string().min(1),
+  // Required from #28 in production — distributed rate limiter (Upstash Redis)
+  UPSTASH_REDIS_REST_URL:
+    process.env.NODE_ENV === "production"
+      ? z.string().url()
+      : z.string().url().optional(),
+  UPSTASH_REDIS_REST_TOKEN:
+    process.env.NODE_ENV === "production"
+      ? z.string().min(1)
+      : z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof serverEnvSchema>;

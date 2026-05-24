@@ -26,7 +26,7 @@ const BodySchema = z.object({
 export async function POST(req: NextRequest) {
   // Rate-limit by IP (60 req/min)
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const { allowed } = checkRateLimit(ip, RATE_LIMIT, RATE_WINDOW_MS);
+  const { allowed } = await checkRateLimit(ip, RATE_LIMIT, RATE_WINDOW_MS);
   if (!allowed) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
