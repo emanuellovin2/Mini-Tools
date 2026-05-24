@@ -48,5 +48,173 @@ The goal: a correct, maintainable foundation with clean boundaries — not prema
 - Keep APIs **stateless** (JWT, no server session affinity) so horizontal scaling is automatic.
 - Do **NOT** add caching layers, message queues, microservices, or multi-region now. Add them only when real metrics demand it.
 
+---
+
+## §5 — Partitioning policy for hot append-only tables (#48)
+
+Every hot append-only table must be declared `PARTITION BY RANGE (created_at)` with monthly partitions from day 1. Retrofitting partitioning after data exists requires a full rewrite + lock.
+
+**Partitioned tables (canonical list):**
+
+| Table | Task | Retention |
+|---|---|---|
+| `audit_log` | #2/#48 | 18 months raw → S3 archive |
+| `jobs` | #48 | succeeded 14d, failed/dead 90d → detach |
+| `vendor_webhook_deliveries` | #48/#39 | 60d |
+| `analytics_events` | #46 | 90d raw → roll up to `analytics_daily` |
+| `analytics_daily` | #46 | forever (aggregated) |
+| `run_steps` | #42 | 180d |
+| `notifications` | #39 | 180d |
+| `usage_events` | #40 | never purge (financial) |
+| `credit_transactions` | #40 | never purge (financial) |
+
+**Pattern for any new hot table:**
+```sql
+CREATE TABLE public.foo (
+  ...,
+  created_at timestamptz NOT NULL DEFAULT now()
+) PARTITION BY RANGE (created_at);
+-- Migration comment MUST state: table, partition key, retention window
+```
+
+**Partition rotation:** the `partition-rotation-cron` Edge Function (runs 25th of each month) calls `create_next_month_partitions()` to create the next 2 months and `detach_partition_if_exists()` for expired partitions per the retention table above. Never `DROP` a partition without first archiving to S3.
+
+**Every future build that creates a hot table MUST:**
+1. Add `PARTITION BY RANGE (created_at)` in the migration.
+2. Add seed partitions for the current + next 2 months.
+3. Add the table + retention to the canonical list above.
+4. Add the table to `partition-rotation-cron/index.ts` `PARTITIONED_TABLES`.
+
+---
+
+## §6 — Migration safety pattern (#48)
+
+Never take an `AccessExclusiveLock` on a hot table in production. Forbidden shortcuts:
+
+- `ALTER TABLE t ADD COLUMN col NOT NULL DEFAULT expr` — full rewrite, blocks all reads/writes.
+- `CREATE INDEX` without `CONCURRENTLY` — blocks writes.
+- `ALTER TABLE ... ADD CONSTRAINT` without `NOT VALID` — validates inline, blocks.
+- `ALTER TYPE ... ADD VALUE` inside a transaction — Postgres forbids it anyway.
+
+**Required pattern for adding a column to a live table:**
+```sql
+-- Step 1: nullable add — instant (no rewrite, no lock)
+ALTER TABLE public.foo ADD COLUMN bar text;
+
+-- Step 2: backfill in batches (as a 'backfill' jobs row or looped UPDATE)
+UPDATE public.foo SET bar = 'default' WHERE bar IS NULL AND id IN (
+  SELECT id FROM public.foo WHERE bar IS NULL LIMIT 10000
+);
+-- Repeat until count = 0.
+
+-- Step 3: set NOT NULL once backfill complete
+ALTER TABLE public.foo ALTER COLUMN bar SET NOT NULL;
+```
+
+**Required pattern for indexes:**
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS foo_bar_idx ON public.foo (bar);
+```
+
+**Required pattern for constraints:**
+```sql
+ALTER TABLE public.foo ADD CONSTRAINT foo_check CHECK (bar > 0) NOT VALID;
+ALTER TABLE public.foo VALIDATE CONSTRAINT foo_check; -- separate transaction, no lock
+```
+
+---
+
+## §7 — RLS performance rules (#48)
+
+Load-bearing from the moment `is_org_member` / `my_org_ids` are used in policies. A per-row scalar subquery on a 10M-row table will kill the database.
+
+**Rules (all mandatory):**
+1. `is_org_member(org_id, min_role)` and every RLS helper that queries a lookup table **MUST** be `STABLE SECURITY DEFINER`. This lets Postgres cache the result per query, not per row.
+2. `org_members` **MUST** have `(user_id, org_id) INCLUDE (role)` composite index — the helper is one indexed lookup.
+3. Policies **MUST** filter by `org_id` first so partition-pruning + index lookup happen before the helper runs. Pattern:
+   ```sql
+   USING (org_id = ANY(SELECT public.my_org_ids()))
+   ```
+4. Every RLS-protected hot table **MUST** have an `org_id` index.
+5. Forbidden: `auth.uid()` in subqueries that run per-row on large tables — always wrap in the cached helper.
+6. Verify with `EXPLAIN (ANALYZE, BUFFERS)` after adding any new policy on a large table. Seq scan = reject.
+
+---
+
+## §8 — Edge caching policy (#48)
+
+At scale, every page render hitting Postgres is catastrophic. Use Next.js ISR + on-demand revalidation via `lib/cache/revalidate.ts`.
+
+| Surface | Cache strategy | TTL | Invalidated by |
+|---|---|---|---|
+| `/marketplace` | ISR | 60s | `revalidateMarketplace()` on app approve/edit/feature |
+| `/app/[slug]` | ISR | 300s | `revalidateApp(slug)` on screenshot/review/price change |
+| `/r/[reseller]/[offer]` | ISR | 300s | `revalidateStorefront()` on offer-status change |
+| `/_wl/[reseller]/[offer]` | ISR | 300s | `revalidateWLStorefront()` on offer-status/brand change |
+| `/affiliates/top` | ISR | 900s | `revalidateLeaderboard()` on MRR update |
+| `/affiliates/[slug]` | ISR | 900s | `revalidateAffiliateProfile(slug)` on badge/profile update |
+| Authenticated dashboards | No cache | — | React `cache()` for per-request memoization |
+
+**Rule:** any service-layer mutation that changes a cached surface **MUST** call the matching `revalidate*` function from `lib/cache/revalidate.ts`. Never hardcode tag strings.
+
+---
+
+## §9 — Async job queue conventions (#48)
+
+All previously fire-and-forget paths (erasure, export, webhook delivery, analytics rollup, usage settlement) MUST use the `jobs` table + `jobs-worker-cron` worker. Never fan out work inline from a webhook handler or API route.
+
+**Handler contract:**
+- Handlers live in `lib/jobs/handlers.ts` (server) and `supabase/functions/jobs-worker-cron/index.ts` (Edge).
+- Handlers MUST be idempotent — a retry must produce the same outcome.
+- Long work MUST split into multiple jobs (e.g. erasure enqueues one job per eraser).
+- Handlers MUST be registered in BOTH the server-side registry (for tests) and the Edge Function (for production).
+
+**`enqueueJob` from creation paths:**
+```ts
+await enqueueJob("webhook_delivery", { endpointUrl, eventType, body, secret, deliveryId, orgId }, {
+  idempotencyKey: `wh:${deliveryId}`,
+  orgId,
+});
+```
+
+**Dead job replay:** admin calls `replayJob(jobId)` or uses the admin DLQ UI (#36). Never manually update `status` — use the helpers.
+
+---
+
+## §10 — Quota enforcement (#48)
+
+Every new creatable resource MUST have a quota column in `org_quotas` + an `enforceQuota()` call in the creation path. **Default-deny stance** — never silently allow unbounded resource creation.
+
+**Pattern:**
+```ts
+// In server action or API route, before INSERT:
+await enforceQuota(orgId, "offers"); // throws QuotaExceededError on breach
+await admin.from("reseller_offers").insert({ ... });
+```
+
+**Adding a new resource type:**
+1. Add `max_<resource>` column to `org_quotas` with a sensible default.
+2. Add a backfill `UPDATE org_quotas SET max_<resource> = <default>` in the migration.
+3. Add the resource to `RESOURCE_CONFIG` in `lib/quotas/enforce.ts`.
+4. Add `await enforceQuota(orgId, "<resource>")` before every INSERT.
+5. Admin UI (#36) must expose the per-org override (audit-logged write via service role).
+
+---
+
+## §11 — Load-test baselines (#48)
+
+k6 smoke harness: `scripts/loadtest/smoke.js`. Run against seeded local stack.
+
+**Expected p95 / p99 baselines (M1 laptop, local Supabase):**
+
+| Path | p95 | p99 |
+|---|---|---|
+| `GET /marketplace` (ISR hit) | < 80ms | < 150ms |
+| `POST /api/events` beacon | < 40ms | < 80ms |
+| Stripe `invoice.paid` webhook (DB write) | < 500ms | < 1000ms |
+| Usage draw-down (concurrent lock) | < 200ms | < 400ms |
+
+Update this table after each smoke run. A regression in any baseline is a P2 issue.
+
 ## Definition of done for any prompt
 Code compiles with strict TS, inputs are validated with Zod, money/access paths have tests, RLS covers and tests new tables, the prompt's Verify step passes, and the Progress checklist in `CLAUDE.md` is updated.

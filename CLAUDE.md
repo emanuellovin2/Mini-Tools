@@ -66,16 +66,16 @@ lib/
   services/
     org.ts           # (planned #47) createPersonalOrg, createTeamOrg, inviteMember, acceptInvite, listMembers, getActiveOrg
   jobs/
-    queue.ts         # (planned #48) enqueueJob, claimJobs, completeJob, failJob — durable async queue
-    handlers.ts      # (planned #48) handler registry: handlers[type] = (payload, ctx) => result
+    queue.ts         # enqueueJob, claimJobs, completeJob, failJob, replayJob — durable async queue
+    handlers.ts      # handler registry: handlers[type] = (payload, ctx) => result; built-in: erasure, export, webhook_delivery
   quotas/
-    enforce.ts       # (planned #48) enforceQuota(orgId, resource) — throws QUOTA_EXCEEDED
+    enforce.ts       # enforceQuota(orgId, resource) — throws QuotaExceededError (QUOTA_EXCEEDED); getQuotaUsage()
   db/
-    with-timeout.ts  # (planned #48) withStatementTimeout(ms, fn) — SET LOCAL statement_timeout
+    with-timeout.ts  # withStatementTimeout(ms, fn) — SET LOCAL via claim_jobs RPC; presets: withFastTimeout/withStandardTimeout/withCronTimeout
   stripe/
-    with-retry.ts    # (planned #48) withStripeRetry(fn) — 429/5xx backoff for cron-path Stripe calls
+    with-retry.ts    # withStripeRetry(fn) — 429/5xx exponential backoff + jitter, max 5 attempts; idempotent calls only
   cache/
-    revalidate.ts    # (planned #48) revalidateMarketplace/App/Storefront — tagged ISR invalidation
+    revalidate.ts    # revalidateMarketplace/App/Storefront/WLStorefront/AffiliateProfile/Leaderboard — tagged ISR invalidation
   validation/
     env.ts           # boot-time Zod env validation
     vendor.ts        # vendor input schemas
@@ -314,7 +314,7 @@ Wave 6 — docs:
 
 **Phase 6 — Wave 9 (Usage economy — the "4 kitchens" + foundations)** — design constraint: **BYOK + prepaid credits = zero/minimal compute cost to platform**; usage-based earnings for vendor/reseller/affiliate. **Foundation-first ordering: #47 → #48 → #46 → kitchens → #45.** #47/#48/#46 capture decisions that cannot be reconstructed retroactively — never defer.
 - [x] #47 Organizations & multi-seat (the ownership model) — `organizations`, `org_members`, personal-org bootstrap + backfill, RLS rewrite via `is_org_member` (STABLE SECURITY DEFINER + `org_members(user_id, org_id) INCLUDE (role)` index), payouts move to org, `audit_log.actor_org_id` + team activity feed — **BLOCKS #48** (pre-launch clean-break, retrofit cost explodes after launch)
-- [ ] #48 Scale & resilience foundation — durable `jobs` table + tick worker, `org_quotas` + enforce, `statement_timeout` middleware, outbound webhook delivery worker, partition/retention/RLS-perf conventions in ENGINEERING.md, edge caching policy (ISR + on-demand revalidation), k6 smoke harness, Stripe 429 retry wrapper, PITR restore runbook — **BLOCKS #46/#40+** (they consume these primitives from day 1)
+- [x] #48 Scale & resilience foundation — durable `jobs` table + tick worker, `org_quotas` + enforce, `statement_timeout` middleware, outbound webhook delivery worker, partition/retention/RLS-perf conventions in ENGINEERING.md, edge caching policy (ISR + on-demand revalidation), k6 smoke harness, Stripe 429 retry wrapper, PITR restore runbook — **BLOCKS #46/#40+** (they consume these primitives from day 1)
 - [ ] #46 Engagement & analytics event capture — append-only `analytics_events` (monthly partition, salted daily-rotating visitor hash, no PII, DNT), beacon + server capture, rollup cron via jobs queue, REAL funnels (affiliate EPC + click→sale, reseller traffic→conversion, vendor impression→install) — **capture-now, depends on #47 + #48**
 - [ ] #40 Usage metering ledger + usage-based billing (the meter) — generic `usage_events` ledger, prepaid `credit_wallets`, settlement cron, `computeUsageSplit` pure fn — **BLOCKS #41–#44**
 - [ ] #41 AI Gateway (BYOK) (the door) — encrypted `provider_keys` vault, `/api/gateway/[provider]` metered proxy, vendor agent products, spend caps — first usage revenue, zero compute cost
