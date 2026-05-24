@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { submitAppAction, type ActionResult } from "../actions";
+import ScreenshotUploader from "./ScreenshotUploader";
 
 const inputClass =
   "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black";
@@ -75,7 +76,7 @@ export default function AppForm() {
         <div>
           <label className="block text-sm text-gray-700 mb-1">
             Resell floor ($/month)
-            <span className="ml-1 text-xs text-gray-400" title="Leave blank to disable resell">
+            <span className="ml-1 text-xs text-gray-700" title="Leave blank to disable resell">
               opt-in
             </span>
           </label>
@@ -118,6 +119,17 @@ export default function AppForm() {
           className="text-sm text-gray-600 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
         />
         {fieldErrors?.logo && <FieldError msg={fieldErrors.logo[0]} />}
+      </div>
+
+      <div>
+        <label className="block text-sm text-gray-700 mb-2">
+          Screenshots <span className="text-red-500">*</span>
+          <span className="ml-1 text-xs text-gray-500 font-normal">
+            3–7 images, PNG/JPG/WebP, max 1 MB each. First image is the marketplace preview.
+          </span>
+        </label>
+        <ScreenshotUploader />
+        {fieldErrors?.screenshot_urls && <FieldError msg={fieldErrors.screenshot_urls[0]} />}
       </div>
 
       {generalError && <p className="text-red-500 text-sm">{generalError}</p>}

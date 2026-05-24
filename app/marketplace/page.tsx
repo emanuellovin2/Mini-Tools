@@ -43,7 +43,7 @@ export default async function MarketplacePage({ searchParams }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <Link href="/" className="text-sm text-gray-400 hover:text-gray-600 mb-1 inline-block">
+          <Link href="/" className="text-sm text-gray-700 hover:text-gray-900 mb-1 inline-block">
             [PLATFORM]
           </Link>
           <h1 className="text-2xl font-bold">Marketplace</h1>
@@ -108,7 +108,7 @@ export default async function MarketplacePage({ searchParams }: Props) {
       )}
 
       {/* Count */}
-      <p className="text-sm text-gray-400 mb-5">
+      <p className="text-sm text-gray-700 mb-5">
         {total === 0 ? "No apps found" : `${total} app${total === 1 ? "" : "s"}`}
         {search && <span> matching &ldquo;{search}&rdquo;</span>}
         {category && <span> in {category}</span>}
@@ -121,34 +121,49 @@ export default async function MarketplacePage({ searchParams }: Props) {
             <Link
               key={app.id}
               href={`/app/${app.id}`}
-              className="flex flex-col border border-gray-200 rounded-xl p-5 hover:border-gray-400 hover:shadow-sm transition-all"
+              className="flex flex-col border border-gray-200 rounded-xl overflow-hidden hover:border-gray-400 hover:shadow-sm transition-all"
             >
-              <div className="flex justify-between items-start gap-2 mb-2">
-                <h2 className="font-semibold text-base leading-snug">{app.name}</h2>
-                {app.category && (
-                  <span className="shrink-0 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-                    {app.category}
-                  </span>
-                )}
-              </div>
-              {app.description && (
-                <p className="text-sm text-gray-500 mb-3 line-clamp-2 flex-1">
-                  {app.description}
-                </p>
+              {/* Preview screenshot or gradient fallback */}
+              {app.screenshot_urls[0] ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={app.screenshot_urls[0]}
+                  alt={`${app.name} screenshot`}
+                  className="w-full aspect-[16/10] object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="w-full aspect-[16/10] bg-gradient-to-br from-gray-100 to-gray-200" />
               )}
-              <div className="flex items-center justify-between mt-auto pt-2">
-                <span className="text-sm font-medium">
-                  {formatPrice(app.price_cents, app.currency)}<span className="text-gray-400 font-normal">/mo</span>
-                </span>
-                {app.vendor_name && (
-                  <span className="text-xs text-gray-400">by {app.vendor_name}</span>
+
+              <div className="p-5 flex flex-col flex-1">
+                <div className="flex justify-between items-start gap-2 mb-2">
+                  <h2 className="font-semibold text-base leading-snug">{app.name}</h2>
+                  {app.category && (
+                    <span className="shrink-0 text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
+                      {app.category}
+                    </span>
+                  )}
+                </div>
+                {app.description && (
+                  <p className="text-sm text-gray-700 mb-3 line-clamp-2 flex-1">
+                    {app.description}
+                  </p>
                 )}
+                <div className="flex items-center justify-between mt-auto pt-2">
+                  <span className="text-sm font-medium">
+                    {formatPrice(app.price_cents, app.currency)}<span className="text-gray-700 font-normal">/mo</span>
+                  </span>
+                  {app.vendor_name && (
+                    <span className="text-xs text-gray-700">by {app.vendor_name}</span>
+                  )}
+                </div>
               </div>
             </Link>
           ))}
         </div>
       ) : (
-        <div className="text-center py-20 text-gray-400 border border-dashed border-gray-200 rounded-xl">
+        <div className="text-center py-20 text-gray-700 border border-dashed border-gray-200 rounded-xl">
           <p className="text-sm">No apps match your filters.</p>
           <Link href="/marketplace" className="text-sm text-black underline mt-2 inline-block">
             Clear filters
@@ -167,11 +182,11 @@ export default async function MarketplacePage({ searchParams }: Props) {
               ← Previous
             </Link>
           ) : (
-            <span className="px-4 py-2 rounded-lg text-sm text-gray-300 border border-gray-100">
+            <span className="px-4 py-2 rounded-lg text-sm text-gray-600 border border-gray-100">
               ← Previous
             </span>
           )}
-          <span className="text-sm text-gray-400">
+          <span className="text-sm text-gray-700">
             {page} / {totalPages}
           </span>
           {page < totalPages ? (
@@ -182,7 +197,7 @@ export default async function MarketplacePage({ searchParams }: Props) {
               Next →
             </Link>
           ) : (
-            <span className="px-4 py-2 rounded-lg text-sm text-gray-300 border border-gray-100">
+            <span className="px-4 py-2 rounded-lg text-sm text-gray-600 border border-gray-100">
               Next →
             </span>
           )}

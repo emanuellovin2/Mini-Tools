@@ -153,6 +153,14 @@ scripts/
 - `subscriptions.reseller_wl_tier_snapshot / vendor_openness_snapshot` — immutable after subscribe. Existing subs grandfathered at `(1, open_to_resellers)`.
 - `VENDOR_WL_KICKBACK_BPS = 3333` in `lib/stripe/transfers.ts` — 33.33% of platform reseller commission goes to vendor if `open_to_wl`. Tunable const, never inline.
 
+## Screenshots data model (as of #30)
+- `apps.screenshot_urls text[]` — ordered list of public URLs. First element is marketplace preview/hero. CHECK: `cardinality = 0` (pending) or `3–7` (active). Approved apps require ≥3.
+- Storage bucket `app-screenshots`: public read, vendor-prefixed write (`{vendor_id}/{nanoid}.{ext}`). Same PNG/JPG/WebP magic-bytes + 1MB cap as logos.
+- Upload route: `POST /api/vendor/apps/screenshots` — authenticated vendor only, returns `{ url }`.
+- `ScreenshotUploader` (`app/vendor/_components/`) — client component with 7-slot grid, HTML5 DnD reorder, per-slot upload progress, hidden inputs for FormData.
+- `Lightbox` (`components/ui/Lightbox.tsx`) — keyboard nav (←→ ESC Home End), thumb strip, focus trap, body-scroll lock.
+- `ScreenshotGallery` (`app/app/[id]/_components/`) — hero + 4-thumb grid + "+N more" pill, wraps Lightbox.
+
 ## Affiliate data model (as of #25)
 - `profiles.affiliate_active_mrr_cents` — current active MRR (drives commission tier + leaderboard rank). Set by `increment_affiliate_mrr` RPC on `invoice.paid`; decremented on refund.
 - `profiles.affiliate_lifetime_mrr_cents` — monotonic cumulative MRR (drives lifetime badges). Decremented on refund to keep badges honest.
@@ -257,7 +265,7 @@ Wave 6 — docs:
 - [x] #29 White-label Tier 2 (vendor toggle, reseller subdomain storefront, per-offer WL branding)
 
 **Phase 5 — Wave 8** (sequential: #30 + #31 first, then #32–#39 parallel-able)
-- [ ] #30 App screenshots gallery (3–7/app, lightbox, drag-reorder, marketplace preview)
+- [x] #30 App screenshots gallery (3–7/app, lightbox, drag-reorder, marketplace preview)
 - [ ] #31 Design system v2 (Stripe-density tokens, drawer/sparkline/cmdk/skeleton/empty-state/toast/bell/onboarding primitives, mobile responsive, dark mode)
 - [ ] #32 Vendor dashboard v2 (channel mix, Stripe Connect balance, dunning queue, refund/dispute feed, per-app drill-down drawer, openness panel with kickback earnings, transparent fee breakdown)
 - [ ] #33 Affiliate dashboard v2 (conversion funnel, apps-to-promote catalog, earnings per app, Connect status, payout history, pending earnings, refund clawbacks, sticky referrals, share kit with QR)

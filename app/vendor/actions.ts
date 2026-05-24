@@ -48,6 +48,18 @@ export async function submitAppAction(
     return { error: parsed.error.flatten().fieldErrors as Record<string, string[]> };
   }
 
+  // Screenshots — must have 3–7 before submission
+  const screenshotUrls = formData.getAll("screenshot_urls") as string[];
+  const validScreenshots = screenshotUrls.filter(
+    (u) => typeof u === "string" && u.startsWith("https://")
+  );
+  if (validScreenshots.length < 3) {
+    return { error: { screenshot_urls: ["At least 3 screenshots are required"] } };
+  }
+  if (validScreenshots.length > 7) {
+    return { error: { screenshot_urls: ["Maximum 7 screenshots allowed"] } };
+  }
+
   // Logo upload with server-side magic byte validation
   const logoFile = formData.get("logo") as File | null;
   let logo_url: string | null = null;
@@ -101,6 +113,7 @@ export async function submitAppAction(
     min_price_cents,
     auth_url: parsed.data.auth_url,
     logo_url,
+    screenshot_urls: validScreenshots,
     status: "pending",
   });
 

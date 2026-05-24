@@ -170,6 +170,7 @@ export type Database = {
           min_price_cents: number | null
           name: string
           price_cents: number
+          screenshot_urls: string[]
           status: Database["public"]["Enums"]["app_status"]
           stripe_price_id: string | null
           stripe_product_id: string | null
@@ -189,6 +190,7 @@ export type Database = {
           min_price_cents?: number | null
           name: string
           price_cents: number
+          screenshot_urls?: string[]
           status?: Database["public"]["Enums"]["app_status"]
           stripe_price_id?: string | null
           stripe_product_id?: string | null
@@ -208,6 +210,7 @@ export type Database = {
           min_price_cents?: number | null
           name?: string
           price_cents?: number
+          screenshot_urls?: string[]
           status?: Database["public"]["Enums"]["app_status"]
           stripe_price_id?: string | null
           stripe_product_id?: string | null
@@ -928,6 +931,7 @@ export type Database = {
           id: string
           name: string
           price_cents: number
+          screenshot_urls: string[]
           vendor_name: string
         }[]
       }
@@ -949,6 +953,7 @@ export type Database = {
           id: string
           name: string
           price_cents: number
+          screenshot_urls: string[]
           total_count: number
           vendor_name: string
         }[]

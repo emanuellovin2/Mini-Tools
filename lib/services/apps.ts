@@ -10,6 +10,7 @@ export type MarketplaceApp = {
   price_cents: number;
   currency: string;
   vendor_name: string | null;
+  screenshot_urls: string[];
 };
 
 export type MarketplaceAppDetail = MarketplaceApp & {
