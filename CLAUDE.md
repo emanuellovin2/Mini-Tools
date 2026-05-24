@@ -115,6 +115,17 @@ supabase/migrations/   # all schema changes — never manual dashboard edits
 - Provider adapters: `lib/gateway/providers/{openai,anthropic,compat}.ts`. Adding a provider = new file only. Streams teed: one to client, one to parse usage SSE for settlement.
 - `GATEWAY_ENABLED` env flag gates the route. Plaintext keys never leave server, never in any log.
 
+**Workflow engine (as of #42)**
+- `workflows`: `owner_id` → `organizations.id` (org-owned). `trigger_type` enum (`manual|schedule|webhook`). `webhook_secret` required when `trigger_type='webhook'`.
+- `workflow_steps`: editable draft steps; counted for `max_workflow_steps` quota. `position` + `next_step_key` form the execution order.
+- `workflow_versions`: immutable snapshots at publish time (`graph` jsonb). Capped at 50 per workflow by trigger. Runs pin a version. `template_of_id` for attribution on installs.
+- `workflow_runs`: durable state machine. `next_step_key` + `next_run_at` = cursor. `usage_event_id` guards against double-charge on retry. `claim_workflow_run(p_worker_id)` RPC = `SELECT ... FOR UPDATE SKIP LOCKED`.
+- `run_steps`: per-step checkpoint; `idempotency_key = {run_id}:{step_key}:{attempt}`. Executor resumes from last incomplete step on crash with no duplicate side effects.
+- Executor design: `executeRun(runId)` in `lib/services/workflows.ts` → one step per invocation. Delay step sets `next_run_at`; no long-running function. `workflow-runner-cron` Edge Function (every minute) claims due runs + enqueues `workflow_execute` jobs.
+- Step types: `ai` (BYOK via key vault, non-streaming sync call), `http` (outbound fetch), `transform` (safe `{{path}}` template expansion — NO eval), `branch` (condition evaluator — NO eval), `delay` (future `next_run_at`), `connector` (stub until #43).
+- Template install (`installTemplate`): clones a `is_template=true` version into buyer's org; strips `provider_key_id` from step configs (buyer supplies own keys).
+- Key files: `lib/services/workflows.ts`, `lib/workflows/steps/{ai,http,transform,branch,delay}.ts`, `app/api/workflows/[id]/trigger/[secret]/route.ts`, `supabase/functions/workflow-runner-cron/`.
+
 **Outcome metrics (as of #51)**
 - `deployment_metrics`: append-only, **daily** partition (not monthly). `tenant_shard_id` first in all composites. 90d raw retention; detached by `partition-rotation-cron`.
 - `deployment_metrics_rollup`: indefinite daily summaries. `rollup_watermark` per `(deployment_id, metric_key, dimensions_hash, date)` row; idempotent ON CONFLICT. `cardinality_overflow=true` when >1000 distinct dimension combos/day for a metric.
@@ -161,7 +172,7 @@ Repositioning: infrastructure agencies use to build agent-powered businesses for
 - [x] #51 Outcome metrics seam — `deployment_metrics` (daily partition, append-only), `emitMetric` idempotent, reserved namespaces (`lead.*`/`meeting.*`/`task.*`/`time.*`/`revenue.*`/`cost.*`/`quality.*`), k≥5 anonymity on benchmarks, PII dimension guard, incremental 15-min rollup with watermark.
 - [x] #40 Usage metering + billing — `usage_meters`, `usage_events` (monthly partitioned), prepaid `credit_wallets`, `record_usage` RPC (atomic, idempotent), `computeUsageSplit` pure fn + fuzz tests, settlement jobs, usage reconciliation, `subscriptions.acquired_by` + `partner_owner_id` (SPEC §13), SPEC §14.
 - [x] #41 AI Gateway (BYOK) — per-deployment key routing (vendor/agency/client BYOK), spend caps, encrypted `provider_keys` vault, `/api/gateway/[provider]` metered proxy.
-- [ ] #42 Workflow engine — `workflows/versions/runs/run_steps`, triggers (manual/schedule/webhook), durable tick executor, sellable templates. Runs scoped to deployments.
+- [x] #42 Workflow engine — `workflows/workflow_steps/workflow_versions/workflow_runs/run_steps`, triggers (manual/schedule/webhook), tick-driven durable executor (one step per cron slice), sellable templates, `claim_workflow_run` RPC.
 - [ ] #43 Connectors — OAuth owned by client_org, delegated to deployment; versioned registry (Gmail/Slack/Sheets/HTTP), encrypted `connector_accounts`.
 - [ ] #44 Usage-product distribution — agency forks vendor templates → customises → deploys under agency brand; metered marketplace products, reseller per-unit markup, affiliate recurring %.
 - [ ] #52 Agency operations dashboard — `/agency` route (org.type='agency' only), client-centric health board, `client_health_scores` precomputed hourly, `computeChurnRisk` pure fn, cursor pagination (no OFFSET), Stripe Connect balance + payouts.

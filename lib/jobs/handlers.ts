@@ -300,6 +300,38 @@ registerHandler("deployment.orphan_archive", async (payload, _ctx) => {
   return { archived: deploymentIds.length };
 });
 
+// ── #42: workflow step executor ──────────────────────────────────────────────
+// Enqueued by workflow-runner-cron for each claimed run.
+// Executes one step slice; the cron tick re-claims for the next step.
+// Idempotent: run_steps checkpoint prevents duplicate side effects on retry.
+registerHandler("workflow_execute", async (payload, _ctx) => {
+  const { runId } = payload as { runId: string };
+  if (!runId) throw new Error("workflow_execute: missing runId");
+
+  const { executeRun } = await import("@/lib/services/workflows");
+  const result = await executeRun(runId);
+
+  console.log(JSON.stringify({
+    event: "workflow_execute.ok",
+    run_id: runId,
+    status: result.status,
+    step_executed: result.stepExecuted,
+    next_step_key: result.nextStepKey,
+  }));
+
+  return result;
+});
+
+// ── #42: workflow schedule trigger ───────────────────────────────────────────
+// Enqueued by workflow-runner-cron; calls enqueueScheduledRuns() for schedule-
+// triggered workflows whose next_run_iso has passed.
+registerHandler("workflow_scheduler", async (_payload, _ctx) => {
+  const { enqueueScheduledRuns } = await import("@/lib/services/workflows");
+  const result = await enqueueScheduledRuns();
+  console.log(JSON.stringify({ event: "workflow_scheduler.ok", enqueued: result.enqueued }));
+  return result;
+});
+
 // Usage settlement — one job per (vendor_org, batch_window), enqueued by usage-settlement-cron.
 // Idempotent: re-runs never double-transfer (Stripe idempotency key per batch).
 registerHandler("settlement", async (payload, _ctx) => {
