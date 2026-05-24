@@ -15,6 +15,8 @@ import {
   getVendorRefundsDisputes,
   getVendorResellerKickback,
 } from "@/lib/services/vendor";
+import { getVendorFunnel } from "@/lib/services/analytics";
+import { getActiveOrg } from "@/lib/services/org";
 import { getVendorCutBps } from "@/lib/stripe/transfers";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -31,6 +33,7 @@ import RefundsFeedCard from "./_components/RefundsFeedCard";
 import CommissionTierCard from "./_components/CommissionTierCard";
 import ResellerKickbackPanel from "./_components/ResellerKickbackPanel";
 import AppsTable from "./_components/AppsTable";
+import VendorFunnelCard from "./_components/VendorFunnelCard";
 
 export const metadata: Metadata = { title: "Vendor Dashboard — [PLATFORM]" };
 
@@ -79,6 +82,9 @@ export default async function VendorDashboard({
   const { app: selectedAppId } = await searchParams;
   const appFilter = selectedAppId || undefined;
 
+  // Resolve active org for funnel scoping (analytics_events are stamped with owner_org_id)
+  const { org: activeOrg } = await getActiveOrg();
+
   // Fetch all data in parallel
   const [
     apps,
@@ -93,6 +99,7 @@ export default async function VendorDashboard({
     dunning,
     refundsFeed,
     kickback,
+    vendorFunnel,
   ] = await Promise.all([
     getVendorApps(user.id),
     getVendorStats(),
@@ -106,6 +113,7 @@ export default async function VendorDashboard({
     getVendorDunning(user.id),
     getVendorRefundsDisputes(user.id),
     getVendorResellerKickback(user.id),
+    getVendorFunnel(activeOrg.id),
   ]);
 
   // Trailing churn for KPI delta
@@ -266,6 +274,15 @@ export default async function VendorDashboard({
       {/* ── 8. Apps table ─────────────────────────────────────────────────── */}
       <Section title={`My apps (${apps.length})`}>
         <AppsTable apps={apps} stats={stats} channelMixByApp={channelMixByApp} />
+      </Section>
+
+      {/* ── 8b. Acquisition funnel (impression → view → checkout → subscribe) ─ */}
+      <Section title="Acquisition funnel — last 90 days">
+        <VendorFunnelCard funnel={vendorFunnel.funnel} byApp={vendorFunnel.by_app} />
+        <p className="text-[11px] text-muted-foreground mt-3">
+          Sourced from analytics_events rollups (DNT/GPC-respecting, no PII).
+          Conversion % is unique-visitor based.
+        </p>
       </Section>
 
       {/* ── 9 & 10. MRR waterfall + cohort retention ───────────────────────── */}

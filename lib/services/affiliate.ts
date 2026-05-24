@@ -275,6 +275,9 @@ export type AffiliateFunnel = {
   currently_active: number;
   active_30d: number;   // created ≥30d ago, still active
   active_90d: number;   // created ≥90d ago, still active
+  // Real top-of-funnel + click→sale economics (from analytics_events rollups)
+  funnel: import("@/lib/analytics/funnel").Funnel;
+  epc: import("@/lib/analytics/funnel").EpcResult;
 };
 
 export type EarningsByAppRow = {
@@ -336,6 +339,8 @@ export async function getAffiliateFunnel(
     currently_active: result.currently_active,
     active_30d: result.active_30d,
     active_90d: result.active_90d,
+    funnel: result.funnel,
+    epc: result.epc,
   };
 }
 

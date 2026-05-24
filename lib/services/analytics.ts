@@ -220,21 +220,33 @@ export async function getOfferFunnel(
     { label: "Subscribed",         event_type: "checkout_complete" },
   ]);
 
-  // Traffic sources from raw events (30d window for granularity)
+  // Traffic sources from raw events (30d window for granularity).
+  // PostgREST does not support `column.count()` aggregate syntax — fetch raw
+  // (referrer, visitor_hash) rows and aggregate in JS via `aggregateSources`.
   const { data: rawRows } = await admin
     .from("analytics_events")
-    .select("referrer, event_count:id.count(), unique_visitors:visitor_hash.count()")
+    .select("referrer, visitor_hash")
     .eq("reseller_id", resellerId)
     .eq("entity_type", "offer")
     .eq("entity_id", offerId)
     .eq("event_type", "storefront_visit")
-    .gte("created_at", new Date(Date.now() - 30 * 86_400_000).toISOString());
+    .gte("created_at", new Date(Date.now() - 30 * 86_400_000).toISOString())
+    .limit(50_000);
 
+  // Group by referrer; unique_visitors = distinct visitor_hash (null counts as a visit)
+  const sourceMap = new Map<string, { count: number; visitors: Set<string> }>();
+  for (const r of (rawRows ?? []) as Array<{ referrer: string | null; visitor_hash: string | null }>) {
+    const key = r.referrer ?? "(direct)";
+    const cur = sourceMap.get(key) ?? { count: 0, visitors: new Set<string>() };
+    cur.count += 1;
+    if (r.visitor_hash) cur.visitors.add(r.visitor_hash);
+    sourceMap.set(key, cur);
+  }
   const traffic_sources = aggregateSources(
-    (rawRows ?? []).map((r: Record<string, unknown>) => ({
-      referrer: r.referrer as string | null,
-      event_count: Number(r.event_count ?? 0),
-      unique_visitors: Number(r.unique_visitors ?? 0),
+    Array.from(sourceMap.entries()).map(([referrer, v]) => ({
+      referrer: referrer === "(direct)" ? null : referrer,
+      event_count: v.count,
+      unique_visitors: v.visitors.size,
     }))
   );
 
@@ -436,16 +448,25 @@ export async function getTrafficSources(
   const admin = createAdminClient() as AnyClient;
   const { data: rawRows } = await admin
     .from("analytics_events")
-    .select("referrer, event_count:id, unique_visitors:visitor_hash")
+    .select("referrer, visitor_hash")
     .eq("entity_id", offerId)
     .eq("event_type", "storefront_visit")
-    .gte("created_at", new Date(Date.now() - days * 86_400_000).toISOString());
+    .gte("created_at", new Date(Date.now() - days * 86_400_000).toISOString())
+    .limit(50_000);
 
+  const sourceMap = new Map<string, { count: number; visitors: Set<string> }>();
+  for (const r of (rawRows ?? []) as Array<{ referrer: string | null; visitor_hash: string | null }>) {
+    const key = r.referrer ?? "(direct)";
+    const cur = sourceMap.get(key) ?? { count: 0, visitors: new Set<string>() };
+    cur.count += 1;
+    if (r.visitor_hash) cur.visitors.add(r.visitor_hash);
+    sourceMap.set(key, cur);
+  }
   return aggregateSources(
-    (rawRows ?? []).map((r: Record<string, unknown>) => ({
-      referrer: r.referrer as string | null,
-      event_count: 1,
-      unique_visitors: r.unique_visitors ? 1 : 0,
+    Array.from(sourceMap.entries()).map(([referrer, v]) => ({
+      referrer: referrer === "(direct)" ? null : referrer,
+      event_count: v.count,
+      unique_visitors: v.visitors.size,
     }))
   );
 }

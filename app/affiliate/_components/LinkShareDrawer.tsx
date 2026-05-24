@@ -16,31 +16,57 @@ type Link = {
 function FunnelMini({ funnel }: { funnel: AffiliateFunnel | null }) {
   if (!funnel) return null;
   const total = funnel.total_attributed;
-  if (total === 0)
-    return <p className="text-[12px] text-muted-foreground">No conversions yet for this link.</p>;
+  const epc = funnel.epc;
+  const clicks = epc?.clicks ?? 0;
+  if (total === 0 && clicks === 0)
+    return <p className="text-[12px] text-muted-foreground">No clicks or conversions yet for this link.</p>;
 
   const pct = (n: number) => (total > 0 ? ((n / total) * 100).toFixed(1) + "%" : "—");
+  const fmtCents = (cents: number | null) =>
+    cents === null
+      ? "—"
+      : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 
   return (
-    <div className="space-y-2">
-      {[
-        { label: "Total paid", value: total },
-        { label: "Active now", value: funnel.currently_active },
-        { label: "Active 30d+", value: funnel.active_30d },
-        { label: "Active 90d+", value: funnel.active_90d },
-      ].map((s) => (
-        <div key={s.label} className="flex items-center gap-2">
-          <span className="w-24 text-[12px] text-muted-foreground shrink-0">{s.label}</span>
-          <div className="flex-1 h-4 bg-muted/40 rounded overflow-hidden">
-            <div
-              className="h-full bg-primary/70 rounded"
-              style={{ width: total > 0 ? `${(s.value / total) * 100}%` : "0%" }}
-            />
-          </div>
-          <span className="w-8 text-[11px] text-right tabular-nums">{s.value}</span>
-          <span className="w-10 text-[11px] text-muted-foreground text-right">{pct(s.value)}</span>
+    <div className="space-y-3">
+      {/* Top-of-funnel economics */}
+      {clicks > 0 && (
+        <div className="flex gap-4 text-[11px] pb-2 border-b border-border">
+          <span className="text-muted-foreground">
+            Clicks: <span className="text-foreground font-semibold">{clicks}</span>
+          </span>
+          <span className="text-muted-foreground">
+            EPC: <span className="text-foreground font-semibold">{fmtCents(epc.epc_cents)}</span>
+          </span>
+          <span className="text-muted-foreground">
+            Click→sale:{" "}
+            <span className="text-foreground font-semibold">
+              {epc.click_to_sale_pct !== null ? `${epc.click_to_sale_pct.toFixed(2)}%` : "—"}
+            </span>
+          </span>
         </div>
-      ))}
+      )}
+
+      <div className="space-y-2">
+        {[
+          { label: "Total paid", value: total },
+          { label: "Active now", value: funnel.currently_active },
+          { label: "Active 30d+", value: funnel.active_30d },
+          { label: "Active 90d+", value: funnel.active_90d },
+        ].map((s) => (
+          <div key={s.label} className="flex items-center gap-2">
+            <span className="w-24 text-[12px] text-muted-foreground shrink-0">{s.label}</span>
+            <div className="flex-1 h-4 bg-muted/40 rounded overflow-hidden">
+              <div
+                className="h-full bg-primary/70 rounded"
+                style={{ width: total > 0 ? `${(s.value / total) * 100}%` : "0%" }}
+              />
+            </div>
+            <span className="w-8 text-[11px] text-right tabular-nums">{s.value}</span>
+            <span className="w-10 text-[11px] text-muted-foreground text-right">{pct(s.value)}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
