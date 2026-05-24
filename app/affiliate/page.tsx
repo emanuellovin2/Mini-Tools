@@ -5,45 +5,90 @@ import { createServerSupabaseClient } from "@/lib/services/supabase-server";
 import { createAdminClient } from "@/lib/services/supabase";
 import {
   getAffiliateLinks,
-  getAffiliateStats,
-  getAffiliateLeaderboardPosition,
   getBadgeProgress,
-  getAllBadges,
+  getAffiliateLeaderboardPosition,
+  getAffiliateFunnel,
+  getAffiliateEarningsByApp,
+  getAffiliatePayouts,
+  getAffiliatePendingEarnings,
+  getAffiliateClawbacks,
+  getAffiliateRetention,
+  getPromotableApps,
 } from "@/lib/services/affiliate";
+import { getAffiliateCommissionBps } from "@/lib/stripe/transfers";
+import { KpiCard } from "@/components/ui/KpiCard";
+import { Tooltip } from "@/components/ui/Tooltip";
+import HeroBanner from "./_components/HeroBanner";
+import FunnelCard from "./_components/FunnelCard";
+import EarningsByAppCard from "./_components/EarningsByAppCard";
+import PromoteAppsSection from "./_components/PromoteAppsSection";
+import LinksTableV2 from "./_components/LinksTableV2";
 import GenerateLinkForm from "./_components/GenerateLinkForm";
-import LinksList from "./_components/LinksList";
 import ProfileEditor from "./_components/ProfileEditor";
+import PayoutHistoryCard from "./_components/PayoutHistoryCard";
+import { PendingEarningsCard, ClawbacksCard } from "./_components/PendingEarningsCard";
+import RetentionCard from "./_components/RetentionCard";
+import type { AffiliateFunnel } from "@/lib/services/affiliate";
 
 export const metadata: Metadata = { title: "Affiliate Dashboard — [PLATFORM]" };
 
-function formatCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+function Section({
+  title,
+  tooltip,
+  children,
+}: {
+  title: string;
+  tooltip?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-surface rounded-[10px] border border-border shadow-[var(--shadow-card)] p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-[13px] font-semibold text-foreground">{title}</h2>
+        {tooltip && (
+          <Tooltip content={tooltip}>
+            <span className="w-4 h-4 rounded-full bg-muted text-muted-foreground text-[10px] flex items-center justify-center cursor-default">
+              ?
+            </span>
+          </Tooltip>
+        )}
+      </div>
+      {children}
+    </div>
+  );
 }
 
-// Next badge the affiliate hasn't earned yet, with how much more is needed.
-function nextBadgeProgress(
-  profile: { affiliate_lifetime_mrr_cents: number; affiliate_active_mrr_cents: number; created_at: string },
-  badgesWithStatus: Array<{ id: string; display_name: string; threshold_kind: string; threshold_value: number; icon_emoji: string | null; earned: boolean }>
-): { badge: typeof badgesWithStatus[0]; remaining: string } | null {
-  const tenureDays = (Date.now() - new Date(profile.created_at).getTime()) / 86_400_000;
-  const unearned = badgesWithStatus.filter((b) => !b.earned);
-  if (unearned.length === 0) return null;
-
-  for (const b of unearned) {
-    let remaining: string | null = null;
-    if (b.threshold_kind === "lifetime_mrr") {
-      const diff = b.threshold_value - profile.affiliate_lifetime_mrr_cents;
-      if (diff > 0) remaining = `$${(diff / 100).toFixed(0)} more lifetime MRR`;
-    } else if (b.threshold_kind === "active_mrr") {
-      const diff = b.threshold_value - profile.affiliate_active_mrr_cents;
-      if (diff > 0) remaining = `$${(diff / 100).toFixed(0)} more active MRR`;
-    } else if (b.threshold_kind === "tenure_days") {
-      const diff = Math.ceil(b.threshold_value - tenureDays);
-      if (diff > 0) remaining = `${diff} more day${diff !== 1 ? "s" : ""} as affiliate`;
-    }
-    if (remaining !== null) return { badge: b, remaining };
-  }
-  return null;
+function BadgeGrid({
+  badges,
+}: {
+  badges: Array<{
+    id: string;
+    display_name: string;
+    description: string;
+    icon_emoji: string | null;
+    earned: boolean;
+    threshold_kind: string;
+    threshold_value: number;
+  }>;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {badges.map((b) => (
+        <Tooltip key={b.id} content={b.description}>
+          <div
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] border transition-opacity ${
+              b.earned
+                ? "bg-primary/10 border-primary/30 text-primary font-medium"
+                : "bg-muted border-border text-muted-foreground opacity-50"
+            }`}
+          >
+            <span>{b.icon_emoji ?? "🏅"}</span>
+            <span>{b.display_name}</span>
+          </div>
+        </Tooltip>
+      ))}
+    </div>
+  );
 }
 
 export default async function AffiliateDashboardPage() {
@@ -55,164 +100,220 @@ export default async function AffiliateDashboardPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, stripe_account_id, charges_enabled, payouts_enabled, display_name, slug, affiliate_bio, affiliate_avatar_url, affiliate_active_mrr_cents, affiliate_lifetime_mrr_cents, created_at")
+    .select(
+      "role, stripe_account_id, charges_enabled, payouts_enabled, display_name, slug, affiliate_bio, affiliate_avatar_url, affiliate_active_mrr_cents, affiliate_lifetime_mrr_cents, created_at"
+    )
     .eq("id", user.id)
     .single();
 
   if (profile?.role !== "affiliate") redirect("/buyer");
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const admin = createAdminClient();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const onboardingDone = profile.charges_enabled && profile.payouts_enabled;
+  const activeMrr = profile.affiliate_active_mrr_cents ?? 0;
+  const lifetimeMrr = profile.affiliate_lifetime_mrr_cents ?? 0;
+  const affiliateCommBps = getAffiliateCommissionBps(activeMrr);
 
-  const [links, stats, position, badgesWithStatus] = await Promise.all([
+  const [
+    links,
+    badgesWithStatus,
+    position,
+    earningsByApp,
+    payouts,
+    pending,
+    clawbacks,
+    retention,
+    promotableApps,
+    funnel,
+  ] = await Promise.all([
     getAffiliateLinks(user.id),
-    getAffiliateStats(),
-    getAffiliateLeaderboardPosition(user.id),
     getBadgeProgress(user.id),
+    getAffiliateLeaderboardPosition(user.id),
+    getAffiliateEarningsByApp(user.id),
+    getAffiliatePayouts(user.id),
+    getAffiliatePendingEarnings(user.id),
+    getAffiliateClawbacks(user.id),
+    getAffiliateRetention(user.id),
+    getPromotableApps(),
+    getAffiliateFunnel(user.id),
   ]);
 
-  // Look up app names for stats rows
-  const appIds = [...new Set(stats.map((s) => s.app_id))];
+  // Per-link funnels
+  const funnelByCode: Record<string, AffiliateFunnel> = {};
+  await Promise.all(
+    links.map(async (link) => {
+      funnelByCode[link.code] = await getAffiliateFunnel(user.id, link.code);
+    })
+  );
+
+  // App names for links table
+  const appIds = [...new Set(links.map((l) => l.app_id).filter(Boolean))] as string[];
   const appNames: Record<string, string> = {};
   if (appIds.length > 0) {
-    const { data: apps } = await admin
-      .from("apps")
-      .select("id, name")
-      .in("id", appIds);
+    const { data: apps } = await admin.from("apps").select("id, name").in("id", appIds);
     for (const app of apps ?? []) appNames[app.id] = app.name;
   }
 
-  const totalActiveSubs = stats.reduce((s, r) => s + Number(r.active_subs), 0);
-  const totalMrrCents = stats.reduce((s, r) => s + Number(r.mrr_gross_cents ?? 0), 0);
+  const totalEarnings = earningsByApp.reduce((s, r) => s + r.earnings_cents, 0);
 
-  const onboardingDone = profile.charges_enabled && profile.payouts_enabled;
+  const nextPayoutDate = (() => {
+    const d = new Date();
+    const daysUntilFriday = (5 - d.getDay() + 7) % 7 || 7;
+    d.setDate(d.getDate() + daysUntilFriday);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  })();
 
-  const profileForBadges = {
-    affiliate_lifetime_mrr_cents: profile.affiliate_lifetime_mrr_cents ?? 0,
-    affiliate_active_mrr_cents: profile.affiliate_active_mrr_cents ?? 0,
-    created_at: profile.created_at,
-  };
-  const nextBadge = nextBadgeProgress(profileForBadges, badgesWithStatus);
-  const earnedBadges = badgesWithStatus.filter((b) => b.earned);
+  function fmtCents(cents: number) {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+    }).format(cents / 100);
+  }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
-      <h1 className="text-lg font-semibold">Affiliate Dashboard</h1>
-
-      {/* Stripe Connect onboarding */}
+    <div className="max-w-6xl mx-auto space-y-5">
+      {/* Stripe Connect banner */}
       {!onboardingDone && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <p className="text-sm font-medium text-amber-800">
-            Complete Stripe Connect onboarding to receive payouts.
+        <div className="flex items-center justify-between gap-4 rounded-[10px] border border-bad/30 bg-bad-soft p-4">
+          <p className="text-[13px] text-bad font-medium">
+            Connect your Stripe account to receive payouts.
           </p>
           <a
             href="/api/affiliate/onboard"
-            className="inline-block mt-2 bg-amber-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-amber-700 transition-colors"
+            className="shrink-0 text-[13px] px-4 py-2 rounded-lg bg-bad text-white hover:bg-bad/90 transition-colors"
           >
-            Connect Stripe Account
+            Connect Stripe
           </a>
         </div>
       )}
 
-      {/* Leaderboard rank + badge progress */}
-      {(position || earnedBadges.length > 0 || nextBadge) && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
-          {position && (
-            <p className="text-sm text-gray-700">
-              You&apos;re{" "}
-              <span className="font-semibold">#{position.active_rank}</span> on the{" "}
-              <Link href="/affiliates/top" className="underline hover:text-blue-600">
-                active MRR leaderboard
-              </Link>
-            </p>
-          )}
-          {earnedBadges.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {earnedBadges.map((b) => (
-                <div
-                  key={b.id}
-                  title={b.description}
-                  className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-full px-2.5 py-0.5 text-xs"
-                >
-                  <span>{b.icon_emoji}</span>
-                  <span className="font-medium text-gray-700">{b.display_name}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {nextBadge && (
-            <p className="text-xs text-gray-700">
-              Next badge:{" "}
-              <span className="font-medium text-gray-700">
-                {nextBadge.badge.icon_emoji} {nextBadge.badge.display_name}
-              </span>{" "}
-              — {nextBadge.remaining} to go
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Aggregate stats */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <p className="text-xs text-gray-700">Active Attributed Subscribers</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{totalActiveSubs}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <p className="text-xs text-gray-700">Estimated MRR Earned</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{formatCents(totalMrrCents)}</p>
-          <p className="text-xs text-gray-700 mt-0.5">Based on active subscriber prices</p>
-        </div>
-      </div>
-
-      {/* Per-app breakdown */}
-      {stats.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-700">By App</h2>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-gray-700 border-b border-gray-100">
-                <th className="text-left px-4 py-2 font-medium">App</th>
-                <th className="text-right px-4 py-2 font-medium">Active Subs</th>
-                <th className="text-right px-4 py-2 font-medium">Est. MRR Earned</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {stats.map((row) => (
-                <tr key={row.app_id}>
-                  <td className="px-4 py-2 text-gray-700">
-                    {appNames[row.app_id] ?? row.app_id}
-                  </td>
-                  <td className="px-4 py-2 text-right text-gray-700">
-                    {Number(row.active_subs)}
-                  </td>
-                  <td className="px-4 py-2 text-right text-gray-700">
-                    {formatCents(Number(row.mrr_gross_cents ?? 0))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Public profile editor */}
-      <ProfileEditor
-        currentSlug={profile.slug ?? null}
-        currentBio={profile.affiliate_bio ?? null}
-        currentAvatarUrl={profile.affiliate_avatar_url ?? null}
+      {/* Hero */}
+      <HeroBanner
+        activeMrrCents={activeMrr}
+        lifetimeMrrCents={lifetimeMrr}
+        rank={position?.active_rank ?? null}
       />
 
-      {/* Generate new link */}
-      <GenerateLinkForm />
-
-      {/* Existing links */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">Your Referral Links</h2>
-        <LinksList links={links} appUrl={appUrl} />
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard
+          label="Est. earnings/mo"
+          value={totalEarnings > 0 ? fmtCents(totalEarnings) : "$0"}
+          sub={`${(affiliateCommBps / 100).toFixed(0)}% commission tier`}
+        />
+        <KpiCard
+          label="Active referrals"
+          value={funnel.currently_active}
+          sub={`${funnel.total_attributed} all-time`}
+        />
+        <KpiCard
+          label="Confirmed pending"
+          value={fmtCents(pending.confirmed_cents)}
+          sub="Past 30d clawback window"
+        />
+        <KpiCard
+          label="Next payout"
+          value={nextPayoutDate}
+          sub={onboardingDone ? "Weekly Friday" : "Connect Stripe first"}
+        />
       </div>
+
+      {/* Conversion funnel */}
+      <Section
+        title="Conversion funnel"
+        tooltip="Tracks subscribers from attribution through long-term retention milestones."
+      >
+        <FunnelCard funnel={funnel} />
+      </Section>
+
+      {/* Earnings per app */}
+      <Section title="Earnings by app">
+        <EarningsByAppCard rows={earningsByApp} />
+        <p className="text-[11px] text-muted-foreground mt-3">
+          Estimated from active subs × commission snapshot × list price. Actual payout uses net amount after Stripe fees.
+        </p>
+      </Section>
+
+      {/* Pending earnings + clawbacks */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <Section title="Pending earnings">
+          <PendingEarningsCard pending={pending} />
+        </Section>
+        <Section title="Refund clawbacks (30d)">
+          <ClawbacksCard clawbacks={clawbacks} />
+        </Section>
+      </div>
+
+      {/* Payout history */}
+      <Section title="Payout history">
+        <PayoutHistoryCard payouts={payouts} />
+      </Section>
+
+      {/* Sticky referrals */}
+      <Section
+        title="Sticky referrals"
+        tooltip="Of subscribers referred 6+ months ago, what % are still active? Measures traffic quality."
+      >
+        <RetentionCard retention={retention} />
+      </Section>
+
+      {/* Apps to promote */}
+      <Section title="Apps to promote">
+        <PromoteAppsSection apps={promotableApps} affiliateCommissionBps={affiliateCommBps} />
+      </Section>
+
+      {/* Referral links */}
+      <Section title="Your referral links">
+        <div className="mb-5">
+          <GenerateLinkForm />
+        </div>
+        <LinksTableV2
+          links={links}
+          appUrl={appUrl}
+          appNames={appNames}
+          funnelByCode={funnelByCode}
+        />
+      </Section>
+
+      {/* Badges */}
+      {badgesWithStatus.length > 0 && (
+        <Section title="Badges">
+          <BadgeGrid badges={badgesWithStatus} />
+          {position && (
+            <p className="text-[12px] text-muted-foreground mt-3">
+              <Link href="/affiliates/top" className="text-primary underline">
+                #{position.active_rank} on active MRR leaderboard
+              </Link>
+              {position.lifetime_rank != null && (
+                <span className="text-muted-foreground"> · #{position.lifetime_rank} lifetime</span>
+              )}
+            </p>
+          )}
+        </Section>
+      )}
+
+      {/* Public profile */}
+      <Section title="Public profile">
+        <ProfileEditor
+          currentSlug={profile.slug ?? null}
+          currentBio={profile.affiliate_bio ?? null}
+          currentAvatarUrl={profile.affiliate_avatar_url ?? null}
+        />
+        {profile.slug ? (
+          <p className="text-[12px] text-muted-foreground mt-3">
+            Live at{" "}
+            <Link href={`/affiliates/${profile.slug}`} className="text-primary underline" target="_blank">
+              /affiliates/{profile.slug}
+            </Link>
+          </p>
+        ) : (
+          <p className="text-[12px] text-muted-foreground mt-3">
+            Set a slug to appear on the leaderboard and get a public profile page.
+          </p>
+        )}
+      </Section>
     </div>
   );
 }
