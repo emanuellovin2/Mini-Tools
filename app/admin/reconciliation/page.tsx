@@ -36,6 +36,8 @@ function DriftTypeBadge({ type }: { type: DriftItem["type"] }) {
     subscription_drift: "bg-orange-50 text-orange-700 border-orange-200",
     missing_transfer: "bg-red-50 text-red-600 border-red-200",
     stale_webhook: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    credit_balance_drift: "bg-purple-50 text-purple-700 border-purple-200",
+    usage_partner_payable_drift: "bg-blue-50 text-blue-700 border-blue-200",
   };
   return (
     <span

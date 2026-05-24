@@ -183,7 +183,43 @@ The anti-poaching boundary (§6, §7) is **not global** — it is governed by **
 ### Why scoped, not a per-subscription toggle
 Provenance is decided **once, by the acquisition context**, not flipped later. The two product lines simply carry different defaults — there is no runtime UI toggle and no dual RLS regime per row beyond reading `acquired_by`. Keep one boundary code path that branches on this column; do not fork the stats views.
 
-> §14 is reserved for "Usage metering & credits" (added when build #40 ships).
+> §14 covers "Usage metering & credits" — built in #40.
+
+## 14. Usage metering & credits
+
+Built in #40. The platform runs a prepaid credit economy for usage-based products (gateway agents, workflows, connectors). The platform never fronts AI provider compute costs.
+
+### Cost-to-owner principle
+- **BYOK** (`usage_meters.cost_mode = 'byok'`): the buyer supplies their own provider key via #41; the provider bills them directly. `provider_cost_cents` on usage events is **informational only**.
+- **Managed** (`cost_mode = 'managed'`): the platform's key is used; the buyer's prepaid credits cover provider cost + platform margin + partner shares. `platform_share_cents` must always ≥ provider cost (enforced by `computeUsageSplit`).
+- In both modes the buyer pays **prepaid credits** — no invoicing risk, no float.
+
+### Money model (per billable unit)
+`billable_cents = vendor_unit_price_cents + platform_fee_cents (+ reseller_markup_cents if reseller-sold)`
+- **Vendor** receives `vendor_share_cents` at settlement (weekly Friday payout via Stripe Connect).
+- **Platform** keeps `platform_share_cents` (net of affiliate commission + reseller platform cut).
+- **Reseller** (if attributed): keeps markup minus 5% platform cut of markup. Reuses Tier 1 reseller bps.
+- **Affiliate** (if attributed): earns `affiliateCommissionBps` of platform fee; grows with consumption.
+- Attribution is inherited from the linked `subscriptions` row (affiliate/reseller mutually exclusive).
+- All amounts are integer cents, margins in bps. `computeUsageSplit` in `lib/usage/split.ts` is the single money-math path; CI fuzz-tests 1 000 iterations confirming sum invariant and non-negative platform share.
+
+### Key tables
+- `usage_meters`: pricing config per product (`flat|tiered|volume` model, tiers array, allowance, minimum commitment). Owned by org.
+- `usage_events`: append-only, monthly-partitioned, financial record — never purged. Cross-partition dedup via app-layer 7-day idempotency key window.
+- `credit_wallets`: one per buyer, `balance_cents ≥ 0`. Locked `FOR UPDATE` during check+draw-down — no double-spend.
+- `credit_transactions`: ledger of `topup|drawdown|refund|grant`.
+
+### Atomic record_usage RPC
+`record_usage(...)` Postgres function: lock wallet → check balance → insert usage_event → draw-down wallet → insert credit_transaction → audit_log, all in one transaction. Returns `{ ok, blocked, remaining_balance_cents }`. Zero/insufficient balance → `blocked=true`, no draw-down.
+
+### Settlement
+Daily `usage-settlement-cron` enqueues one `jobs` row per `(vendor_org, batch_window)` (type `settlement`). Job handler aggregates unsettled events → one Stripe transfer per vendor → marks `settled_at`. Idempotency key per batch — re-runs never double-transfer.
+
+### Accounting
+- **Credit liability** = Σ `credit_wallets.balance_cents` (unspent prepaid, a service liability).
+- **Partner payable** = Σ shares on `usage_events WHERE settled_at IS NULL`.
+- **Recognized platform revenue** = Σ `platform_share_cents WHERE settled_at IS NOT NULL`.
+- `runReconciliation()` checks Σ topups − Σ drawdowns − Σ refunds = Σ wallet balances; flags drift > $1.
 
 ## 15. Organizations & ownership (multi-seat)
 Built in #47. The unit of ownership, billing, and payout is an **organization**, not a bare user — agencies/resellers/vendors are teams.

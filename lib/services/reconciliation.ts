@@ -24,7 +24,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 type AnyClient = SupabaseClient<any>;
 
 export type DriftItem = {
-  type: "subscription_drift" | "missing_transfer" | "stale_webhook";
+  type:
+    | "subscription_drift"
+    | "missing_transfer"
+    | "stale_webhook"
+    | "credit_balance_drift"
+    | "usage_partner_payable_drift";
   stripe_id: string | null;
   db_status?: string;
   stripe_status?: string;
@@ -161,6 +166,55 @@ export async function runReconciliation(): Promise<ReconciliationResult> {
         message: `Webhook event ${wh.id} (${wh.type}) has been in "received" state for >1h — handler may have crashed`,
         detected_at: now,
       });
+    }
+
+    // ------------------------------------------------------------------
+    // 4. Usage credit integrity: Σ topups − Σ drawdowns − Σ refunds === Σ wallet balances
+    //    Flag if drift exceeds $1 (100 cents) to allow for rounding.
+    // ------------------------------------------------------------------
+    try {
+      const anyAdmin2 = admin as AnyClient;
+      const [topupsRes, drawdownsRes, refundsRes, walletsRes] = await Promise.all([
+        anyAdmin2
+          .from("credit_transactions")
+          .select("amount_cents")
+          .eq("type", "topup"),
+        anyAdmin2
+          .from("credit_transactions")
+          .select("amount_cents")
+          .eq("type", "drawdown"),
+        anyAdmin2
+          .from("credit_transactions")
+          .select("amount_cents")
+          .eq("type", "refund"),
+        anyAdmin2.from("credit_wallets").select("balance_cents"),
+      ]);
+
+      const sumTopups = ((topupsRes.data ?? []) as Array<{ amount_cents: number }>).reduce(
+        (s, r) => s + r.amount_cents, 0
+      );
+      const sumDrawdowns = ((drawdownsRes.data ?? []) as Array<{ amount_cents: number }>).reduce(
+        (s, r) => s + r.amount_cents, 0
+      );
+      const sumRefunds = ((refundsRes.data ?? []) as Array<{ amount_cents: number }>).reduce(
+        (s, r) => s + r.amount_cents, 0
+      );
+      const sumBalances = ((walletsRes.data ?? []) as Array<{ balance_cents: number }>).reduce(
+        (s, r) => s + r.balance_cents, 0
+      );
+
+      const expected = sumTopups - sumDrawdowns - sumRefunds;
+      const delta = Math.abs(expected - sumBalances);
+      if (delta > 100) {
+        drift.push({
+          type: "credit_balance_drift",
+          stripe_id: null,
+          message: `Usage credit integrity: expected balance=${expected}¢ (topups-drawdowns-refunds), actual sum of wallets=${sumBalances}¢, delta=${delta}¢`,
+          detected_at: now,
+        });
+      }
+    } catch {
+      // Non-fatal — usage tables may not exist in all environments yet
     }
 
     // ------------------------------------------------------------------

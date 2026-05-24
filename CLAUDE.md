@@ -32,7 +32,8 @@ stripe listen --forward-to localhost:3000/api/webhooks
 
 ## Key file locations
 ```
-lib/services/          # service layer (apps.ts, solutions.ts, vendor.ts, buyer.ts, admin.ts, affiliate.ts, reseller.ts, org.ts, analytics.ts, reconciliation.ts, api-keys.ts, notifications.ts, onboarding.ts, export.ts, vendor-webhooks.ts, agency.ts, deployments.ts, outcomes.ts)
+lib/services/          # service layer (apps.ts, solutions.ts, vendor.ts, buyer.ts, admin.ts, affiliate.ts, reseller.ts, org.ts, analytics.ts, reconciliation.ts, api-keys.ts, notifications.ts, onboarding.ts, export.ts, vendor-webhooks.ts, agency.ts, deployments.ts, outcomes.ts, usage.ts)
+lib/usage/split.ts     # pure priceUnit + computeUsageSplit (flat/tiered/volume, BYOK/managed, fuzz-tested)
 lib/stripe/            # billing.ts (computeTier), transfers.ts, webhook-handlers.ts, connect.ts, products.ts, with-retry.ts
 lib/auth/              # permissions.ts (can()), jwt.ts, roles.ts, sdk.ts
 lib/jobs/              # queue.ts (enqueueJob/claimJobs), handlers.ts
@@ -148,7 +149,7 @@ Repositioning: infrastructure agencies use to build agent-powered businesses for
 - [x] #54 Wave 9 scale invariants — `lib/search/index.ts` interface + Postgres impl, `lib/db/with-replica.ts` + `with-region.ts`, `organizations.region` + `custom_domain`, `settlement_batches`, `idempotency_keys_v2` TTL partitions, tenant noisy-neighbor (pg_cron kill + `tenant_query_stats` mview), `lib/reserved-slugs.ts` single source, `lib/cold-storage/index.ts` stub, `CUSTOM_DOMAINS_ENABLED` flag, ENGINEERING.md §12 + k6 Wave 9 scenarios
 - [x] #50 Agency ↔ Client + Deployments — `organization_type` extended (`agency`|`client`), `client_relationships` (one active agency per client), `solution_deployments` as op unit for non-SaaS (SaaS keeps subscriptions), `getEffectiveConfig` Redis-cached (5min + 30s LRU), RLS trust boundaries. **BLOCKS #51–#53, refits #40–#44.**
 - [x] #51 Outcome metrics seam — `deployment_metrics` (daily partition, append-only), `emitMetric` idempotent, reserved namespaces (`lead.*`/`meeting.*`/`task.*`/`time.*`/`revenue.*`/`cost.*`/`quality.*`), k≥5 anonymity on benchmarks, PII dimension guard, incremental 15-min rollup with watermark.
-- [ ] #40 Usage metering + billing — `usage_events.deployment_id` refit, prepaid `credit_wallets`, settlement cron, `computeUsageSplit` pure fn (vendor/agency/platform/reseller/affiliate). **BLOCKS #41–#44.**
+- [x] #40 Usage metering + billing — `usage_meters`, `usage_events` (monthly partitioned), prepaid `credit_wallets`, `record_usage` RPC (atomic, idempotent), `computeUsageSplit` pure fn + fuzz tests, settlement jobs, usage reconciliation, `subscriptions.acquired_by` + `partner_owner_id` (SPEC §13), SPEC §14.
 - [ ] #41 AI Gateway (BYOK) — per-deployment key routing (vendor/agency/client BYOK), spend caps, encrypted `provider_keys` vault, `/api/gateway/[provider]` metered proxy.
 - [ ] #42 Workflow engine — `workflows/versions/runs/run_steps`, triggers (manual/schedule/webhook), durable tick executor, sellable templates. Runs scoped to deployments.
 - [ ] #43 Connectors — OAuth owned by client_org, delegated to deployment; versioned registry (Gmail/Slack/Sheets/HTTP), encrypted `connector_accounts`.

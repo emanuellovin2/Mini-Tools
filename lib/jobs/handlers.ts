@@ -299,3 +299,17 @@ registerHandler("deployment.orphan_archive", async (payload, _ctx) => {
 
   return { archived: deploymentIds.length };
 });
+
+// Usage settlement — one job per (vendor_org, batch_window), enqueued by usage-settlement-cron.
+// Idempotent: re-runs never double-transfer (Stripe idempotency key per batch).
+registerHandler("settlement", async (payload, _ctx) => {
+  const { vendorOrgId, vendorStripeAccountId, batchId, batchWindowEnd } = payload as {
+    vendorOrgId: string;
+    vendorStripeAccountId: string;
+    batchId: string;
+    batchWindowEnd: string;
+  };
+
+  const { settleUsageBatch } = await import("@/lib/services/usage");
+  return settleUsageBatch({ vendorOrgId, vendorStripeAccountId, batchId, batchWindowEnd });
+});
