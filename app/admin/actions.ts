@@ -6,7 +6,7 @@ import { createServerSupabaseClient } from "@/lib/services/supabase-server";
 import { createAdminClient } from "@/lib/services/supabase";
 import { approveAppWithStripe } from "@/lib/stripe/products";
 import { syncConnectStatus } from "@/lib/stripe/connect";
-import { setVendorCutOverride } from "@/lib/services/admin";
+import { setVendorCutOverride, setFeatureFlag, writeAuditLog } from "@/lib/services/admin";
 import type { Json } from "@/types/supabase";
 
 const uuidParam = z.string().uuid("Invalid ID");
@@ -149,4 +149,101 @@ export async function syncVendorStripeAction(
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Unknown error" };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Feature flags
+// ---------------------------------------------------------------------------
+
+const SetFlagSchema = z.object({
+  name: z.string().min(1).max(100),
+  enabled: z.boolean(),
+});
+
+export async function setFeatureFlagAction(
+  input: z.infer<typeof SetFlagSchema>
+): Promise<ActionResult> {
+  const parsed = SetFlagSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const user = await requireAdmin();
+  if (!user) return { error: "Forbidden" };
+
+  try {
+    await setFeatureFlag(parsed.data.name, parsed.data.enabled, user.id);
+    revalidatePath("/admin");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Suspend user (admin support tool)
+// ---------------------------------------------------------------------------
+
+const SuspendSchema = z.object({
+  userId: z.string().uuid(),
+  reason: z.string().min(10).max(500),
+});
+
+export async function suspendUserAction(
+  input: z.infer<typeof SuspendSchema>
+): Promise<ActionResult> {
+  const parsed = SuspendSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const user = await requireAdmin();
+  if (!user) return { error: "Forbidden" };
+  if (user.id === parsed.data.userId) return { error: "Cannot suspend yourself" };
+
+  const admin = createAdminClient();
+
+  // Ban via Supabase Auth admin API (sets banned_until far in the future)
+  const { error } = await admin.auth.admin.updateUserById(parsed.data.userId, {
+    ban_duration: "876600h", // ~100 years
+  });
+  if (error) return { error: error.message };
+
+  await writeAuditLog({
+    actorId: user.id,
+    actorRole: "admin",
+    action: "user.suspended",
+    entityType: "profiles",
+    entityId: parsed.data.userId,
+    metadata: { reason: parsed.data.reason },
+  });
+
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Force-refund (writes audit trail; Stripe call deferred to support workflow)
+// ---------------------------------------------------------------------------
+
+const ForceRefundSchema = z.object({
+  subscriptionId: z.string().uuid(),
+  reason: z.string().min(10).max(500),
+});
+
+export async function forceRefundAuditAction(
+  input: z.infer<typeof ForceRefundSchema>
+): Promise<ActionResult> {
+  const parsed = ForceRefundSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const user = await requireAdmin();
+  if (!user) return { error: "Forbidden" };
+
+  await writeAuditLog({
+    actorId: user.id,
+    actorRole: "admin",
+    action: "subscription.force_refund_requested",
+    entityType: "subscriptions",
+    entityId: parsed.data.subscriptionId,
+    metadata: { reason: parsed.data.reason },
+  });
+
+  return { success: true, message: "Refund request logged. Process manually via Stripe Dashboard." };
 }

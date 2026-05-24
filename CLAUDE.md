@@ -324,7 +324,7 @@ Wave 6 — docs:
 - [x] #33 Affiliate dashboard v2 (conversion funnel, apps-to-promote catalog, earnings per app, Connect status, payout history, pending earnings, refund clawbacks, sticky referrals, share kit with QR)
 - [x] #34 Reseller dashboard v2 (resellable apps catalog, per-offer analytics drawer, vendor change alerts, Tier 2 WL panel, markup simulator, kickback transparency)
 - [ ] #35 Buyer dashboard v2 (upcoming charges calendar, payment methods, invoice history, per-sub drawer, cancel-with-reason, pause-until date picker, privacy panel)
-- [ ] #36 Admin dashboard v2 (system health, take-rate trend, channel mix, concentration risk, payout obligation, webhook health + DLQ, drill-downs, manual support tools, feature flags, JWT rotation, tax export)
+- [x] #36 Admin dashboard v2 (system health, take-rate trend, channel mix, concentration risk, payout obligation, webhook health + DLQ, drill-downs, manual support tools, feature flags, JWT rotation, tax export)
 - [ ] #37 Marketplace v2 (search, category nav, filters, sort, screenshot cards, featured carousel, SEO)
 - [ ] #38 Fee transparency layer (live calculators in vendor/reseller/affiliate forms, optional buyer breakdown, canonical `/legal/fees` page)
 - [ ] #39 Cross-role: notifications bell + preferences, account settings (2FA/sessions/data export/delete), onboarding checklist per role, CSV export everywhere, vendor webhook subscribers
