@@ -48,7 +48,7 @@ export default function SetupForm({ currentSlug, hasActiveSub }: Props) {
           >
             <div className="flex-1">
               <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden text-sm">
-                <span className="px-3 py-2 bg-gray-50 text-gray-400 border-r border-gray-300 shrink-0">
+                <span className="px-3 py-2 bg-gray-50 text-gray-700 border-r border-gray-300 shrink-0">
                   /r/
                 </span>
                 <input
@@ -62,7 +62,7 @@ export default function SetupForm({ currentSlug, hasActiveSub }: Props) {
                 <p className="text-red-600 text-xs mt-1">{slugErrors.slug[0]}</p>
               )}
               {topError && <p className="text-red-600 text-xs mt-1">{topError}</p>}
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-gray-700 mt-1">
                 Lowercase letters, numbers, hyphens. 3–40 chars.
               </p>
             </div>
@@ -97,10 +97,10 @@ export default function SetupForm({ currentSlug, hasActiveSub }: Props) {
             Start 30-day free trial — $19/mo after trial
           </button>
         ) : (
-          <p className="text-sm text-gray-500">Your reseller subscription is active.</p>
+          <p className="text-sm text-gray-700">Your reseller subscription is active.</p>
         )}
         {!slugSaved && (
-          <p className="text-xs text-gray-400 mt-1">Save your slug first to enable payment.</p>
+          <p className="text-xs text-gray-700 mt-1">Save your slug first to enable payment.</p>
         )}
       </div>
     </div>

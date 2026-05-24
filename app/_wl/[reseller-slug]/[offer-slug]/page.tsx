@@ -61,7 +61,7 @@ export default async function WLStorefrontPage({ params }: { params: Promise<Par
             <div>
               <h1 className="text-xl font-bold">{app.name as string}</h1>
               {!!app.category && (
-                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
                   {app.category as string}
                 </span>
               )}
@@ -77,16 +77,16 @@ export default async function WLStorefrontPage({ params }: { params: Promise<Par
           <div className="mb-6">
             <p className="text-3xl font-bold">
               {formatCents(sellPrice)}
-              <span className="text-base font-normal text-gray-500">/mo</span>
+              <span className="text-base font-normal text-gray-700">/mo</span>
             </p>
           </div>
 
           <SubscribeButton offerId={offerId} />
 
-          <p className="text-xs text-center text-gray-400 mt-4">
+          <p className="text-xs text-center text-gray-700 mt-4">
             By subscribing you agree to our Terms of Service. Cancel anytime.
           </p>
-          <p className="text-xs text-center text-gray-300 mt-2">Hosted by [PLATFORM]</p>
+          <p className="text-xs text-center text-gray-600 mt-2">Hosted by [PLATFORM]</p>
         </div>
       </div>
     </main>

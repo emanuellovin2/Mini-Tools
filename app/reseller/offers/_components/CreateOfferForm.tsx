@@ -64,7 +64,7 @@ export default function CreateOfferForm({ apps }: { apps: App[] }) {
           <p className="text-red-600 text-xs mt-1">{fieldErrors.app_id[0]}</p>
         )}
         {selectedApp && (
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-gray-700 mt-1">
             Direct price: ${(selectedApp.price_cents / 100).toFixed(2)}/mo · Vendor floor: $
             {selectedApp.min_price_cents !== null
               ? formatCents(selectedApp.min_price_cents)
@@ -92,7 +92,7 @@ export default function CreateOfferForm({ apps }: { apps: App[] }) {
         {fieldErrors?.sell_price_dollars && (
           <p className="text-red-600 text-xs mt-1">{fieldErrors.sell_price_dollars[0]}</p>
         )}
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="text-xs text-gray-700 mt-1">
           Must be above the vendor floor. Platform takes 5%; you keep the rest of the markup.
         </p>
       </div>
@@ -100,7 +100,7 @@ export default function CreateOfferForm({ apps }: { apps: App[] }) {
       <div>
         <label className="block text-sm font-medium mb-1">Offer slug</label>
         <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden text-sm">
-          <span className="px-3 py-2 bg-gray-50 text-gray-400 border-r border-gray-300 shrink-0">
+          <span className="px-3 py-2 bg-gray-50 text-gray-700 border-r border-gray-300 shrink-0">
             /r/your-store/
           </span>
           <input

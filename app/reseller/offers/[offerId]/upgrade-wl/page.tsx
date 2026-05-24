@@ -49,7 +49,7 @@ export default async function UpgradeWLPage({
     <main className="min-h-screen bg-gray-50">
       <div className="max-w-xl mx-auto px-4 py-10">
         <div className="flex items-center gap-3 mb-6">
-          <a href="/reseller/offers" className="text-sm text-gray-500 hover:text-gray-700">
+          <a href="/reseller/offers" className="text-sm text-gray-700 hover:text-gray-900">
             ← My Offers
           </a>
           <h1 className="text-2xl font-bold">Upgrade to White-Label Tier 2</h1>
@@ -70,7 +70,7 @@ export default async function UpgradeWLPage({
           <div className="bg-white rounded-2xl border border-gray-200 p-6">
             <div className="mb-4">
               <h2 className="font-semibold">{offer.apps?.name}</h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-gray-700 mt-1">
                 Tier 2 costs <strong>$29/mo</strong> per offer. You get: subdomain storefront
                 (<code className="text-xs bg-gray-100 px-1 rounded">your-slug.platform.com</code>), custom logo
                 + brand color in the storefront header, and branded email receipts.

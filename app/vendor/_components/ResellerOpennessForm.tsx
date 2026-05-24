@@ -53,7 +53,7 @@ export default function ResellerOpennessForm({ current }: { current: Openness })
           />
           <span>
             <span className="block text-sm font-medium">{opt.label}</span>
-            <span className="block text-xs text-gray-500 mt-0.5">{opt.desc}</span>
+            <span className="block text-xs text-gray-700 mt-0.5">{opt.desc}</span>
           </span>
         </label>
       ))}
@@ -64,7 +64,7 @@ export default function ResellerOpennessForm({ current }: { current: Openness })
             : "Invalid selection"}
         </p>
       )}
-      {pending && <p className="text-xs text-gray-400">Saving…</p>}
+      {pending && <p className="text-xs text-gray-700">Saving…</p>}
     </form>
   );
 }

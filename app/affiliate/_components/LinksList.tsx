@@ -14,7 +14,7 @@ export default function LinksList({ links, appUrl }: { links: Link[]; appUrl: st
 
   if (links.length === 0) {
     return (
-      <p className="text-sm text-gray-400 text-center py-8">
+      <p className="text-sm text-gray-700 text-center py-8">
         No links yet — generate your first referral link above.
       </p>
     );
@@ -28,7 +28,7 @@ export default function LinksList({ links, appUrl }: { links: Link[]; appUrl: st
           <li key={link.id} className="py-3 flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="font-mono text-xs text-gray-700 truncate">{url}</p>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-gray-700 mt-0.5">
                 {link.app_id ? `App: ${link.app_id}` : "Generic (all apps)"}
                 {" · "}
                 {new Date(link.created_at).toLocaleDateString()}

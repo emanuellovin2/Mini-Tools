@@ -24,7 +24,7 @@ export default function MRRWaterfallChart({
 }) {
   if (data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-48 text-sm text-gray-400">
+      <div className="flex items-center justify-center h-48 text-sm text-gray-700">
         No revenue data yet
       </div>
     );

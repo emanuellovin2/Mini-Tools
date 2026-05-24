@@ -63,7 +63,7 @@ export default async function AffiliateProfilePage({
             className="w-16 h-16 rounded-full object-cover border border-gray-200"
           />
         ) : (
-          <div className="w-16 h-16 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-2xl font-bold text-gray-400">
+          <div className="w-16 h-16 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-2xl font-bold text-gray-700">
             {(profile.display_name ?? slug).charAt(0).toUpperCase()}
           </div>
         )}
@@ -71,7 +71,7 @@ export default async function AffiliateProfilePage({
           <h1 className="text-xl font-bold text-gray-900">
             {profile.display_name ?? slug}
           </h1>
-          <p className="text-sm text-gray-400">@{slug}</p>
+          <p className="text-sm text-gray-700">@{slug}</p>
           {profile.affiliate_bio && (
             <p className="text-sm text-gray-600 mt-1">{profile.affiliate_bio}</p>
           )}
@@ -81,19 +81,19 @@ export default async function AffiliateProfilePage({
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
-          <p className="text-xs text-gray-400">Active MRR</p>
+          <p className="text-xs text-gray-700">Active MRR</p>
           <p className="text-lg font-bold text-gray-900 mt-1">
             {roundMrr(profile.affiliate_active_mrr_cents)}
           </p>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
-          <p className="text-xs text-gray-400">Lifetime MRR</p>
+          <p className="text-xs text-gray-700">Lifetime MRR</p>
           <p className="text-lg font-bold text-gray-900 mt-1">
             {roundMrr(profile.affiliate_lifetime_mrr_cents)}
           </p>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
-          <p className="text-xs text-gray-400">Tenure</p>
+          <p className="text-xs text-gray-700">Tenure</p>
           <p className="text-lg font-bold text-gray-900 mt-1">
             {tenureLabel(profile.created_at)}
           </p>
@@ -127,14 +127,14 @@ export default async function AffiliateProfilePage({
             {apps.map((app) => (
               <div key={app.app_id} className="flex items-center justify-between text-sm">
                 <span className="text-gray-700">{app.app_name}</span>
-                <span className="text-gray-400">{app.active_subs} active sub{app.active_subs !== 1 ? "s" : ""}</span>
+                <span className="text-gray-700">{app.active_subs} active sub{app.active_subs !== 1 ? "s" : ""}</span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <p className="text-xs text-gray-400 text-center">
+      <p className="text-xs text-gray-700 text-center">
         MRR figures are rounded for privacy. No buyer data is shown.
       </p>
     </main>

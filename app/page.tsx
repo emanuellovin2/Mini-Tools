@@ -4,7 +4,7 @@ export default function RootPage() {
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-8 text-center bg-white">
       <h1 className="text-4xl font-bold tracking-tight mb-3">[PLATFORM]</h1>
-      <p className="text-lg text-gray-500 mb-8 max-w-md">
+      <p className="text-lg text-gray-700 mb-8 max-w-md">
         Discover and subscribe to independent SaaS tools — billing, access, and
         distribution all in one place.
       </p>

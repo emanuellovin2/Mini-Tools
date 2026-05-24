@@ -11,7 +11,7 @@ function formatCents(cents: number) {
 export default function LTVCard({ ltv }: { ltv: LTVResult }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-5">
-      <p className="text-xs text-gray-500 mb-1">Est. LTV</p>
+      <p className="text-xs text-gray-700 mb-1">Est. LTV</p>
       <p className="text-3xl font-bold tracking-tight">
         {ltv.avg_ltv_cents > 0 ? formatCents(ltv.avg_ltv_cents) : "—"}
       </p>
@@ -20,7 +20,7 @@ export default function LTVCard({ ltv }: { ltv: LTVResult }) {
           ⚠ Less than 6 months of data — estimate may be unreliable
         </p>
       )}
-      <p className="text-xs text-gray-400 mt-3">
+      <p className="text-xs text-gray-700 mt-3">
         Method: {ltv.method}
       </p>
     </div>

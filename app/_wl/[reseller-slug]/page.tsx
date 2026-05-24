@@ -31,7 +31,7 @@ export default async function WLStorefrontLandingPage({ params }: { params: Prom
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold mb-6">Available Apps</h1>
         {offers.length === 0 ? (
-          <p className="text-sm text-gray-500">No apps currently available.</p>
+          <p className="text-sm text-gray-700">No apps currently available.</p>
         ) : (
           <div className="space-y-4">
             {offers.map((offer) => {
@@ -58,14 +58,14 @@ export default async function WLStorefrontLandingPage({ params }: { params: Prom
                   )}
                   <div>
                     <p className="font-semibold">{displayName ?? (app?.name as string)}</p>
-                    <p className="text-sm text-gray-500">{formatCents(sellPrice)}/mo</p>
+                    <p className="text-sm text-gray-700">{formatCents(sellPrice)}/mo</p>
                   </div>
                 </a>
               );
             })}
           </div>
         )}
-        <p className="text-xs text-gray-400 mt-8">Hosted by [PLATFORM]</p>
+        <p className="text-xs text-gray-700 mt-8">Hosted by [PLATFORM]</p>
       </div>
     </main>
   );

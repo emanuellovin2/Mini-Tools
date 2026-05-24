@@ -24,7 +24,7 @@ export default function ApproveRejectButtons({
     });
   }
 
-  if (msg) return <span className="text-xs text-gray-500">{msg}</span>;
+  if (msg) return <span className="text-xs text-gray-700">{msg}</span>;
 
   return (
     <div className="flex items-center gap-2">

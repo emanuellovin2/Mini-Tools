@@ -28,7 +28,7 @@ export default function UpgradeWLForm({ offerId }: { offerId: string }) {
           required
           className="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-gray-200 file:text-xs file:bg-white hover:file:bg-gray-50"
         />
-        <p className="text-xs text-gray-400 mt-1">PNG, JPG, or WebP · max 1 MB</p>
+        <p className="text-xs text-gray-700 mt-1">PNG, JPG, or WebP · max 1 MB</p>
       </div>
 
       <div>
@@ -40,7 +40,7 @@ export default function UpgradeWLForm({ offerId }: { offerId: string }) {
             defaultValue="#6366f1"
             className="h-9 w-16 rounded border border-gray-200 cursor-pointer"
           />
-          <span className="text-xs text-gray-400">Applied to storefront header and emails</span>
+          <span className="text-xs text-gray-700">Applied to storefront header and emails</span>
         </div>
       </div>
 
@@ -54,7 +54,7 @@ export default function UpgradeWLForm({ offerId }: { offerId: string }) {
           required
           className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
         />
-        <p className="text-xs text-gray-400 mt-1">Shown in storefront header and email receipts</p>
+        <p className="text-xs text-gray-700 mt-1">Shown in storefront header and email receipts</p>
       </div>
 
       {"error" in (state ?? {}) && (

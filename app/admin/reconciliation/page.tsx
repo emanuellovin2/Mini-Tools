@@ -87,26 +87,26 @@ export default async function ReconciliationPage({ searchParams }: Props) {
         <div>
           <Link
             href="/admin"
-            className="text-xs text-gray-400 hover:text-gray-600 mb-1 inline-block"
+            className="text-xs text-gray-700 hover:text-gray-900 mb-1 inline-block"
           >
             ← Admin dashboard
           </Link>
           <h1 className="text-2xl font-bold">Stripe ↔ DB Reconciliation</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-700 mt-1">
             Daily job (02:00 UTC) comparing Stripe state to the database.
           </p>
         </div>
       </div>
 
       {runs.length === 0 ? (
-        <div className="border border-gray-200 rounded-xl p-8 text-center text-gray-400">
+        <div className="border border-gray-200 rounded-xl p-8 text-center text-gray-700">
           No reconciliation runs yet. The cron runs daily at 02:00 UTC.
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Run list */}
           <div className="lg:col-span-1 space-y-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-700 mb-3">
               Runs ({total})
             </h2>
             {runs.map((run) => (
@@ -127,7 +127,7 @@ export default async function ReconciliationPage({ searchParams }: Props) {
                     </span>
                   )}
                 </div>
-                <div className="text-xs text-gray-400">{dateShort(run.run_at)}</div>
+                <div className="text-xs text-gray-700">{dateShort(run.run_at)}</div>
               </Link>
             ))}
 
@@ -137,18 +137,18 @@ export default async function ReconciliationPage({ searchParams }: Props) {
                 {page > 1 && (
                   <Link
                     href={`/admin/reconciliation?page=${page - 1}`}
-                    className="text-xs text-gray-500 hover:text-gray-700"
+                    className="text-xs text-gray-700 hover:text-gray-900"
                   >
                     ← prev
                   </Link>
                 )}
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-gray-700">
                   {page}/{totalPages}
                 </span>
                 {page < totalPages && (
                   <Link
                     href={`/admin/reconciliation?page=${page + 1}`}
-                    className="text-xs text-gray-500 hover:text-gray-700"
+                    className="text-xs text-gray-700 hover:text-gray-900"
                   >
                     next →
                   </Link>
@@ -164,11 +164,11 @@ export default async function ReconciliationPage({ searchParams }: Props) {
                 <div className="flex items-center justify-between">
                   <div>
                     <StatusBadge status={expandedRun.status} />
-                    <span className="ml-2 text-sm text-gray-500">
+                    <span className="ml-2 text-sm text-gray-700">
                       {dateShort(expandedRun.run_at)}
                     </span>
                   </div>
-                  <span className="text-xs text-gray-400 font-mono">
+                  <span className="text-xs text-gray-700 font-mono">
                     {expandedRun.id.slice(0, 8)}…
                   </span>
                 </div>
@@ -187,7 +187,7 @@ export default async function ReconciliationPage({ searchParams }: Props) {
 
                 {expandedRun.drift_items.length > 0 && (
                   <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-700 mb-3">
                       Drift items ({expandedRun.drift_count})
                     </h3>
                     <ul className="space-y-3">
@@ -199,7 +199,7 @@ export default async function ReconciliationPage({ searchParams }: Props) {
                           <div className="flex items-center gap-2">
                             <DriftTypeBadge type={item.type} />
                             {item.db_status && item.stripe_status && (
-                              <span className="text-xs text-gray-500">
+                              <span className="text-xs text-gray-700">
                                 DB: <strong>{item.db_status}</strong> → Stripe:{" "}
                                 <strong>{item.stripe_status}</strong>
                               </span>
@@ -207,7 +207,7 @@ export default async function ReconciliationPage({ searchParams }: Props) {
                           </div>
                           <p className="text-gray-700">{item.message}</p>
                           {item.stripe_id && (
-                            <p className="text-xs text-gray-400 font-mono">
+                            <p className="text-xs text-gray-700 font-mono">
                               {item.stripe_id}
                             </p>
                           )}
@@ -218,7 +218,7 @@ export default async function ReconciliationPage({ searchParams }: Props) {
                 )}
               </div>
             ) : (
-              <div className="border border-gray-200 rounded-xl p-8 text-center text-gray-400 text-sm">
+              <div className="border border-gray-200 rounded-xl p-8 text-center text-gray-700 text-sm">
                 Select a run to see details.
               </div>
             )}

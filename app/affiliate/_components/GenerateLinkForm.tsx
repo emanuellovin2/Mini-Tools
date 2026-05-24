@@ -37,7 +37,7 @@ export default function GenerateLinkForm() {
       <h2 className="text-sm font-semibold text-gray-700 mb-4">Generate Referral Link</h2>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">
+          <label className="block text-xs text-gray-700 mb-1">
             App ID (optional — leave blank for a generic link)
           </label>
           <input

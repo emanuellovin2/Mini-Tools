@@ -25,7 +25,7 @@ export default function SyncStripeButton({ vendorId }: { vendorId: string }) {
       >
         {isPending ? "Syncing…" : "Sync Stripe"}
       </button>
-      {msg && <span className="text-xs text-gray-500">{msg}</span>}
+      {msg && <span className="text-xs text-gray-700">{msg}</span>}
     </div>
   );
 }

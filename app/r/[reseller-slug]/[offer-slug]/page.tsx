@@ -89,7 +89,7 @@ export default async function StorefrontPage({
             <div>
               <h1 className="text-xl font-bold">{app.name}</h1>
               {app.category && (
-                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
                   {app.category}
                 </span>
               )}
@@ -105,9 +105,9 @@ export default async function StorefrontPage({
           <div className="mb-6">
             <p className="text-3xl font-bold">
               {formatCents(offer.sell_price_cents)}
-              <span className="text-base font-normal text-gray-500">/mo</span>
+              <span className="text-base font-normal text-gray-700">/mo</span>
             </p>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-gray-700 mt-1">
               Sold by {wlDisplayName ?? (resellerRecord.display_name as string | null) ?? resellerSlug} · Powered by{" "}
               <a href="/marketplace" className="underline">
                 [PLATFORM]
@@ -117,7 +117,7 @@ export default async function StorefrontPage({
 
           <SubscribeButton offerId={offer.id} />
 
-          <p className="text-xs text-center text-gray-400 mt-4">
+          <p className="text-xs text-center text-gray-700 mt-4">
             By subscribing you agree to our Terms of Service. Cancel anytime.
           </p>
         </div>

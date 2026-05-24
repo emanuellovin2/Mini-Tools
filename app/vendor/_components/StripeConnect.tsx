@@ -57,7 +57,7 @@ export default function StripeConnect({ stripeAccountId, chargesEnabled, payouts
       {currentCharges && (
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full shrink-0 ${currentPayouts ? "bg-green-500" : "bg-yellow-400"}`} />
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-700">
             {currentPayouts ? "Payouts enabled" : "Payouts pending"}
           </span>
         </div>

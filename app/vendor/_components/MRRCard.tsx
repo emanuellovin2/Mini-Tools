@@ -22,7 +22,7 @@ export default function MRRCard({
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-5">
-      <p className="text-xs text-gray-500 mb-1">MRR</p>
+      <p className="text-xs text-gray-700 mb-1">MRR</p>
       <p className="text-3xl font-bold tracking-tight">
         {formatCents(snapshot.mrr_cents)}
       </p>
@@ -38,11 +38,11 @@ export default function MRRCard({
       )}
       <div className="mt-4 grid grid-cols-2 gap-3 text-center">
         <div className="bg-gray-50 rounded-xl p-3">
-          <p className="text-xs text-gray-500">Active subs</p>
+          <p className="text-xs text-gray-700">Active subs</p>
           <p className="text-xl font-semibold mt-0.5">{snapshot.active_subs}</p>
         </div>
         <div className="bg-gray-50 rounded-xl p-3">
-          <p className="text-xs text-gray-500">ARPU</p>
+          <p className="text-xs text-gray-700">ARPU</p>
           <p className="text-xl font-semibold mt-0.5">
             {formatCents(snapshot.arpu_cents)}
           </p>

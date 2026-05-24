@@ -45,7 +45,7 @@ export default function AffiliateCommissionForm({ appId, currentBps }: Props) {
           placeholder="e.g. 20"
           className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-black"
         />
-        <span className="text-xs text-gray-500">%</span>
+        <span className="text-xs text-gray-700">%</span>
         <button
           type="submit"
           disabled={pending || !valid}
@@ -59,7 +59,7 @@ export default function AffiliateCommissionForm({ appId, currentBps }: Props) {
             name="affiliate_commission_bps"
             value=""
             disabled={pending}
-            className="text-xs text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+            className="text-xs text-gray-700 hover:text-red-500 transition-colors disabled:opacity-50"
           >
             Disable
           </button>
@@ -67,7 +67,7 @@ export default function AffiliateCommissionForm({ appId, currentBps }: Props) {
       </div>
 
       {affiliatePct > 0 && valid && (
-        <p className="text-xs text-gray-500 mt-1.5">
+        <p className="text-xs text-gray-700 mt-1.5">
           You pay{" "}
           <strong className="text-gray-700">{affiliatePct}%</strong> to affiliate +{" "}
           <strong className="text-gray-700">5%</strong> platform ={" "}

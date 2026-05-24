@@ -68,7 +68,7 @@ function OverrideModal({
         <h3 className="font-semibold text-lg mb-1">
           Set commission override
         </h3>
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-gray-700 mb-4">
           Vendor:{" "}
           <span className="font-medium text-gray-700">
             {vendor.display_name ?? vendor.vendor_id.slice(0, 8)}
@@ -91,7 +91,7 @@ function OverrideModal({
               onChange={(e) => setBpsInput(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
             />
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-gray-700 mt-1">
               0 = free; 1200 = 12% (Tier 1 default); max 5000 (50%)
             </p>
           </div>
@@ -145,7 +145,7 @@ export default function VendorCutOverrideTable({
 
   if (vendors.length === 0) {
     return (
-      <p className="text-sm text-gray-400 border border-dashed border-gray-200 rounded-xl p-6 text-center">
+      <p className="text-sm text-gray-700 border border-dashed border-gray-200 rounded-xl p-6 text-center">
         No vendors yet.
       </p>
     );
@@ -160,11 +160,11 @@ export default function VendorCutOverrideTable({
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left">
             <tr>
-              <th className="px-4 py-2 font-medium text-gray-500">Vendor</th>
-              <th className="px-4 py-2 font-medium text-gray-500">Auto-tier cut</th>
-              <th className="px-4 py-2 font-medium text-gray-500">Override</th>
-              <th className="px-4 py-2 font-medium text-gray-500">Effective</th>
-              <th className="px-4 py-2 font-medium text-gray-500">Action</th>
+              <th className="px-4 py-2 font-medium text-gray-700">Vendor</th>
+              <th className="px-4 py-2 font-medium text-gray-700">Auto-tier cut</th>
+              <th className="px-4 py-2 font-medium text-gray-700">Override</th>
+              <th className="px-4 py-2 font-medium text-gray-700">Effective</th>
+              <th className="px-4 py-2 font-medium text-gray-700">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -173,9 +173,9 @@ export default function VendorCutOverrideTable({
                 <td className="px-4 py-3 font-medium">
                   {v.display_name ?? v.vendor_id.slice(0, 8)}
                 </td>
-                <td className="px-4 py-3 text-gray-500">
+                <td className="px-4 py-3 text-gray-700">
                   {bpsToPercent(v.auto_tier_cut_bps)}{" "}
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-gray-700">
                     ({tierLabel(v.auto_tier_cut_bps)})
                   </span>
                 </td>
@@ -185,7 +185,7 @@ export default function VendorCutOverrideTable({
                       {bpsToPercent(v.cut_bps_override)}
                     </span>
                   ) : (
-                    <span className="text-gray-300">—</span>
+                    <span className="text-gray-600">—</span>
                   )}
                 </td>
                 <td className="px-4 py-3 font-semibold">

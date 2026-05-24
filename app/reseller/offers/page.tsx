@@ -18,7 +18,7 @@ function formatCents(cents: number) {
 
 const OFFER_STATUS_BADGE: Record<string, string> = {
   active: "bg-green-100 text-green-700",
-  draft: "bg-gray-100 text-gray-500",
+  draft: "bg-gray-100 text-gray-700",
   paused: "bg-yellow-100 text-yellow-700",
 };
 
@@ -50,7 +50,7 @@ export default async function OffersPage() {
     <main className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 py-10">
         <div className="flex items-center gap-3 mb-6">
-          <a href="/reseller" className="text-sm text-gray-500 hover:text-gray-700">
+          <a href="/reseller" className="text-sm text-gray-700 hover:text-gray-900">
             ← Dashboard
           </a>
           <h1 className="text-2xl font-bold">My Offers</h1>
@@ -68,7 +68,7 @@ export default async function OffersPage() {
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
           <h2 className="font-semibold mb-4">Existing Offers ({offers.length})</h2>
           {offers.length === 0 ? (
-            <p className="text-sm text-gray-400">No offers yet. Create one below.</p>
+            <p className="text-sm text-gray-700">No offers yet. Create one below.</p>
           ) : (
             <div className="space-y-3">
               {offers.map((offer: ResellerOfferRow) => {
@@ -81,7 +81,7 @@ export default async function OffersPage() {
                   >
                     <div>
                       <p className="font-medium text-sm">{app?.name ?? "—"}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="text-xs text-gray-700 mt-0.5">
                         {formatCents(offer.sell_price_cents)}/mo · floor{" "}
                         {formatCents(offer.vendor_floor_snapshot_cents)} · slug: /{offer.slug}
                       </p>
@@ -124,7 +124,7 @@ export default async function OffersPage() {
         <div className="bg-white rounded-2xl border border-gray-200 p-6">
           <h2 className="font-semibold mb-4">Create New Offer</h2>
           {resellableApps.length === 0 ? (
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-gray-700">
               No resellable apps available. Vendors must opt in by setting a minimum price.
             </p>
           ) : (

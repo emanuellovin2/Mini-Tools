@@ -32,7 +32,7 @@ export default async function LeaderboardPage({
     <main className="max-w-3xl mx-auto px-4 py-10 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Affiliate Leaderboard</h1>
-        <p className="text-sm text-gray-500 mt-1">Top affiliates by revenue generated. MRR is rounded for privacy.</p>
+        <p className="text-sm text-gray-700 mt-1">Top affiliates by revenue generated. MRR is rounded for privacy.</p>
       </div>
 
       <div className="flex gap-2 text-sm">
@@ -59,12 +59,12 @@ export default async function LeaderboardPage({
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-sm text-gray-500">No affiliates on the leaderboard yet.</p>
+        <p className="text-sm text-gray-700">No affiliates on the leaderboard yet.</p>
       ) : (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-xs text-gray-400 border-b border-gray-100 bg-gray-50">
+              <tr className="text-xs text-gray-700 border-b border-gray-100 bg-gray-50">
                 <th className="text-left px-4 py-3 font-medium">#</th>
                 <th className="text-left px-4 py-3 font-medium">Affiliate</th>
                 <th className="text-right px-4 py-3 font-medium">Active MRR</th>
@@ -76,7 +76,7 @@ export default async function LeaderboardPage({
                 const rank = sort === "active" ? row.active_rank : row.lifetime_rank;
                 return (
                   <tr key={row.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-gray-400 font-mono text-xs">{rank}</td>
+                    <td className="px-4 py-3 text-gray-700 font-mono text-xs">{rank}</td>
                     <td className="px-4 py-3">
                       <Link
                         href={`/affiliates/${row.slug}`}
@@ -99,7 +99,7 @@ export default async function LeaderboardPage({
         </div>
       )}
 
-      <p className="text-xs text-gray-400 text-center">
+      <p className="text-xs text-gray-700 text-center">
         Only affiliates who have opted into a public profile appear here.{" "}
         <Link href="/affiliate" className="underline">Manage your profile</Link>
       </p>

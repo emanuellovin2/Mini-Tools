@@ -11,7 +11,7 @@ export default function ChurnRateCard({
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-5">
-      <p className="text-xs text-gray-500 mb-1">Monthly churn</p>
+      <p className="text-xs text-gray-700 mb-1">Monthly churn</p>
       <p className="text-3xl font-bold tracking-tight">{fmt(churnBps)}</p>
       <p
         className={`text-xs mt-1 font-medium ${
@@ -20,7 +20,7 @@ export default function ChurnRateCard({
       >
         {delta <= 0 ? "↓" : "↑"} vs 3-month avg ({fmt(trailing3Bps)})
       </p>
-      <p className="text-xs text-gray-400 mt-3">Logo churn (by subscriber count)</p>
+      <p className="text-xs text-gray-700 mt-3">Logo churn (by subscriber count)</p>
     </div>
   );
 }
