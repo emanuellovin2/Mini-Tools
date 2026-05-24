@@ -20,10 +20,10 @@ A connector call just **moves data** between the customer's tools and a workflow
 ## Sections to build
 
 ### 1. Connector registry
-A static, code-defined registry (`lib/connectors/registry.ts`): each connector declares `id`, `name`, `auth` (`oauth2|api_key|none`), `actions[]` (e.g. `gmail.send`, `sheets.appendRow`, `slack.postMessage`), `triggers[]` (e.g. `gmail.newEmail`), and a JSON schema for each action's input. Start with: **Gmail, Slack, Google Sheets, HTTP/Webhook** (HTTP needs no auth — ship it first as the universal escape hatch).
+A static, code-defined registry (`lib/connectors/registry.ts`): each connector declares `id`, `version` (int — **contract version, so a schema change to an action doesn't silently break existing workflows**; runs pin the version they were built against, like `workflow_versions`), `name`, `auth` (`oauth2|api_key|none`), `actions[]` (e.g. `gmail.send`, `sheets.appendRow`, `slack.postMessage`), `triggers[]` (e.g. `gmail.newEmail`), and a Zod/JSON schema for each action's input. Start with: **Gmail, Slack, Google Sheets, HTTP/Webhook** (HTTP needs no auth — ship it first as the universal escape hatch).
 
 ### 2. Credential vault (`connector_accounts`)
-`id`, `owner_id` → profiles, `connector_id` (text), `label`, `ciphertext` (bytea — AES-GCM, reuse #41 `lib/gateway/crypto.ts`), `scopes` (text[]), `expires_at` (nullable), `refresh_ciphertext` (nullable), `created_at`. Tokens encrypted at rest; decrypt only server-side at execution. RLS: owner-only metadata; ciphertext service-role only.
+`id`, `owner_id` → profiles, `connector_id` (text), `label`, `ciphertext` (bytea), `dek_wrapped` (bytea), `key_version` (int), `scopes` (text[]), `expires_at` (nullable), `refresh_ciphertext` (nullable + own wrapped DEK), `created_at`. **Reuse the envelope-encryption module from #41 (`encryptSecret`/`decryptSecret`)** — same per-record DEK + versioned master key, so master-key rotation covers connector tokens too with no re-encryption. Tokens encrypted at rest; decrypt only server-side at execution. RLS: owner-only metadata; ciphertext/`dek_wrapped` service-role only.
 
 ### 3. OAuth flows
 `GET /api/connectors/[id]/connect` → provider OAuth consent; callback `GET /api/connectors/[id]/callback` → exchange code, encrypt + store tokens. Auto-refresh expired tokens before a step runs (refresh token → new access token → re-encrypt). State param signed to prevent CSRF.

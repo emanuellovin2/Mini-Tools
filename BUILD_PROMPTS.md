@@ -83,3 +83,4 @@ The pivot from "billing rail" to "system of operation for AI agencies." Designed
 - [#42 — Workflow / automation engine (the recipe book)](build_prompts/42-workflow-engine.md) — start of lock-in
 - [#43 — Connectors / integrations (the lock-in)](build_prompts/43-connectors.md) — the moat
 - [#44 — Usage-product distribution across vendor / reseller / affiliate](build_prompts/44-usage-product-distribution.md) — makes the kitchens profitable for every role
+- [#45 — Partner-client data lifecycle & DPA](build_prompts/45-partner-client-data-lifecycle.md) — legal foundation for §13 (export/erasure across all kitchens); ship with the kitchens, depends on #40/#41/#43

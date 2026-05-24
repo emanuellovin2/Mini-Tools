@@ -34,8 +34,14 @@ Orchestration (deciding which step runs next, passing data between steps) is **c
 ### 3. Step types
 `ai` (via #41 gateway), `http` (outbound request), `transform` (JS-safe template/JSONata-style mapping — NO arbitrary eval), `branch` (conditional), `delay`, `connector` (from #43). Each step type is a pure-ish handler `run(input, ctx) → output`.
 
-### 4. Executor (durable, idempotent, resumable)
-Process one run as a state machine. Each `run_steps` row is the durable checkpoint — re-running a crashed run resumes from the last incomplete step (idempotency key per step). Metering: call `recordUsage()` once per run (and per AI/connector step that has its own meter) inside the step transaction. If credits are `blocked`, the run halts with a clear status, not a half-charge.
+### 4. Executor — **tick-driven & async, NOT a long-running synchronous loop** (critical, expensive to retrofit)
+Serverless functions have a hard max duration; a workflow with a `delay` step ("wait 1 day") or many steps cannot run in one invocation. So model the run as a **durable state machine advanced one slice at a time**:
+- `workflow_runs` carries `next_step_key` and `next_run_at` (timestamptz). A frequent **scheduler tick** (Edge Function `workflow-runner-cron`, ~every minute) claims runs where `status='running' AND next_run_at <= now()` (row-locked claim, like the webhook atomic claim), executes **one step (or a small bounded slice)**, persists the result to `run_steps`, sets the next `next_step_key`/`next_run_at`, and returns. A `delay` step just sets `next_run_at` in the future — zero compute while waiting.
+- Each `run_steps` row is the **durable checkpoint** with a per-step idempotency key → a crashed/re-claimed run resumes from the last incomplete step with **no duplicate side effects**.
+- Long external calls (AI/connector) run within one slice but with a timeout; on timeout the step is retried (bounded attempts) then failed.
+- Metering: `recordUsage()` once per run (and per metered step) **inside the step transaction**. If credits are `blocked`, the run halts with a clear status — never a half-charge.
+
+This keeps ENGINEERING's "no heavy queue" rule (it's a cron tick + a table, not Kafka) while being durable and timeout-proof. Do **not** implement a synchronous "run all steps now" executor even for the manual trigger — manual just sets `next_run_at = now()`.
 
 ### 5. Builder UI
 Minimal first: a list/form builder (add step, pick type, configure, order) + a run-history table with per-step input/output drill-down (drawer). A visual graph editor is a later polish — do NOT build it now.
@@ -59,6 +65,9 @@ installTemplate(buyerId, templateVersionId): { workflowId }
 ## Acceptance criteria
 - [ ] A 3-step workflow (webhook → ai → http) runs end to end and meters exactly once per run.
 - [ ] Crashing mid-run and re-executing resumes from the last incomplete step (no duplicate side effects, no double-charge).
+- [ ] A `delay` step (e.g. wait 1h) survives across function invocations via `next_run_at` — no long-running invocation, zero compute while waiting.
+- [ ] Step timeout retries with bounded attempts, then fails the step cleanly (run resumable).
+- [ ] Manual trigger uses the same tick path (`next_run_at = now()`), no separate synchronous executor.
 - [ ] Schedule trigger fires due runs; webhook trigger verifies its secret.
 - [ ] `transform` step uses a safe evaluator — NO `eval`/`Function` on user input.
 - [ ] No-credit halts the run cleanly; partial work is checkpointed.

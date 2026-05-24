@@ -20,21 +20,24 @@ BYOK is the whole point: the **buyer (or vendor/reseller running the product) su
 
 ## Sections to build
 
-### 1. Provider key vault (`provider_keys`)
-`id`, `owner_id` → profiles, `provider` (`openai|anthropic|openai_compat` enum), `label`, `ciphertext` (bytea — AES-GCM encrypted with a server-only `KEY_VAULT_SECRET`), `last4` (text — for display), `created_at`. **Never** return plaintext to the client; decrypt only server-side at proxy time. RLS: owner-only read of metadata; ciphertext never selectable by anon/auth roles (service role only). Add `KEY_VAULT_SECRET` to env Zod schema.
+### 1. Provider key vault (`provider_keys`) — envelope encryption + rotation from day one
+`id`, `owner_id` → profiles, `provider` (`openai|anthropic|openai_compat` enum), `label`, `ciphertext` (bytea), `dek_wrapped` (bytea — the per-record data key, wrapped by the active master key), `key_version` (int — which master key wrapped this DEK), `last4` (text — display), `created_at`. **Use envelope encryption, NOT a single symmetric key:** each record gets its own random data key (DEK) that encrypts the secret (AES-256-GCM); the DEK is wrapped by a master key held in env (`KEY_VAULT_MASTER_KEYS` — a versioned set, e.g. `{ "1": "<base64>", "2": "..." }`, active version in `KEY_VAULT_ACTIVE_VERSION`). **Why:** rotating the master key only re-wraps DEKs (cheap), never re-encrypts every secret; a leaked master version is bounded. Ship a `rotateMasterKey()` admin path that re-wraps all DEKs to the new version. **Never** return plaintext to the client; decrypt only server-side at proxy time. RLS: owner-only metadata; ciphertext/`dek_wrapped` service-role only. Add the env vars to the Zod schema. **This `lib/gateway/crypto.ts` envelope module is the shared crypto reused by #43 connector tokens — design it generically (`encryptSecret(plaintext)` / `decryptSecret(record)`).**
 
 ### 2. Proxy endpoint `POST /api/gateway/[provider]`
 - Auth: Supabase session or a scoped gateway API token (see §6).
-- Resolve the `usage_meter` for the target product; call `recordUsage()` (#40) **before** forwarding for a fixed-cost unit, or reserve-then-reconcile for token-based (estimate, then adjust quantity post-response from the provider's usage block).
-- If `blocked` (no credits) → `402 Payment Required`, do not forward.
-- Decrypt the owner's provider key, forward the request (streaming passthrough — `ReadableStream`), return provider response verbatim.
-- On token-based meters, read the provider's returned `usage` and record the true quantity (idempotent adjust).
+- **Client idempotency:** accept an `Idempotency-Key` header. A retried request with the same key returns the cached result and **never double-meters** (store key → result ref on the `usage_events` idempotency_key).
+- Resolve the `usage_meter` for the target product. Metering is **reserve-then-settle** (the only correct model for token billing where the true quantity is known post-response):
+  1. **Reserve** an estimated max cost against the wallet (hold), under the wallet row lock (#40). If insufficient → `402 Payment Required`, do not forward.
+  2. **Forward** the request through the resolved key (streaming passthrough — `ReadableStream`), return provider response verbatim.
+  3. **Settle**: read the provider's returned `usage` block, record the true quantity via `recordUsage()`, release the unused reservation. If the call fails/aborts mid-stream, release the full reservation (no charge for a failed call).
+- This makes a crash-between-reserve-and-settle safe: an orphaned reservation expires (a sweep releases holds older than N minutes).
 
-### 3. Spend caps + rate limiting
-Per-buyer daily/monthly spend cap (cents) and per-key rate limit. Reuse `checkRateLimit()` (always `await`). Gateway is NOT webhook-exempt — rate-limit it.
+### 3. Spend caps + abuse protection (protect the buyer's real provider account)
+Per-buyer daily/monthly spend cap (cents) **and** per-gateway-token cap (a leaked token must not be able to drain the buyer's BYOK provider account). Anomaly guard: a sudden spike vs trailing average pauses the token and notifies. Reuse `checkRateLimit()` (always `await`). Gateway is NOT webhook-exempt — rate-limit it.
 
-### 4. Vendor "AI app" product type
-Extend `apps` (or a `gateway_products` table) so a vendor can publish a gateway-backed product: `model`, `system_prompt` (nullable), `meter_id`, `byok_mode` (`buyer_key|vendor_key` — default `buyer_key` for zero vendor infra cost). Approval reuses the existing admin gate + `charges_enabled`.
+### 4. Provider adapter abstraction + product type
+- **Adapter interface** (`lib/gateway/providers/{openai,anthropic,compat}.ts`): each provider implements `forward(req, key) → stream` and `parseUsage(response) → { unit, quantity }` and `priceModel(model) → providerCostResolver`. Per-model provider cost lives in config, not hardcoded in the proxy. Adding a provider = new adapter file, **no proxy rewrite**.
+- **Vendor "AI agent" product** — extend `apps` (or `gateway_products`): `model`, `system_prompt` (nullable), `meter_id`, `cost_mode` (`byok|managed` — from #40 §8). **`byok`** = buyer/vendor key, platform cost zero. **`managed`** = platform key, buyer prepays provider cost + margin (chosen strategy: offer both; default `byok`, `managed` as a one-click option to remove the "I don't have an API key" friction). Approval reuses the admin gate + `charges_enabled`.
 
 ### 5. Privacy / logging
 Log call **metadata only** (owner, meter, quantity, latency, status) via `lib/logger.ts`. Do **NOT** persist prompt/response bodies by default (PII + cost). Opt-in debug logging behind a flag, redacted. Client visibility follows the **`acquired_by` boundary (SPEC §13)**: usage products default to `acquired_by='partner'`, so the **acquiring partner** (`partner_owner_id`) owns and may see their own client; **every other counterparty still sees only `anon_user_id`** (a vendor whose agent is resold by an agency never sees the agency's client). Card/payment data is never exposed to anyone but platform + Stripe.
@@ -59,8 +62,14 @@ getGatewayUsage(buyerId, days): { byProduct, spentCents, capCents }
 ```
 
 ## Acceptance criteria
-- [ ] Provider key stored encrypted; plaintext never leaves the server, never in any API response or log.
-- [ ] Every forwarded call records exactly one `usage_event` (idempotent); token-based meters record true token count from the provider response.
+- [ ] Provider key stored with **envelope encryption** (per-record DEK wrapped by versioned master key); plaintext never leaves the server, never in any response or log.
+- [ ] `rotateMasterKey()` re-wraps all DEKs to the new version WITHOUT re-encrypting secrets or downtime; old version still decrypts until drained.
+- [ ] Client `Idempotency-Key` retries return cached result, never double-meter.
+- [ ] Reserve-then-settle: a failed/aborted call charges nothing (reservation released); crash leaves an expiring hold, not a stuck balance.
+- [ ] Per-token spend cap prevents a leaked token from draining the buyer's BYOK provider account; anomaly spike pauses the token.
+- [ ] Adding a new provider is a new adapter file only — no change to the proxy core.
+- [ ] `managed` cost_mode bills provider cost + margin from prepaid credits; platform never fronts money; `byok` incurs zero platform provider cost.
+- [ ] Every forwarded call records exactly one `usage_event` (idempotent); token meters record true token count from the provider response.
 - [ ] No credits → `402`, request NOT forwarded, no provider call made.
 - [ ] Streaming responses pass through without buffering the whole body.
 - [ ] Spend cap enforced; rate limit enforced (awaited).

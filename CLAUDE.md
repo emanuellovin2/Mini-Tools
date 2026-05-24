@@ -210,6 +210,8 @@ NEXT_PUBLIC_SENTRY_DSN=               # required from #28 (P1) — error trackin
 SENTRY_AUTH_TOKEN=                    # required from #28 (P1) — sourcemap upload at build
 SENTRY_ORG=
 SENTRY_PROJECT=
+KEY_VAULT_MASTER_KEYS=                 # required from #41 — JSON of versioned AES-256 master keys, e.g. {"1":"<base64-32B>"} — wraps per-record DEKs (envelope encryption for provider keys + connector OAuth tokens)
+KEY_VAULT_ACTIVE_VERSION=             # required from #41 — which KEY_VAULT_MASTER_KEYS version wraps NEW secrets (rotation: add a new version, re-wrap, then bump this)
 ```
 
 Generate the RS256 key pair once with:
@@ -291,6 +293,7 @@ Wave 6 — docs:
 - [ ] #42 Workflow / automation engine (the recipe book) — `workflows`/`workflow_runs`/`run_steps`, triggers (manual/schedule/webhook), durable resumable executor, sellable templates
 - [ ] #43 Connectors / integrations (the lock-in) — connector registry (Gmail/Slack/Sheets/HTTP), encrypted OAuth `connector_accounts`, workflow step wiring
 - [ ] #44 Usage-product distribution — metered products in marketplace, reseller per-unit markup, affiliate recurring % of platform fee, role usage-earnings dashboards
+- [ ] #45 Partner-client data lifecycle & DPA — `partner_clients` identity registry, cross-kitchen erasure/export hooks, retention cron, `/legal/dpa` — legal foundation for §13 (platform = data processor); depends on #40/#41/#43
 
 ## Guardrails
 - Never expose buyer email, name, or card data to vendors, resellers, or affiliates — the anonymous token model (SPEC §6) and the `vendor_subscription_stats` / `reseller_sale_stats` / `affiliate_stats` boundaries (SPEC §7) are non-negotiable. None of these roles gets a read path to `subscriptions.buyer_id`.

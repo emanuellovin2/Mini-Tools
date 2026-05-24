@@ -102,6 +102,17 @@ Card: current key id · age · days until rotation due. One-click "Rotate now" w
 ### 20. Tax/legal export (NEW)
 Year-end button: "Generate 1099-K data for US vendors" → CSV with totals per vendor. EU VAT report. Out of scope for full impl, just the CSV.
 
+### 21. Usage economy oversight (NEW — Wave 9, only after #40–#44 ship)
+The usage economy introduces money the platform **holds** (prepaid credits = liability) and **owes** (undistributed partner shares = payable). Admin must see them:
+- **Credit liability card:** outstanding prepaid credit balance Σ (deferred revenue the platform owes as service). Trend.
+- **Partner payable card:** drawn-but-unsettled usage shares owed to vendors/resellers/affiliates; next settlement run total.
+- **Usage reconciliation:** drift between topups − drawdowns − refunds vs wallet balances, and settled shares vs Connect transfers (from #40 §5b). Surfaces in the system health row + reconciliation list.
+- **Gateway health:** request volume, error rate, p95 latency, top models, `402` (no-credit) rate, anomaly-paused tokens.
+- **Workflow runner health:** queued/running/failed runs, stuck runs (claimed but not advanced), DLQ of failed runs with retry.
+- **Managed-key exposure:** for `cost_mode='managed'` products, platform's provider spend vs margin captured (must stay ≥0).
+
+Add to the System health row (§1): "Usage runner lag" + "Credit liability". Add feature-flag kill switches (§18): gateway, workflow runner, credit top-ups.
+
 ---
 
 ## Data layer additions
@@ -126,6 +137,10 @@ getFeatureFlags(): FeatureFlag[]
 setFeatureFlag(name, enabled, adminId): void
 rotateJwtKey(adminId): { oldKid, newKid }
 exportTaxReport(year): CSVStream
+// Wave 9 (after #40–#44):
+getUsageEconomyOverview(): { creditLiabilityCents, partnerPayableCents, recognizedRevenueCents }
+getGatewayHealth(): { volume, errorRate, p95, noCreditRate, pausedTokens }
+getWorkflowRunnerHealth(): { queued, running, failed, stuck, dlq[] }
 ```
 
 New tables: `webhook_events` (id, type, received_at, processed_at, error, payload), `feature_flags` (name, enabled, updated_by, updated_at).

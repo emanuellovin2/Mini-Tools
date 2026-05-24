@@ -57,8 +57,8 @@ All roles see:
 - **Password**: change with current.
 - **2FA**: TOTP enroll/disable (Supabase Auth MFA).
 - **Active sessions**: list with device/IP/last seen, revoke individually or all.
-- **Data export** (GDPR): "Request all my data" → background job → email with ZIP of all rows with user_id.
-- **Delete account**: confirmation flow, soft-delete with 30-day grace, then hard-delete cron.
+- **Data export** (GDPR): "Request all my data" → background job → email with ZIP of all rows with user_id. *(This covers the logged-in user's OWN data. Data of a partner's end-clients — stored under `acquired_by='partner'`, SPEC §13 — is handled by the dedicated cross-kitchen lifecycle in #45; reuse its plumbing, don't duplicate.)*
+- **Delete account**: confirmation flow, soft-delete with 30-day grace, then hard-delete cron. *(A partner deleting their account must trigger #45 erasure for all their clients too.)*
 - **Theme**: light / dark / system.
 
 Role-specific:
