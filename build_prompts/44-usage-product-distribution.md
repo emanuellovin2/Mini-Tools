@@ -3,7 +3,9 @@
 > **Before starting:** read [build_prompts/40-usage-metering-billing.md](build_prompts/40-usage-metering-billing.md), [build_prompts/41-ai-gateway-byok.md](build_prompts/41-ai-gateway-byok.md), [build_prompts/42-workflow-engine.md](build_prompts/42-workflow-engine.md), `SPEC.md` §4 (affiliate/reseller economics), [build_prompts/37-marketplace-v2.md](build_prompts/37-marketplace-v2.md), [build_prompts/38-fee-transparency-layer.md](build_prompts/38-fee-transparency-layer.md).
 > **Definition of Done:** the new metered products (gateway agents #41, workflow templates #42) are listable in the marketplace, resellable by resellers with a per-unit markup, and referable by affiliates for a recurring % of the platform fee — all settled through the #40 ledger. This is the layer that makes the 4 kitchens **profitable for every role**, with the platform always on a fixed margin.
 
-**Phase 6 — Wave 9. Depends on: #40, #41, (#42 for template products). Last of the wave — ties everything to the existing money model.**
+**Phase 6 — Wave 9. Depends on: #40, #41, #47, (#42 for template products). Last of the wave — ties everything to the existing money model.**
+
+> **Org ownership (#47):** metered products, reseller metered offers, and earnings all belong to **`org_id → organizations`**. Vendor/reseller/affiliate earnings + payouts are org-level. RLS uses `is_org_member`.
 
 ---
 

@@ -3,7 +3,9 @@
 > **Before starting:** read `SPEC.md` §6 (anti-poaching), §11, [build_prompts/40-usage-metering-billing.md](build_prompts/40-usage-metering-billing.md), [lib/utils/rate-limit.ts](lib/utils/rate-limit.ts), [lib/validation/env.ts](lib/validation/env.ts).
 > **Definition of Done:** an authenticated proxy that forwards AI requests to providers (OpenAI / Anthropic / OpenAI-compatible) using the **customer's own encrypted key**, records one `usage_event` per call via #40, applies the platform+vendor fee, streams the response back. The platform pays **zero** provider compute. This is the first usage-revenue engine.
 
-**Phase 6 — Wave 9. Depends on: #40. Parallel with #43 after #40. Feeds #42, #44.**
+**Phase 6 — Wave 9. Depends on: #40, #47. Parallel with #43 after #40. Feeds #42, #44.**
+
+> **Org ownership (#47):** `provider_keys.owner_id`, gateway products, and gateway tokens are owned by an **`org_id → organizations`** (the org's members share keys/products per their role). RLS uses `is_org_member`.
 
 ---
 

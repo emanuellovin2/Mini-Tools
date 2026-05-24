@@ -3,7 +3,9 @@
 > **Before starting:** read `SPEC.md` §3, §11, [lib/stripe/transfers.ts](lib/stripe/transfers.ts), [lib/services/reseller.ts](lib/services/reseller.ts), [supabase/migrations/20260522000007_vendor_revenue_events_net.sql](supabase/migrations/20260522000007_vendor_revenue_events_net.sql). Read `ENGINEERING.md` (money section) in full.
 > **Definition of Done:** a single generic usage ledger that ANY metered product (gateway #41, workflow #42, connector #43) writes to; a prepaid credit wallet so the platform never fronts money; a settlement job that turns unsettled usage into Stripe charges + Separate Charges & Transfers splits (vendor / platform / reseller / affiliate). Pure money math + tests + RLS.
 
-**Phase 6 — Wave 9. Depends on: nothing new (extends existing billing). BLOCKS #41, #42, #43, #44.**
+**Phase 6 — Wave 9. Depends on: #47 (org ownership). BLOCKS #41, #42, #43, #44, #45.**
+
+> **Org ownership (SPEC §13 + #47):** every owner/payer reference below is an **`org_id → organizations`**, never a bare user. `usage_meters.owner_id`, `credit_wallets.owner_org_id`, and the payer side of `usage_events` are org-scoped. Each user has a personal org, so this is uniform. RLS uses `is_org_member`.
 
 ---
 

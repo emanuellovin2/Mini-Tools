@@ -3,7 +3,9 @@
 > **Before starting:** read [build_prompts/40-usage-metering-billing.md](build_prompts/40-usage-metering-billing.md), [build_prompts/41-ai-gateway-byok.md](build_prompts/41-ai-gateway-byok.md), `ENGINEERING.md` (transactions + idempotency).
 > **Definition of Done:** agencies build trigger→steps workflows that run server-side; each run meters via #40; AI steps run through the gateway #41 (BYOK, zero platform compute cost beyond orchestration); the executor is idempotent and resumable. Vendors can publish workflow **templates** that resellers resell and affiliates refer. This is where the customer's daily work starts living in the platform — the start of real lock-in.
 
-**Phase 6 — Wave 9. Depends on: #41 (AI steps), #40 (metering). Connector steps light up after #43.**
+**Phase 6 — Wave 9. Depends on: #41 (AI steps), #40 (metering), #47 (org ownership). Connector steps light up after #43.**
+
+> **Org ownership (#47):** `workflows.owner_id` is an **`org_id → organizations`**. Team members operate the org's workflows per their `org_members` role (`member` can run, `admin` can edit). RLS uses `is_org_member`.
 
 ---
 

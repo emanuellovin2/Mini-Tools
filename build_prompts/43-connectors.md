@@ -3,7 +3,9 @@
 > **Before starting:** read [build_prompts/41-ai-gateway-byok.md](build_prompts/41-ai-gateway-byok.md) (key vault pattern), [build_prompts/42-workflow-engine.md](build_prompts/42-workflow-engine.md) (step interface), `ENGINEERING.md` (security).
 > **Definition of Done:** OAuth-based connectors (Gmail, Slack, Google Sheets, generic HTTP/webhook) usable as workflow steps; an encrypted credential vault with token refresh; a connector registry that exposes actions/triggers to the engine. This is the moat: once the agency's tools are wired in, leaving means re-plumbing their whole operation.
 
-**Phase 6 — Wave 9. Depends on: #42 (consumed as step type) + #41 vault pattern. Parallel-able with #42 after the registry interface is agreed.**
+**Phase 6 — Wave 9. Depends on: #42 (consumed as step type) + #41 vault pattern + #47 (org ownership). Parallel-able with #42 after the registry interface is agreed.**
+
+> **Org ownership (#47):** `connector_accounts.owner_id` is an **`org_id → organizations`** — a team connects Gmail/Slack/Sheets once and all members' workflows can use it (per role). RLS uses `is_org_member`.
 
 ---
 

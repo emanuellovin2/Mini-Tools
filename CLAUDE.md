@@ -287,13 +287,19 @@ Wave 6 — docs:
 - [ ] #38 Fee transparency layer (live calculators in vendor/reseller/affiliate forms, optional buyer breakdown, canonical `/legal/fees` page)
 - [ ] #39 Cross-role: notifications bell + preferences, account settings (2FA/sessions/data export/delete), onboarding checklist per role, CSV export everywhere, vendor webhook subscribers
 
-**Phase 6 — Wave 9 (Usage economy — the "4 kitchens")** — sequential #40 → #41 → #42 → #43 → #44. Design constraint: **BYOK + prepaid credits = zero/minimal compute cost to platform**; usage-based earnings for vendor/reseller/affiliate.
+**Phase 6 — Wave 9 (Usage economy — the "4 kitchens" + foundations)** — design constraint: **BYOK + prepaid credits = zero/minimal compute cost to platform**; usage-based earnings for vendor/reseller/affiliate. **Foundation-first ordering: #47 → #46 → kitchens → #45.** #47 + #46 capture data that cannot be reconstructed retroactively — never defer.
+- [ ] #47 Organizations & multi-seat (the ownership model) — `organizations`, `org_members`, personal-org bootstrap + backfill, RLS rewrite via `is_org_member`, payouts move to org, `audit_log.actor_org_id` + team activity feed — **BLOCKS #40–#46** (pre-launch clean-break, retrofit cost explodes after launch)
+- [ ] #46 Engagement & analytics event capture — append-only `analytics_events` (salted daily-rotating visitor hash, no PII, DNT), beacon + server capture, rollup cron, REAL funnels (affiliate EPC + click→sale, reseller traffic→conversion, vendor impression→install) — **capture-now, depends on #47**
 - [ ] #40 Usage metering ledger + usage-based billing (the meter) — generic `usage_events` ledger, prepaid `credit_wallets`, settlement cron, `computeUsageSplit` pure fn — **BLOCKS #41–#44**
 - [ ] #41 AI Gateway (BYOK) (the door) — encrypted `provider_keys` vault, `/api/gateway/[provider]` metered proxy, vendor agent products, spend caps — first usage revenue, zero compute cost
-- [ ] #42 Workflow / automation engine (the recipe book) — `workflows`/`workflow_runs`/`run_steps`, triggers (manual/schedule/webhook), durable resumable executor, sellable templates
-- [ ] #43 Connectors / integrations (the lock-in) — connector registry (Gmail/Slack/Sheets/HTTP), encrypted OAuth `connector_accounts`, workflow step wiring
+- [ ] #42 Workflow / automation engine (the recipe book) — `workflows`/`workflow_versions`/`workflow_runs`/`run_steps`, triggers (manual/schedule/webhook), durable tick-driven executor, sellable templates
+- [ ] #43 Connectors / integrations (the lock-in) — versioned connector registry (Gmail/Slack/Sheets/HTTP), encrypted OAuth `connector_accounts`, workflow step wiring
 - [ ] #44 Usage-product distribution — metered products in marketplace, reseller per-unit markup, affiliate recurring % of platform fee, role usage-earnings dashboards
-- [ ] #45 Partner-client data lifecycle & DPA — `partner_clients` identity registry, cross-kitchen erasure/export hooks, retention cron, `/legal/dpa` — legal foundation for §13 (platform = data processor); depends on #40/#41/#43
+- [ ] #45 Partner-client data lifecycle & DPA + CRM seam — `partner_clients` identity registry (tags/lifecycle_stage/notes — agency client book), cross-kitchen erasure/export hooks, retention cron, `/legal/dpa` — legal foundation for §13 (platform = data processor); depends on #40/#41/#43/#47
+
+**Wave 8 stragglers — org-aware (run after #47):**
+- [ ] #37 Marketplace v2 + **reviews & ratings** (`app_reviews`, verified-purchase only, trigger-maintained `rating_avg/rating_count` on apps) — reputation = non-portable stickiness
+- [ ] #39 Cross-role: notifications/2FA/sessions/onboarding/CSV/**vendor webhook subscribers** (v1.* event versioning) + **partner platform API** (`api_keys` test/live mode, `idempotency_keys`, scoped + rate-limited `/api/v1/*`) — embedding stickiness
 
 ## Guardrails
 - Never expose buyer email, name, or card data to vendors, resellers, or affiliates — the anonymous token model (SPEC §6) and the `vendor_subscription_stats` / `reseller_sale_stats` / `affiliate_stats` boundaries (SPEC §7) are non-negotiable. None of these roles gets a read path to `subscriptions.buyer_id`.

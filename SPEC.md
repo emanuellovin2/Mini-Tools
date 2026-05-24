@@ -168,7 +168,7 @@ Code compiles with strict TS, inputs validated with Zod, money/access paths have
 The anti-poaching boundary (§6, §7) is **not global** — it is governed by **who acquired the end client**, recorded once per subscription and immutable thereafter. This resolves the tension between the marketplace business (the platform brings buyers and protects them) and the usage-economy business (agencies bring their own clients and must own them — see §14).
 
 - **`subscriptions.acquired_by`** (enum `platform | partner`, immutable after subscribe) is the single source of truth for the boundary.
-- **`subscriptions.partner_owner_id`** (uuid → profiles, nullable; non-null **iff** `acquired_by='partner'`) names the **single** party that owns the client relationship. CHECK: `(acquired_by='partner') = (partner_owner_id IS NOT NULL)`.
+- **`subscriptions.partner_owner_id`** (uuid → **organizations**, nullable; non-null **iff** `acquired_by='partner'`) names the **single** org that owns the client relationship (ownership is org-level, see §15 / build #47 — any member of that org may act for the client per their role). CHECK: `(acquired_by='partner') = (partner_owner_id IS NOT NULL)`.
 
 ### Boundary rules
 - **`acquired_by='platform'`** — the platform acquired the buyer (the marketplace channel). The full §6/§7 anti-poaching boundary applies: every counterparty (vendor, reseller, affiliate) sees only `anon_user_id` and aggregate stats, never buyer PII. **This is the default for marketplace hosted apps (#1–#39) — unchanged.**
@@ -182,3 +182,15 @@ The anti-poaching boundary (§6, §7) is **not global** — it is governed by **
 
 ### Why scoped, not a per-subscription toggle
 Provenance is decided **once, by the acquisition context**, not flipped later. The two product lines simply carry different defaults — there is no runtime UI toggle and no dual RLS regime per row beyond reading `acquired_by`. Keep one boundary code path that branches on this column; do not fork the stats views.
+
+> §14 is reserved for "Usage metering & credits" (added when build #40 ships).
+
+## 15. Organizations & ownership (multi-seat)
+Built in #47. The unit of ownership, billing, and payout is an **organization**, not a bare user — agencies/resellers/vendors are teams.
+
+- **Every user has exactly one personal org** (auto-created at signup, `type='personal'`). Teams are orgs with more than one member. A personal account is just a one-member org, so ownership is **uniformly `org_id`** — there is no "user-or-org" polymorphism anywhere.
+- **`organizations`** holds the Stripe Connect account + `charges_enabled`/`payouts_enabled` (payouts go to the org, not the individual). The reseller `$19/mo` and WL subscriptions bill the org.
+- **`org_members`** (`role`: `owner|admin|member`) governs in-app permissions: `owner` = billing + payouts + delete + transfer; `admin` = manage products/members; `member` = operate (run workflows, view), no billing. `profiles.role` remains the user's **platform** role (admin/vendor/buyer/affiliate/reseller) for capabilities; intra-work permissions come from `org_members.role`.
+- **All product/money/data ownership references `org_id`**: apps, reseller_offers, affiliate_links, usage_meters, provider_keys, connector_accounts, workflows, metered products, credit_wallets, partner_clients, api_keys, and the Connect-bearing path. RLS checks membership via `is_org_member(org_id, min_role)`, not `user_id`.
+- The **anti-poaching boundary (§6, §7, §13)** is unchanged in spirit, now expressed in org terms: a *vendor* is "a member of the vendor org," and no org gets a path to buyer PII it did not acquire. `partner_owner_id` (§13) is the owning org, making a client book a **shared team asset**.
+- **Pre-launch migration:** existing single-user ownership backfills to each user's personal org (no live data; clean-break OK).

@@ -138,6 +138,7 @@ create table vendor_webhooks (
 ### Dispatcher
 On every platform event for that vendor's apps, queue a POST to subscribed URLs:
 - HMAC-SHA256 signature in `X-Platform-Signature` header (same pattern as Stripe).
+- **Event-type versioning from day 1:** every event type is prefixed `v1.` (e.g. `v1.subscription.created`, `v1.subscription.canceled`, `v1.subscription.paused`). Payload schema for `v1.*` is frozen — fixes/breaking changes ship as `v2.*` and partners opt in per endpoint via the `events[]` array. Without this convention, any payload bug fix becomes a breaking change for every integrated partner.
 - Retries: 5 attempts with exponential backoff.
 - Tracks delivery in `vendor_webhook_deliveries` table.
 - Anonymizes payload (uses `anon_user_id`, not `buyer_id`).
@@ -157,6 +158,16 @@ On every platform event for that vendor's apps, queue a POST to subscribed URLs:
 
 ---
 
+## 6. Partner platform API (NEW — inbound; embedding = stickiness)
+Outbound webhooks tell a partner when something changed; an **inbound API** lets them build ON the platform (pull their stats, manage products/offers/links programmatically, top up credits, trigger workflows). Once a partner integrates their own systems against your API, leaving means re-engineering — durable switching cost.
+- **`api_keys`** — `id`, `org_id` → organizations (#47), `name`, `hashed_key` (store only the hash; show full key once), `prefix` (text — for display, e.g. `pk_test_ab…` / `pk_live_ab…`), **`mode` (`test|live` — NOT NULL, from day 1)**, `scopes` (text[] — `read:analytics`, `manage:products`, `manage:offers`, `manage:links`, `billing:credits`, `run:workflows`), `last_used_at`, `revoked_at` (nullable), `created_at`. RLS: org members (admin+) manage; key auth resolves the org + scopes server-side. **Why test/live now:** retrofitting the split later means re-issuing every partner's key — adopt Stripe's convention from day 1. Test-mode keys route to Stripe test-mode + a no-op for irreversible side effects (emails, payouts).
+- **Idempotency** — **`idempotency_keys`** table from day 1: `(key, org_id, request_hash, response_status, response_body, created_at)`, UNIQUE `(org_id, key)`. Every mutating `/api/v1/*` endpoint accepts an `Idempotency-Key` header; identical key + identical body within 24h replays the stored response, identical key + different body returns 409. Without this, a network blip on `POST /api/v1/checkout` = double subscription. Standard Stripe pattern; **schema gap closes here**.
+- **Surface** a stable, **explicitly versioned** REST API (`/api/v1/...`) backed by the **existing service layer** (do NOT write parallel logic — the services from #32–#46 are the single source). Scope every endpoint to the key's org + scopes, rate-limited per key. Version is in the URL path; never break v1 — additive only.
+- **Settings UI** under `/settings/api`: tabs for Test/Live keys, create/revoke keys, scope selection, usage, docs link.
+- **Design note:** this is the reason the service layer must stay UI-agnostic (ENGINEERING.md) — the same functions back the dashboards, the webhooks, and this API.
+
+---
+
 ## Acceptance criteria
 
 - [ ] Notification bell shows unread count, opens feed, mark-as-read works.
@@ -171,4 +182,8 @@ On every platform event for that vendor's apps, queue a POST to subscribed URLs:
 - [ ] Webhook test event delivers immediately.
 - [ ] Failed webhook auto-disables after 50 failures with email alert.
 - [ ] RLS: notifications RLS — user reads own; vendor_webhooks RLS — vendor reads own.
+- [ ] Platform API keys: hashed at rest, shown once, scoped + rate-limited per org; revoke is immediate; endpoints reuse the service layer (no parallel logic).
+- [ ] API keys split test/live from day 1; test-mode keys cannot trigger irreversible side effects (no real emails, no payouts).
+- [ ] `Idempotency-Key` header on every mutating `/api/v1/*`: same key+body → cached replay; same key+different body → 409.
+- [ ] Outbound webhook event types are `v1.*`-prefixed from day 1; payload schema for v1 frozen.
 - [ ] Mobile responsive for settings pages.

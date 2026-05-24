@@ -50,6 +50,13 @@ Already covered in #30 — gallery + lightbox + sticky pricing card + vendor car
 ### 10. Empty state
 "No apps match your filters" + "Clear filters" CTA.
 
+### 11. Reviews & ratings (NEW — foundational, the rest of this task already assumes ratings exist)
+Reputation is non-portable stickiness (a vendor's track record lives here) **and** trust/desirability for buyers. Nothing builds it yet — add it now.
+- **`app_reviews`** — `id`, `app_id` → apps, `buyer_id` → profiles, `subscription_id` → subscriptions (UNIQUE per `(app_id, buyer_id)` — **only a real subscriber can review**, anti-fake), `rating` (int 1–5, CHECK), `title` (nullable), `body` (nullable), `vendor_response` (text, nullable — vendor may reply once), `status` (`published|hidden` — admin moderation), `created_at`, `updated_at`. RLS: anyone reads `published`; buyer writes own (must own an active/past sub); vendor (org member) writes only `vendor_response`; admin moderates.
+- **Denormalized aggregates on `apps`**: `rating_avg` (numeric), `rating_count` (int), maintained by trigger on review insert/update — so marketplace sort/filter by rating is cheap (no live aggregation).
+- Display: stars + count on cards + detail page; review list with vendor replies on detail; "leave a review" only for entitled buyers; verified-purchase badge.
+- Keep buyer reviews public but **never expose buyer PII to the vendor beyond display_name** (SPEC §6/§7 — a reviewer is identified by display_name only, and only for `acquired_by='platform'` marketplace subs; partner-acquired clients are not auto-enrolled as public reviewers).
+
 ---
 
 ## Data layer additions
@@ -58,6 +65,11 @@ Already covered in #30 — gallery + lightbox + sticky pricing card + vendor car
 // lib/services/apps.ts
 listMarketplaceApps({ q, cat, priceMin, priceMax, ratingMin, hasAffiliate, hasTrial, verifiedOnly, sort, page, limit })
 getFeaturedApps(limit): App[]
+// reviews
+createReview(buyerId, appId, { rating, title, body }): Review   // entitlement-checked
+listReviews(appId, { page }): Review[]
+respondToReview(orgMemberId, reviewId, response): void          // vendor org
+moderateReview(adminId, reviewId, status): void
 ```
 
 Index: `create index on apps using gin (to_tsvector('english', name || ' ' || description));` for full-text.
@@ -73,4 +85,7 @@ Index: `create index on apps using gin (to_tsvector('english', name || ' ' || de
 - [ ] SEO meta + OG image valid (verify with curl).
 - [ ] Mobile filter sheet usable.
 - [ ] Empty state with CTA.
+- [ ] Only entitled subscribers can review (one per app); fake reviews blocked by the subscription_id constraint.
+- [ ] `rating_avg`/`rating_count` maintained by trigger; sort/filter by rating is cheap.
+- [ ] Vendor can reply once; admin can hide; reviewer shows display_name only (no PII leak).
 - [ ] Lighthouse SEO ≥95.

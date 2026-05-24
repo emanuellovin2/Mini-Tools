@@ -3,7 +3,9 @@
 > **Before starting:** read `SPEC.md` §6, §7, **§13** (`acquired_by`), [build_prompts/40-usage-metering-billing.md](build_prompts/40-usage-metering-billing.md), [build_prompts/41-ai-gateway-byok.md](build_prompts/41-ai-gateway-byok.md), [build_prompts/43-connectors.md](build_prompts/43-connectors.md), [build_prompts/39-cross-role-notifications-accounts.md](build_prompts/39-cross-role-notifications-accounts.md).
 > **Definition of Done:** because §13 makes the platform store **end-client personal data on behalf of partners** (agencies/resellers/vendors who brought their own clients), the platform is now a **data processor**. This task builds the cross-kitchen data lifecycle: a partner can export and erase a single client's data spanning every store that touches it, retention policies exist, and a DPA/processor stance is documented. Designing erasure in from the start is far cheaper than retrofitting deletion across ledgers, logs, and connector data later.
 
-**Phase 6 — Wave 9. Depends on: #40, #41, #43 (the stores that hold client data). Ship alongside / right after the kitchens — NOT deferred to Wave 8 polish.**
+**Phase 6 — Wave 9. Depends on: #40, #41, #43, #47 (the stores that hold client data + org ownership). Ship alongside / right after the kitchens — NOT deferred to Wave 8 polish.**
+
+> **Org ownership (#47):** the partner that owns a client is an **organization** — `partner_clients.partner_owner_id → organizations` (SPEC §13's `partner_owner_id` is the owning org). Any org member with the right role can raise export/erasure for the org's clients. This makes the client book a **shared team asset** (CRM-grade stickiness), not one person's.
 
 ---
 
@@ -17,9 +19,9 @@ Only the **`partner_owner_id`** party owns/sees a given client. A data request c
 
 ## Sections to build
 
-### 1. Client identity registry (`partner_clients`)
-A single canonical row per `(partner_owner_id, client)` so identity lives in ONE place and everything else references it by id (makes erasure a focused operation):
-`id`, `partner_owner_id` → profiles, `external_ref` (text — the partner's own id for their client, optional), `email` (text, nullable), `display_name` (nullable), `created_at`, `deleted_at` (nullable — soft-delete tombstone). All other tables (`usage_events`, workflow runs, etc.) reference `partner_client_id`, never duplicate PII. RLS: only `partner_owner_id` + admin read; never exposed to other counterparties.
+### 1. Client identity registry (`partner_clients`) — also the CRM seam
+A single canonical row per `(partner_owner_id, client)` so identity lives in ONE place and everything else references it by id (makes erasure a focused operation **and** doubles as the agency's client book — a strong stickiness lever):
+`id`, `partner_owner_id` → **organizations** (the owning agency/reseller org, #47), `external_ref` (text — the partner's own id, optional), `email` (text, nullable), `display_name` (nullable), **CRM seam fields:** `tags` (text[], default `{}`), `lifecycle_stage` (text, nullable — `lead|active|churned|...`, free-form), `notes` (text, nullable), `last_seen_at` (timestamptz, nullable — touched by usage/workflow activity), `created_at`, `deleted_at` (nullable — soft-delete tombstone). All other tables (`usage_events`, workflow runs, etc.) reference `partner_client_id`, never duplicate PII. The CRM fields cost nothing now but mean we never re-migrate when agencies want client tagging/segmentation/notes. RLS: only members of `partner_owner_id` org + admin read; never exposed to other counterparties.
 
 ### 2. Per-store erasure hooks
 Each kitchen registers an eraser in a registry (`lib/privacy/erasers.ts`): given a `partner_client_id`, it deletes or irreversibly anonymizes that client's rows in its store:
