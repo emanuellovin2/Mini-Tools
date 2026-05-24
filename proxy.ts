@@ -4,12 +4,11 @@ import type { Database } from "@/types/supabase";
 import { ROLE_DASHBOARDS, type UserRole } from "@/lib/auth/roles";
 import { visitorHash, isBot, isDnt } from "@/lib/analytics/hash";
 import { recordEvent } from "@/lib/services/analytics";
+import { RESERVED_SLUGS } from "@/lib/reserved-slugs";
 
-// Subdomains reserved for platform use — cannot be registered as reseller slugs.
-const RESERVED_SUBDOMAINS = new Set([
-  "www", "api", "admin", "auth", "app", "dashboard", "support", "help",
-  "mail", "email", "ftp", "ns1", "ns2", "staging", "dev", "test", "prod",
-]);
+// Single source of truth — import from lib/reserved-slugs.ts.
+// Never inline reserved names here; add them to lib/reserved-slugs.ts instead.
+const RESERVED_SUBDOMAINS = RESERVED_SLUGS;
 
 // Paths accessible without authentication.
 // Note: each prefix is matched with `startsWith`, so a bare "/r" would also match
@@ -78,8 +77,30 @@ export async function proxy(request: NextRequest) {
       return "";
     }
   })();
+
+  const requestHost = (request.headers.get("host") ?? "").toLowerCase().split(":")[0];
+
+  // ── Custom domain routing (#54 §5) — Cloudflare for SaaS pattern ─────────
+  // Agency sets organizations.custom_domain = 'portal.acme-agency.com'.
+  // Cloudflare for SaaS routes the request here via fallback origin.
+  // proxy.ts resolves the agency slug from the Host header, then rewrites
+  // to /_client/<slug> (same rewrite logic as subdomain WL).
+  // Feature-flagged — off by default until Cloudflare for SaaS is wired.
+  if (
+    process.env.CUSTOM_DOMAINS_ENABLED === "true" &&
+    baseHost &&
+    requestHost !== baseHost &&
+    !requestHost.endsWith(`.${baseHost}`)
+  ) {
+    // Custom domain: Host doesn't match base or any subdomain.
+    // Future: look up organizations.custom_domain = requestHost → get agency slug.
+    // For now, stub: fall through to standard routing.
+    // Implementation note: DB lookup here would add latency to every request on
+    // custom domains — cache the custom_domain → slug mapping in Redis (5min TTL).
+  }
+
   if (baseHost) {
-    const host = (request.headers.get("host") ?? "").toLowerCase().split(":")[0];
+    const host = requestHost;
     if (host !== baseHost && host.endsWith(`.${baseHost}`)) {
       const slug = host.slice(0, host.length - baseHost.length - 1);
       if (!RESERVED_SUBDOMAINS.has(slug)) {

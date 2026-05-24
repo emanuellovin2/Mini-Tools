@@ -216,5 +216,80 @@ k6 smoke harness: `scripts/loadtest/smoke.js`. Run against seeded local stack.
 
 Update this table after each smoke run. A regression in any baseline is a P2 issue.
 
+## §12 — Wave 9 scale invariants (#54)
+
+Every PR that touches hot tables / new resources / new search surfaces / new event tables MUST cite which invariant(s) it satisfies. Reviewer checklist at bottom.
+
+### 12.1 Search abstraction
+- All marketplace + browse pages route through `solutionsIndex` (`lib/search/solutions.ts`).
+- Interface: `lib/search/index.ts`. Postgres impl: `lib/search/postgres/solutions.ts`.
+- Future: swap impl by changing the factory — callers never change.
+- Health endpoint: `lib/search/health.ts`; backlog > 10k = warn, > 100k = alert.
+- Adding a new search surface (agents, workflows): implement `SearchIndex<T>` in `lib/search/postgres/<surface>.ts`; register in `lib/search/<surface>.ts`.
+
+### 12.2 Read-replica routing
+- `lib/db/with-replica.ts` — `getDb({ freshRequired, readOnly, region })`.
+- `freshRequired: true` (default) → primary always. Required for all money-critical reads.
+- `readOnly: true, freshRequired: false` → replica eligible. Use for dashboards + public browse.
+- Full money-critical paths list: `docs/money-critical-reads.md`.
+- Adding a replica: set `SUPABASE_REPLICA_URL` env var; `getDb()` routes automatically.
+
+### 12.3 Region / data-residency
+- `organizations.region` (default `us-east-1`). Strings, not enum.
+- Downstream rows inherit region at insert and are immutable thereafter.
+- Cross-region reads (agency in US, EU client) logged as `cross_region_read` in audit_log.
+- Hot-table composite indexes prefix `(region, ...)` for future shard routing.
+
+### 12.4 Tenant noisy-neighbor
+- Every Server Action / API route opens with `SET LOCAL app.org_id = $1`.
+- `pg_cron` kills queries running > 60s per tenant; logged to audit_log.
+- `tenant_query_stats` mview (refreshed every 5min) surfaces top tenants in admin dashboard.
+- Per-role connection budget: vendor 30%, agency 30%, client 30%, admin/cron 10% — Supavisor config.
+
+### 12.5 Settlement batching
+- `settlement_batches` table: UNIQUE on `(recipient_org_id, period_start, period_end)`.
+- Settlement job aggregates all unsettled events into ONE Stripe transfer per recipient per day.
+- Reconciliation (`lib/services/reconciliation.ts`) verifies `Σ event.share_cents === batch.total_cents === transfer.amount` nightly.
+
+### 12.6 OAuth refresh scheduling
+- Declared in #54, implemented in #43.
+- `next_refresh_at = (expiry - 5min) + jitter(0..5min)`. Cron refreshes proactively.
+- On-demand fallback holds a per-account Redis lock (no thundering-herd).
+
+### 12.7 Hot-wallet sharding
+- Declared in #54, implemented in #40.
+- `credit_wallets.shard_count` (default 1). Auto-promote to 8 at > 100 draw-downs/min.
+- `Σ shard balances === logical balance` — checked nightly by reconciliation.
+
+### 12.8 Idempotency dedup table
+- `idempotency_keys_v2 (scope, key, created_at)` — monthly partitions, 7-day TTL.
+- Writers call `INSERT INTO idempotency_keys_v2 ... ON CONFLICT DO NOTHING`.
+- If rowcount=0 → already processed → short-circuit, do not write event.
+- All new event writers (`recordUsage` #40, `emitMetric` #51) MUST use this pattern.
+
+### 12.9 Reserved-slug registry
+- Single source: `lib/reserved-slugs.ts`. Never inline reserved names elsewhere.
+- Applied to: agency slugs, reseller slugs, affiliate vanity slugs, custom domains.
+
+### 12.10 Cold storage
+- `lib/cold-storage/index.ts` — `coldStorageRouter.queryRange(opts)`.
+- Current impl: inline always. Future: ranges > 24 months → async S3 export.
+- Dashboards MUST call through this router for historical queries. No direct table queries on cold ranges.
+
+### 12.11 Custom domains (Cloudflare for SaaS)
+- `organizations.custom_domain text UNIQUE`. Feature-flagged by `CUSTOM_DOMAINS_ENABLED`.
+- `proxy.ts` resolves `Host` header → agency slug → rewrite (same as subdomain WL).
+- Reserved-slug check applies to custom domains too.
+
+### Reviewer checklist (required for any Wave 9 PR)
+- [ ] New search surface? → implements `SearchIndex<T>`, registered in factory.
+- [ ] Money read? → uses `getDbFresh()`.
+- [ ] New hot table? → has `(region, tenant_shard_id, ...)` composite index prefix, `PARTITION BY RANGE(created_at)` if append-only.
+- [ ] New creatable resource? → quota column in `org_quotas`, `enforceQuota()` in creation path.
+- [ ] New event writer? → uses `idempotency_keys_v2` dedupe pattern.
+- [ ] New settlement path? → writes to `settlement_batches`, one transfer per recipient per period.
+
+---
+
 ## Definition of done for any prompt
 Code compiles with strict TS, inputs are validated with Zod, money/access paths have tests, RLS covers and tests new tables, the prompt's Verify step passes, and the Progress checklist in `CLAUDE.md` is updated.

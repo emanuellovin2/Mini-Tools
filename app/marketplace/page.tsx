@@ -7,7 +7,7 @@ import {
   formatRating,
   MARKETPLACE_PAGE_SIZE,
 } from "@/lib/services/apps";
-import { solutionsIndex } from "@/lib/search/solutions";
+import { solutionsIndex, pageNumberToCursor } from "@/lib/search/solutions";
 import {
   parseMarketplaceParams,
   buildMarketplaceHref,
@@ -46,10 +46,10 @@ export default async function MarketplacePage({ searchParams }: Props) {
   const params = parseMarketplaceParams(raw);
   const { page, category, search, sort, priceMin, priceMax, ratingMin, hasAffiliate, hasTrial } = params;
 
-  const [{ rows: apps, total, totalPages }, categories, featured] = await Promise.all([
+  const [{ rows: apps, total, totalPages: totalPagesRaw }, categories, featured] = await Promise.all([
     solutionsIndex.search(
-      { category, search, sort, priceMin, priceMax, ratingMin, hasAffiliate, hasTrial },
-      { page, pageSize: MARKETPLACE_PAGE_SIZE }
+      { search, category, sort, priceMin, priceMax, ratingMin, hasAffiliate, hasTrial },
+      { cursor: pageNumberToCursor(page), limit: MARKETPLACE_PAGE_SIZE }
     ),
     listMarketplaceCategories(),
     // Only fetch featured when on the default landing (no filters active)
@@ -57,6 +57,8 @@ export default async function MarketplacePage({ searchParams }: Props) {
       ? getFeaturedApps(5)
       : Promise.resolve([]),
   ]);
+
+  const totalPages = totalPagesRaw ?? 1;
 
   const allCategories = Array.from(
     new Set([...FIXED_CATEGORIES, ...categories])

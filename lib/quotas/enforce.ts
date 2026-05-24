@@ -23,7 +23,10 @@ export type Resource =
   | "connectors"
   | "webhook_endpoints"
   | "workflow_steps"
-  | "partner_clients";
+  | "partner_clients"
+  // Wave 9 (#54) — agency/client/deployment resources
+  | "active_deployments"
+  | "clients";
 
 interface ResourceConfig {
   quotaCol: string;
@@ -40,7 +43,10 @@ const RESOURCE_CONFIG: Record<Resource, ResourceConfig> = {
   connectors:        { quotaCol: "max_connectors",        table: "connector_accounts", orgCol: "org_id" },
   webhook_endpoints: { quotaCol: "max_webhook_endpoints", table: "vendor_webhooks",    orgCol: "org_id" },
   workflow_steps:    { quotaCol: "max_workflow_steps",    table: "workflow_steps",     orgCol: "org_id" },
-  partner_clients:   { quotaCol: "max_partner_clients",  table: "partner_clients",    orgCol: "org_id" },
+  partner_clients:    { quotaCol: "max_partner_clients",    table: "partner_clients",       orgCol: "org_id" },
+  // Wave 9 (#54) — tables created in #50; entries here so enforceQuota works from day 1.
+  active_deployments: { quotaCol: "max_active_deployments", table: "solution_deployments",   orgCol: "agency_org_id" },
+  clients:            { quotaCol: "max_clients",             table: "client_relationships",   orgCol: "agency_org_id" },
 };
 
 // org_quotas and several referenced tables are not yet in generated types —
