@@ -26,7 +26,10 @@ export type Resource =
   | "partner_clients"
   // Wave 9 (#54) — agency/client/deployment resources
   | "active_deployments"
-  | "clients";
+  | "clients"
+  // #41 — AI Gateway
+  | "provider_keys"
+  | "gateway_tokens";
 
 interface ResourceConfig {
   quotaCol: string;
@@ -47,6 +50,9 @@ const RESOURCE_CONFIG: Record<Resource, ResourceConfig> = {
   // Wave 9 (#54) — tables created in #50; entries here so enforceQuota works from day 1.
   active_deployments: { quotaCol: "max_active_deployments", table: "solution_deployments",   orgCol: "agency_org_id" },
   clients:            { quotaCol: "max_clients",             table: "client_relationships",   orgCol: "agency_org_id" },
+  // #41 — AI Gateway
+  provider_keys:  { quotaCol: "max_provider_keys",  table: "provider_keys",  orgCol: "owner_id" },
+  gateway_tokens: { quotaCol: "max_gateway_tokens", table: "gateway_tokens", orgCol: "owner_id" },
 };
 
 // org_quotas and several referenced tables are not yet in generated types —

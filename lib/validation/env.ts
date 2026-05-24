@@ -48,6 +48,17 @@ const serverEnvSchema = z.object({
     .optional()
     .default("false")
     .transform((v) => v === "true"),
+  // #41 — AI Gateway provider key vault (envelope encryption)
+  // JSON object: { "1": "<base64-32-bytes>", "2": "..." }
+  KEY_VAULT_MASTER_KEYS: z.string().min(1),
+  // Active master key version (integer string)
+  KEY_VAULT_ACTIVE_VERSION: z.string().regex(/^\d+$/).default("1"),
+  // Gates the /api/gateway/* routes; false = 404 in production until keys provisioned
+  GATEWAY_ENABLED: z
+    .string()
+    .optional()
+    .default("false")
+    .transform((v) => v === "true"),
 });
 
 export type Env = z.infer<typeof serverEnvSchema>;

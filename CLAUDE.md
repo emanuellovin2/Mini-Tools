@@ -32,7 +32,8 @@ stripe listen --forward-to localhost:3000/api/webhooks
 
 ## Key file locations
 ```
-lib/services/          # service layer (apps.ts, solutions.ts, vendor.ts, buyer.ts, admin.ts, affiliate.ts, reseller.ts, org.ts, analytics.ts, reconciliation.ts, api-keys.ts, notifications.ts, onboarding.ts, export.ts, vendor-webhooks.ts, agency.ts, deployments.ts, outcomes.ts, usage.ts)
+lib/services/          # service layer (apps.ts, solutions.ts, vendor.ts, buyer.ts, admin.ts, affiliate.ts, reseller.ts, org.ts, analytics.ts, reconciliation.ts, api-keys.ts, notifications.ts, onboarding.ts, export.ts, vendor-webhooks.ts, agency.ts, deployments.ts, outcomes.ts, usage.ts, gateway.ts)
+lib/gateway/           # AI gateway: crypto.ts (envelope encryption), providers/{openai,anthropic,compat}.ts (adapters)
 lib/usage/split.ts     # pure priceUnit + computeUsageSplit (flat/tiered/volume, BYOK/managed, fuzz-tested)
 lib/stripe/            # billing.ts (computeTier), transfers.ts, webhook-handlers.ts, connect.ts, products.ts, with-retry.ts
 lib/auth/              # permissions.ts (can()), jwt.ts, roles.ts, sdk.ts
@@ -105,6 +106,15 @@ supabase/migrations/   # all schema changes — never manual dashboard edits
 - RLS: client reads own deployments, agency reads operated deployments, vendor reads aggregate via `get_vendor_deployment_stats()` RPC only (no raw rows). No cross-tenant reads.
 - Orphaned deployments: can be adopted (`operated_by=NULL`), transferred to new agency, or archived. Auto-archived after 90 days via pg_cron.
 
+**AI Gateway (as of #41)**
+- `provider_keys`: envelope encryption (per-record DEK wrapped by versioned master key). `KEY_VAULT_MASTER_KEYS` (JSON versioned map) + `KEY_VAULT_ACTIVE_VERSION`. `lib/gateway/crypto.ts` → `encryptSecret/decryptSecret` — reused by #43. `rotateMasterKey()` re-wraps DEKs only.
+- `gateway_products`: one per solution linking to a `usage_meter` + AI config (model, system_prompt, max_tokens_cap, cost_mode). `solution_id` UNIQUE.
+- `gateway_tokens`: hashed non-browser tokens. Spend caps daily/monthly. Anomaly spike → auto-pause. Revocation immediate (hash compare per call).
+- `gateway_reservations`: reserve-then-settle pattern. `reserve_credits()` RPC locks wallet, accounts for in-flight holds. `release_reservation()` on failure. `expire_gateway_reservations()` sweeps every 5 min via pg_cron.
+- `POST /api/gateway/[provider]?deployment_id=<id>`: auth via session OR `Bearer gw_*` token. Rate-limited (NOT webhook-exempt). No credits → 402 before provider call. Idempotency-Key deduplication.
+- Provider adapters: `lib/gateway/providers/{openai,anthropic,compat}.ts`. Adding a provider = new file only. Streams teed: one to client, one to parse usage SSE for settlement.
+- `GATEWAY_ENABLED` env flag gates the route. Plaintext keys never leave server, never in any log.
+
 **Outcome metrics (as of #51)**
 - `deployment_metrics`: append-only, **daily** partition (not monthly). `tenant_shard_id` first in all composites. 90d raw retention; detached by `partition-rotation-cron`.
 - `deployment_metrics_rollup`: indefinite daily summaries. `rollup_watermark` per `(deployment_id, metric_key, dimensions_hash, date)` row; idempotent ON CONFLICT. `cardinality_overflow=true` when >1000 distinct dimension combos/day for a metric.
@@ -150,7 +160,7 @@ Repositioning: infrastructure agencies use to build agent-powered businesses for
 - [x] #50 Agency ↔ Client + Deployments — `organization_type` extended (`agency`|`client`), `client_relationships` (one active agency per client), `solution_deployments` as op unit for non-SaaS (SaaS keeps subscriptions), `getEffectiveConfig` Redis-cached (5min + 30s LRU), RLS trust boundaries. **BLOCKS #51–#53, refits #40–#44.**
 - [x] #51 Outcome metrics seam — `deployment_metrics` (daily partition, append-only), `emitMetric` idempotent, reserved namespaces (`lead.*`/`meeting.*`/`task.*`/`time.*`/`revenue.*`/`cost.*`/`quality.*`), k≥5 anonymity on benchmarks, PII dimension guard, incremental 15-min rollup with watermark.
 - [x] #40 Usage metering + billing — `usage_meters`, `usage_events` (monthly partitioned), prepaid `credit_wallets`, `record_usage` RPC (atomic, idempotent), `computeUsageSplit` pure fn + fuzz tests, settlement jobs, usage reconciliation, `subscriptions.acquired_by` + `partner_owner_id` (SPEC §13), SPEC §14.
-- [ ] #41 AI Gateway (BYOK) — per-deployment key routing (vendor/agency/client BYOK), spend caps, encrypted `provider_keys` vault, `/api/gateway/[provider]` metered proxy.
+- [x] #41 AI Gateway (BYOK) — per-deployment key routing (vendor/agency/client BYOK), spend caps, encrypted `provider_keys` vault, `/api/gateway/[provider]` metered proxy.
 - [ ] #42 Workflow engine — `workflows/versions/runs/run_steps`, triggers (manual/schedule/webhook), durable tick executor, sellable templates. Runs scoped to deployments.
 - [ ] #43 Connectors — OAuth owned by client_org, delegated to deployment; versioned registry (Gmail/Slack/Sheets/HTTP), encrypted `connector_accounts`.
 - [ ] #44 Usage-product distribution — agency forks vendor templates → customises → deploys under agency brand; metered marketplace products, reseller per-unit markup, affiliate recurring %.
