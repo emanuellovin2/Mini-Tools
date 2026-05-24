@@ -37,6 +37,14 @@ async function writeAuditLog(
     entity_type: string;
     entity_id?: string | null;
     metadata?: Record<string, unknown>;
+    /**
+     * Org whose team activity feed should surface this entry. For Stripe webhooks
+     * (actor_role=system), this is the **subject** org — vendor's org for invoice
+     * events, reseller's org for reseller events, etc. Falls back to null when
+     * the relevant org can't be resolved (lookup failure must not abort the
+     * webhook). See SPEC §13 + CLAUDE.md #47.
+     */
+    actor_org_id?: string | null;
   }
 ): Promise<void> {
   await admin.from("audit_log").insert({
@@ -46,7 +54,50 @@ async function writeAuditLog(
     entity_type: entry.entity_type,
     entity_id: entry.entity_id ?? null,
     metadata: (entry.metadata ?? null) as unknown as Json,
+    actor_org_id: entry.actor_org_id ?? null,
   });
+}
+
+// Resolve a user's personal org id for audit-log stamping. Errors are swallowed
+// so a missing membership row never aborts a webhook handler.
+async function resolveOrgForUser(
+  admin: AdminClient,
+  userId: string | null | undefined
+): Promise<string | null> {
+  if (!userId) return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (admin as any)
+    .from("org_members")
+    .select("org_id, organizations!inner(type)")
+    .eq("user_id", userId)
+    .eq("organizations.type", "personal")
+    .maybeSingle();
+  return (data?.org_id as string | undefined) ?? null;
+}
+
+// Resolve the vendor's personal org id from an app id (the org whose activity
+// feed should surface invoice/refund/dispute events for that app).
+async function resolveOrgForApp(
+  admin: AdminClient,
+  appId: string | null | undefined
+): Promise<string | null> {
+  if (!appId) return null;
+  const { data: app } = await admin.from("apps").select("vendor_id").eq("id", appId).maybeSingle();
+  return resolveOrgForUser(admin, app?.vendor_id);
+}
+
+// Resolve org from a subscription stripe id — looks up app_id then vendor.
+async function resolveOrgForStripeSub(
+  admin: AdminClient,
+  stripeSubId: string | null | undefined
+): Promise<string | null> {
+  if (!stripeSubId) return null;
+  const { data: sub } = await admin
+    .from("subscriptions")
+    .select("app_id")
+    .eq("stripe_subscription_id", stripeSubId)
+    .maybeSingle();
+  return resolveOrgForApp(admin, sub?.app_id);
 }
 
 // Recompute affiliate_active_mrr_cents as sum of price_cents of active/trialing subs attributed to this affiliate.
@@ -98,6 +149,7 @@ async function enqueuePendingTransfer(
     action: "transfer.deferred",
     entity_type: args.recipientKind === "affiliate" ? "affiliate_attributions" : "reseller_subscriptions",
     entity_id: args.recipientId,
+    actor_org_id: await resolveOrgForUser(admin, args.recipientId),
     metadata: {
       invoice_id: args.invoiceId,
       amount_cents: args.amountCents,
@@ -204,6 +256,7 @@ export async function handleCheckoutSessionCompleted(
       action: "reseller_subscription.created",
       entity_type: "reseller_subscriptions",
       entity_id: sub.id,
+      actor_org_id: await resolveOrgForUser(admin, reseller_id),
       metadata: { reseller_id, status },
     });
     return;
@@ -258,6 +311,7 @@ export async function handleCheckoutSessionCompleted(
       action: "subscription.created.reseller",
       entity_type: "subscriptions",
       entity_id: sub.id,
+      actor_org_id: await resolveOrgForApp(admin, app_id),
       metadata: { buyer_id, app_id, status, reseller_id, reseller_offer_id },
     });
     logAccessEvent({ action: "subscription.created.reseller", entity_id: sub.id, app_id, status });
@@ -319,6 +373,7 @@ export async function handleCheckoutSessionCompleted(
       action: "affiliate.attribution.recorded",
       entity_type: "affiliate_attributions",
       entity_id: upsertedRows.id,
+      actor_org_id: await resolveOrgForApp(admin, app_id),
       metadata: { affiliate_id: resolvedAffiliateId, code: resolvedAffCode, app_id },
     });
   }
@@ -334,6 +389,7 @@ export async function handleCheckoutSessionCompleted(
     action: "subscription.created",
     entity_type: "subscriptions",
     entity_id: subscriptionId,
+    actor_org_id: await resolveOrgForApp(admin, app_id),
     metadata: { buyer_id, app_id, status, affiliate_id: resolvedAffiliateId ?? undefined },
   });
 
@@ -373,12 +429,19 @@ export async function handleSubscriptionUpdated(
         .update(updatePayload)
         .eq("id", wlOfferData.id);
 
+      // Look up reseller_id for org resolution on this WL offer event
+      const { data: wlOwner } = await admin
+        .from("reseller_offers")
+        .select("reseller_id")
+        .eq("id", wlOfferData.id)
+        .maybeSingle();
       await writeAuditLog(admin, {
         actor_id: null,
         actor_role: "system",
         action: "wl_tier2_subscription.updated",
         entity_type: "reseller_offers",
         entity_id: wlOfferData.id,
+        actor_org_id: await resolveOrgForUser(admin, wlOwner?.reseller_id),
         metadata: { stripe_sub_id: sub.id, wl_status: newWlStatus },
       });
     }
@@ -404,6 +467,8 @@ export async function handleSubscriptionUpdated(
       canceledAt: sub.canceled_at ? new Date(sub.canceled_at * 1000).toISOString() : null,
     });
 
+    const resellerOrgId = await resolveOrgForUser(admin, resellerPlatformSub.reseller_id);
+
     // If the reseller just lapsed, pause all their offers.
     if (wasActive && !nowActive) {
       await pauseOffersOnLapse(resellerPlatformSub.reseller_id);
@@ -413,6 +478,7 @@ export async function handleSubscriptionUpdated(
         action: "reseller_subscription.lapsed.offers_paused",
         entity_type: "reseller_subscriptions",
         entity_id: sub.id,
+        actor_org_id: resellerOrgId,
         metadata: { reseller_id: resellerPlatformSub.reseller_id, status },
       });
     }
@@ -423,6 +489,7 @@ export async function handleSubscriptionUpdated(
       action: "reseller_subscription.updated",
       entity_type: "reseller_subscriptions",
       entity_id: sub.id,
+      actor_org_id: resellerOrgId,
       metadata: { reseller_id: resellerPlatformSub.reseller_id, status },
     });
     return;
@@ -475,6 +542,7 @@ export async function handleSubscriptionUpdated(
     action: "subscription.updated",
     entity_type: "subscriptions",
     entity_id: sub.id,
+    actor_org_id: await resolveOrgForStripeSub(admin, sub.id),
     metadata: { status, cancel_at_period_end: sub.cancel_at_period_end },
   });
 
@@ -517,6 +585,7 @@ export async function handleInvoicePaid(
       action: "wl_tier2_subscription.invoice.paid",
       entity_type: "reseller_offers",
       entity_id: wlOffer.id,
+      actor_org_id: await resolveOrgForUser(admin, wlOffer.reseller_id),
       metadata: { stripe_sub_id: subscriptionId, amount_cents: invoice.amount_paid },
     });
     return;
@@ -543,6 +612,7 @@ export async function handleInvoicePaid(
       action: "reseller_subscription.invoice.paid",
       entity_type: "reseller_subscriptions",
       entity_id: subscriptionId,
+      actor_org_id: await resolveOrgForUser(admin, resellerPlatformSub.reseller_id),
       metadata: { reseller_id: resellerPlatformSub.reseller_id, amount_cents: invoice.amount_paid },
     });
     return;
@@ -700,6 +770,7 @@ export async function handleInvoicePaid(
           action: "reseller.transfer.created",
           entity_type: "subscriptions",
           entity_id: subscriptionId,
+          actor_org_id: await resolveOrgForUser(admin, resellerId),
           metadata: {
             invoice_id: invoiceId,
             reseller_id: resellerId,
@@ -765,6 +836,7 @@ export async function handleInvoicePaid(
         action: "affiliate.transfer.created",
         entity_type: "affiliate_attributions",
         entity_id: subscriptionId,
+        actor_org_id: await resolveOrgForUser(admin, affiliateIdForTransfer),
         metadata: {
           invoice_id: invoiceId,
           affiliate_id: affiliateIdForTransfer,
@@ -842,6 +914,7 @@ export async function handleInvoicePaid(
     action: "invoice.paid",
     entity_type: "subscriptions",
     entity_id: subscriptionId,
+    actor_org_id: await resolveOrgForUser(admin, app.vendor_id),
     metadata: {
       invoice_id: invoiceId,
       amount_paid_gross: grossAmountCents,
@@ -955,6 +1028,7 @@ export async function handleInvoicePaymentFailed(
     action: "invoice.payment_failed",
     entity_type: "subscriptions",
     entity_id: subscriptionId ?? null,
+    actor_org_id: await resolveOrgForStripeSub(admin, subscriptionId),
     metadata: { invoice_id: invoice.id, amount_due: invoice.amount_due },
   });
 
@@ -1153,6 +1227,7 @@ export async function handleChargeRefunded(
     action: "charge.refunded",
     entity_type: "charges",
     entity_id: charge.id,
+    actor_org_id: await resolveOrgForUser(admin, revenueRow?.vendor_id),
     metadata: { invoice_id: invoiceId, amount_refunded: charge.amount_refunded },
   });
 
@@ -1172,23 +1247,46 @@ export async function handleDisputeEvent(
   const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
   if (!chargeId) return;
 
-  // Dispute lost: reverse ALL transfers (vendor + affiliate/reseller all absorb the loss).
-  // Only act on closed+lost — created events are logged only, no reversal yet.
-  if (eventType === "charge.dispute.closed" && dispute.status === "lost") {
+  // Resolve invoice id from the charge → PaymentIntent → transfer_group chain (used
+  // for both transfer-reversal and audit-org resolution).
+  let disputeInvoiceId: string | null = null;
+  try {
     const stripe = getStripe();
     const charge = await stripe.charges.retrieve(chargeId);
     const piId = typeof charge.payment_intent === "string"
       ? charge.payment_intent
       : charge.payment_intent?.id ?? null;
-
     if (piId) {
       const pi = await stripe.paymentIntents.retrieve(piId);
       const tg = pi.transfer_group;
       if (tg?.startsWith("invoice_")) {
-        const invoiceId = tg.slice("invoice_".length);
-        await reverseTransfers({ invoiceId, chargeId });
+        disputeInvoiceId = tg.slice("invoice_".length);
       }
     }
+  } catch {
+    /* lookup failure must not block the audit log */
+  }
+
+  // Dispute lost: reverse ALL transfers (vendor + affiliate/reseller all absorb the loss).
+  // Only act on closed+lost — created events are logged only, no reversal yet.
+  if (
+    eventType === "charge.dispute.closed" &&
+    dispute.status === "lost" &&
+    disputeInvoiceId
+  ) {
+    await reverseTransfers({ invoiceId: disputeInvoiceId, chargeId });
+  }
+
+  // Resolve vendor org for the team-activity feed
+  let disputeOrgId: string | null = null;
+  if (disputeInvoiceId) {
+    const { data: revRow } = await admin
+      .from("vendor_revenue_events")
+      .select("vendor_id")
+      .eq("stripe_invoice_id", disputeInvoiceId)
+      .gt("amount_cents", 0)
+      .maybeSingle();
+    disputeOrgId = await resolveOrgForUser(admin, revRow?.vendor_id);
   }
 
   await writeAuditLog(admin, {
@@ -1197,6 +1295,7 @@ export async function handleDisputeEvent(
     action: eventType,
     entity_type: "disputes",
     entity_id: dispute.id,
+    actor_org_id: disputeOrgId,
     metadata: { charge_id: chargeId, status: dispute.status },
   });
 }
@@ -1257,6 +1356,14 @@ export async function handleAccountDeauthorized(
   connectedAccountId: string,
   admin: AdminClient
 ): Promise<void> {
+  // Resolve org via the connected account before we strip the link, so we can
+  // stamp the audit row even if no profile match is found (legacy data).
+  const { data: orgRow } = await admin
+    .from("organizations")
+    .select("id")
+    .eq("stripe_account_id", connectedAccountId)
+    .maybeSingle();
+
   await admin
     .from("profiles")
     .update({ charges_enabled: false, payouts_enabled: false })
@@ -1273,6 +1380,7 @@ export async function handleAccountDeauthorized(
     action: "account.application.deauthorized",
     entity_type: "profiles",
     entity_id: connectedAccountId,
+    actor_org_id: orgRow?.id ?? null,
     metadata: {},
   });
 }

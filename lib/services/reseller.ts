@@ -6,6 +6,17 @@ import { syncResellerConnectBranding } from "@/lib/stripe/connect";
 import { validateWLBrand, WL_COLOR_REGEX } from "@/lib/validation/wl-brand";
 import { detectLogoMimeType } from "@/lib/utils/magic-bytes";
 import { writeAuditLog } from "@/lib/services/admin";
+import { getPersonalOrgId } from "@/lib/services/org";
+
+// Resolve actor_org_id for audit. Falls back to null on lookup failure so a
+// missing personal-org row never blocks the main mutation.
+async function resolveActorOrgId(userId: string): Promise<string | null> {
+  try {
+    return await getPersonalOrgId(userId);
+  } catch {
+    return null;
+  }
+}
 
 type SubscriptionStatus = Database["public"]["Enums"]["subscription_status"];
 type ResellerOfferStatus = Database["public"]["Enums"]["reseller_offer_status"];
@@ -403,6 +414,7 @@ export async function upgradeOfferToWLTier2(args: {
   // 8. Audit log
   await writeAuditLog({
     actorId: args.resellerId,
+    actorOrgId: await resolveActorOrgId(args.resellerId),
     actorRole: "reseller",
     action: "wl_tier2_upgraded",
     entityType: "reseller_offers",
@@ -449,6 +461,7 @@ export async function cancelWLTier2(args: {
 
   await writeAuditLog({
     actorId: args.resellerId,
+    actorOrgId: await resolveActorOrgId(args.resellerId),
     actorRole: "reseller",
     action: "wl_tier2_canceled",
     entityType: "reseller_offers",
@@ -497,6 +510,7 @@ export async function setResellerGlobalBranding(args: {
 
   await writeAuditLog({
     actorId: args.resellerId,
+    actorOrgId: await resolveActorOrgId(args.resellerId),
     actorRole: "reseller",
     action: "reseller_global_branding_updated",
     entityType: "profiles",
@@ -515,6 +529,7 @@ export async function clearResellerGlobalBranding(resellerId: string): Promise<v
   if (error) throw new Error(`Failed to clear global branding: ${error.message}`);
   await writeAuditLog({
     actorId: resellerId,
+    actorOrgId: await resolveActorOrgId(resellerId),
     actorRole: "reseller",
     action: "reseller_global_branding_cleared",
     entityType: "profiles",
@@ -644,6 +659,7 @@ export async function setResellerOpenness(
 
   await writeAuditLog({
     actorId: vendorId,
+    actorOrgId: await resolveActorOrgId(vendorId),
     actorRole: "vendor",
     action: "vendor_reseller_openness_changed",
     entityType: "profiles",
