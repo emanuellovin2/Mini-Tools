@@ -161,6 +161,15 @@ scripts/
 - `Lightbox` (`components/ui/Lightbox.tsx`) — keyboard nav (←→ ESC Home End), thumb strip, focus trap, body-scroll lock.
 - `ScreenshotGallery` (`app/app/[id]/_components/`) — hero + 4-thumb grid + "+N more" pill, wraps Lightbox.
 
+## Design system v2 (as of #31)
+- **Tokens** (`app/globals.css`): `--font-size-base: 13px`, `--primary: 245 100% 68%` (#635bff), `--sidebar-w: 232px`, `--topbar-h: 56px`. Dark mode via `html[data-theme="dark"]`. HSL channel vars (`--primary: H S% L%`) are consumed by `bg-primary`/`text-primary` Tailwind utilities.
+- **New primitives** (`components/ui/`): `Drawer` (slide-from-right, 520px, focus trap), `Sparkline` (SVG, `points` prop), `KpiCard` (label/value/delta/`sparkline`), `DenseTable`/`DenseRow`/`DenseCell` (CSS grid, `cols` prop, keyboard-accessible), `EmptyState` (icon/title/body/`cta`), `Tooltip` (120ms delay, `side` prop), `OnboardingChecklist` (circular SVG ring, collapsible), `NotificationBell` (unread badge, popover), `CommandPalette` (cmdk, ⌘K).
+- **Updated primitives**: `Button` (new `outline` variant, `xs` size, `focus-visible:ring-primary/30`), `Badge` (ok/warn/bad/outline variants), `Skeleton` (rect/line/avatar variants, `lines` prop), `Toast` (new API: `add(msg, { type?, undo? })`, types: ok/warn/bad, 5s undo window).
+- **Layout** (`components/layout/`): `Sidebar` (search slot, role footer, 232px), `Topbar` (env chip, breadcrumbs, notification bell slot), `DashboardShell` (mobile hamburger → sidebar drawer at <768px), `PageHeader` (tab bar support).
+- **Per-role layouts** (`app/vendor/layout.tsx`, `app/affiliate/layout.tsx`, `app/admin/layout.tsx`, `app/reseller/layout.tsx`) — Server Components that wrap each dashboard in DashboardShell.
+- **Dev page** (`app/dev/components/page.tsx`) — gated to `NODE_ENV=development`; shows all primitives.
+- **Tests** (`components/ui/__tests__/primitives.test.tsx`) — 36 RTL tests covering all new primitives.
+
 ## Affiliate data model (as of #25)
 - `profiles.affiliate_active_mrr_cents` — current active MRR (drives commission tier + leaderboard rank). Set by `increment_affiliate_mrr` RPC on `invoice.paid`; decremented on refund.
 - `profiles.affiliate_lifetime_mrr_cents` — monotonic cumulative MRR (drives lifetime badges). Decremented on refund to keep badges honest.
@@ -266,7 +275,7 @@ Wave 6 — docs:
 
 **Phase 5 — Wave 8** (sequential: #30 + #31 first, then #32–#39 parallel-able)
 - [x] #30 App screenshots gallery (3–7/app, lightbox, drag-reorder, marketplace preview)
-- [ ] #31 Design system v2 (Stripe-density tokens, drawer/sparkline/cmdk/skeleton/empty-state/toast/bell/onboarding primitives, mobile responsive, dark mode)
+- [x] #31 Design system v2 (Stripe-density tokens, drawer/sparkline/cmdk/skeleton/empty-state/toast/bell/onboarding primitives, mobile responsive, dark mode)
 - [ ] #32 Vendor dashboard v2 (channel mix, Stripe Connect balance, dunning queue, refund/dispute feed, per-app drill-down drawer, openness panel with kickback earnings, transparent fee breakdown)
 - [ ] #33 Affiliate dashboard v2 (conversion funnel, apps-to-promote catalog, earnings per app, Connect status, payout history, pending earnings, refund clawbacks, sticky referrals, share kit with QR)
 - [ ] #34 Reseller dashboard v2 (resellable apps catalog, per-offer analytics drawer, vendor change alerts, Tier 2 WL panel, markup simulator, kickback transparency)

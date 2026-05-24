@@ -20,13 +20,13 @@ const STATUS_BADGE: Record<string, string> = {
   past_due: "bg-yellow-100 text-yellow-700",
   canceled: "bg-red-100 text-red-700",
   unpaid: "bg-red-100 text-red-700",
-  paused: "bg-gray-100 text-gray-500",
-  draft: "bg-gray-100 text-gray-500",
+  paused: "bg-gray-100 text-gray-700",
+  draft: "bg-gray-100 text-gray-700",
 };
 
 const OFFER_STATUS_BADGE: Record<string, string> = {
   active: "bg-green-100 text-green-700",
-  draft: "bg-gray-100 text-gray-500",
+  draft: "bg-gray-100 text-gray-700",
   paused: "bg-yellow-100 text-yellow-700",
 };
 
@@ -62,19 +62,8 @@ export default async function ResellerDashboard({
   if (!profile.slug || !resSub) redirect("/reseller/setup");
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 py-10">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold">Reseller Dashboard</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{user.email}</p>
-          </div>
-          <form action="/api/auth/signout" method="POST">
-            <button type="submit" className="text-sm text-gray-500 hover:text-red-600">
-              Sign out
-            </button>
-          </form>
-        </div>
+    <div className="max-w-5xl mx-auto">
+      <h1 className="text-lg font-semibold mb-6">Reseller Dashboard</h1>
 
         {(setup === "success" || onboard === "success") && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
@@ -98,7 +87,7 @@ export default async function ResellerDashboard({
                       {resSub.status}
                     </span>
                   </div>
-                  <p className="text-gray-500 text-xs">
+                  <p className="text-gray-700 text-xs">
                     Renews:{" "}
                     {new Date(resSub.current_period_end).toLocaleDateString("en-US", {
                       month: "short",
@@ -129,7 +118,7 @@ export default async function ResellerDashboard({
                 <p className="text-sm text-green-600">Payouts enabled ✓</p>
               ) : (
                 <div>
-                  <p className="text-sm text-gray-500 mb-3">
+                  <p className="text-sm text-gray-700 mb-3">
                     Complete Stripe Connect onboarding to receive payouts.
                   </p>
                   <a
@@ -145,7 +134,7 @@ export default async function ResellerDashboard({
             {/* Storefront link */}
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <h2 className="font-semibold mb-2">Your Storefront</h2>
-              <p className="text-sm text-gray-500 font-mono">/r/{profile.slug}</p>
+              <p className="text-sm text-gray-700 font-mono">/r/{profile.slug}</p>
             </div>
           </div>
 
@@ -154,11 +143,11 @@ export default async function ResellerDashboard({
             {/* Stats */}
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white rounded-2xl border border-gray-200 p-5">
-                <p className="text-xs text-gray-500 mb-1">Active subscriptions</p>
+                <p className="text-xs text-gray-700 mb-1">Active subscriptions</p>
                 <p className="text-2xl font-bold">{dashboard.activeSubs}</p>
               </div>
               <div className="bg-white rounded-2xl border border-gray-200 p-5">
-                <p className="text-xs text-gray-500 mb-1">Est. MRR (your share)</p>
+                <p className="text-xs text-gray-700 mb-1">Est. MRR (your share)</p>
                 <p className="text-2xl font-bold">{formatCents(dashboard.mrrCents)}</p>
               </div>
             </div>
@@ -177,7 +166,7 @@ export default async function ResellerDashboard({
                 )}
               </div>
               {offers.length === 0 ? (
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-gray-700">
                   No offers yet.{" "}
                   {isActive && profile.payouts_enabled ? (
                     <Link href="/reseller/offers" className="text-blue-600 hover:underline">
@@ -198,7 +187,7 @@ export default async function ResellerDashboard({
                       >
                         <div>
                           <p className="font-medium">{app?.name ?? "—"}</p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-gray-700">
                             {formatCents(offer.sell_price_cents)}/mo · floor{" "}
                             {formatCents(offer.vendor_floor_snapshot_cents)}
                           </p>
@@ -216,7 +205,6 @@ export default async function ResellerDashboard({
             </div>
           </div>
         </div>
-      </div>
-    </main>
+    </div>
   );
 }

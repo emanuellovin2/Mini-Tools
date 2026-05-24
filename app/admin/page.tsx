@@ -43,12 +43,12 @@ function StatusPill({ status }: { status: string }) {
     trialing: "bg-blue-50 text-blue-700 border-blue-200",
     incomplete: "bg-yellow-50 text-yellow-700 border-yellow-200",
     past_due: "bg-red-50 text-red-600 border-red-200",
-    canceled: "bg-gray-100 text-gray-500 border-gray-200",
+    canceled: "bg-gray-100 text-gray-700 border-gray-200",
     approved: "bg-green-50 text-green-700 border-green-200",
     pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
     rejected: "bg-red-50 text-red-600 border-red-200",
   };
-  const cls = colors[status] ?? "bg-gray-100 text-gray-500 border-gray-200";
+  const cls = colors[status] ?? "bg-gray-100 text-gray-700 border-gray-200";
   return (
     <span
       className={`text-xs px-2 py-0.5 rounded-full border font-medium ${cls}`}
@@ -121,31 +121,12 @@ export default async function AdminDashboard({ searchParams }: Props) {
   }
 
   return (
-    <main className="max-w-6xl mx-auto px-4 py-10 space-y-12">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-        <div className="flex items-center gap-4">
-          <Link
-            href="/admin/reconciliation"
-            className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
-          >
-            Reconciliation →
-          </Link>
-          <form action="/api/auth/signout" method="POST">
-            <button
-              type="submit"
-              className="text-sm text-gray-400 hover:text-red-500 transition-colors"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
-      </div>
+    <div className="max-w-6xl mx-auto space-y-12">
+      <h1 className="text-lg font-semibold">Admin Dashboard</h1>
 
       {/* Stats */}
       <section>
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-700 mb-3">
           Platform Stats
         </h2>
         <div className="grid grid-cols-3 gap-4">
@@ -158,7 +139,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
               key={label}
               className="border border-gray-200 rounded-xl p-5 text-center"
             >
-              <p className="text-xs text-gray-400 mb-1">{label}</p>
+              <p className="text-xs text-gray-700 mb-1">{label}</p>
               <p className="text-2xl font-bold">{value}</p>
             </div>
           ))}
@@ -168,7 +149,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
       {/* Churn Alerts */}
       {churnAlerts.length > 0 && (
         <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-700 mb-3">
             Churn Alerts — threshold {(thresholdBps / 100).toFixed(0)}%
           </h2>
           <div className="border border-red-200 rounded-xl overflow-hidden">
@@ -193,7 +174,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
                     </td>
                     <td className="px-4 py-2">{a.canceled}</td>
                     <td className="px-4 py-2">{a.active_at_start}</td>
-                    <td className="px-4 py-2 text-xs text-gray-400">
+                    <td className="px-4 py-2 text-xs text-gray-700">
                       {a.already_alerted ? "Sent" : "Sending…"}
                     </td>
                   </tr>
@@ -206,11 +187,11 @@ export default async function AdminDashboard({ searchParams }: Props) {
 
       {/* Pending Apps */}
       <section>
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-700 mb-3">
           Pending Apps ({pendingApps.length})
         </h2>
         {pendingApps.length === 0 ? (
-          <p className="text-sm text-gray-400 border border-dashed border-gray-200 rounded-xl p-6 text-center">
+          <p className="text-sm text-gray-700 border border-dashed border-gray-200 rounded-xl p-6 text-center">
             No apps awaiting review.
           </p>
         ) : (
@@ -218,11 +199,11 @@ export default async function AdminDashboard({ searchParams }: Props) {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-left">
                 <tr>
-                  <th className="px-4 py-2 font-medium text-gray-500">App</th>
-                  <th className="px-4 py-2 font-medium text-gray-500">Vendor</th>
-                  <th className="px-4 py-2 font-medium text-gray-500">Price</th>
-                  <th className="px-4 py-2 font-medium text-gray-500">Submitted</th>
-                  <th className="px-4 py-2 font-medium text-gray-500">Actions</th>
+                  <th className="px-4 py-2 font-medium text-gray-700">App</th>
+                  <th className="px-4 py-2 font-medium text-gray-700">Vendor</th>
+                  <th className="px-4 py-2 font-medium text-gray-700">Price</th>
+                  <th className="px-4 py-2 font-medium text-gray-700">Submitted</th>
+                  <th className="px-4 py-2 font-medium text-gray-700">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -231,7 +212,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
                     <td className="px-4 py-3">
                       <p className="font-medium">{app.name}</p>
                       {app.description && (
-                        <p className="text-xs text-gray-400 truncate max-w-xs">
+                        <p className="text-xs text-gray-700 truncate max-w-xs">
                           {app.description}
                         </p>
                       )}
@@ -245,7 +226,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
                       )}
                     </td>
                     <td className="px-4 py-3">{app.formatted_price}/mo</td>
-                    <td className="px-4 py-3 text-gray-400">
+                    <td className="px-4 py-3 text-gray-700">
                       {dateShort(app.created_at)}
                     </td>
                     <td className="px-4 py-3">
@@ -264,19 +245,19 @@ export default async function AdminDashboard({ searchParams }: Props) {
 
       {/* Vendors */}
       <section>
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-700 mb-3">
           Vendors ({vendors.length})
         </h2>
         <div className="border border-gray-200 rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-left">
               <tr>
-                <th className="px-4 py-2 font-medium text-gray-500">Name</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Connect</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Charges</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Payouts</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Joined</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Actions</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Name</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Connect</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Charges</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Payouts</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Joined</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -284,7 +265,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-4 py-6 text-center text-gray-400"
+                    className="px-4 py-6 text-center text-gray-700"
                   >
                     No vendors yet.
                   </td>
@@ -295,7 +276,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
                     <td className="px-4 py-3 font-medium">
                       {v.display_name ?? "—"}
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-400 font-mono">
+                    <td className="px-4 py-3 text-xs text-gray-700 font-mono">
                       {v.stripe_account_id
                         ? v.stripe_account_id.slice(0, 12) + "…"
                         : "—"}
@@ -314,14 +295,14 @@ export default async function AdminDashboard({ searchParams }: Props) {
                         <span className="text-red-500 text-xs">✗</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-gray-400">
+                    <td className="px-4 py-3 text-gray-700">
                       {dateShort(v.created_at)}
                     </td>
                     <td className="px-4 py-3">
                       {v.stripe_account_id ? (
                         <SyncStripeButton vendorId={v.id} />
                       ) : (
-                        <span className="text-xs text-gray-300">No account</span>
+                        <span className="text-xs text-gray-600">No account</span>
                       )}
                     </td>
                   </tr>
@@ -334,7 +315,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
 
       {/* Vendor commission overrides */}
       <section>
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-700 mb-3">
           Vendor Commission Overrides
         </h2>
         <VendorCutOverrideTable vendors={vendorCutInfo} />
@@ -342,19 +323,19 @@ export default async function AdminDashboard({ searchParams }: Props) {
 
       {/* Subscriptions */}
       <section>
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-700 mb-3">
           Subscriptions ({subTotal})
         </h2>
         <div className="border border-gray-200 rounded-xl overflow-hidden mb-3">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-left">
               <tr>
-                <th className="px-4 py-2 font-medium text-gray-500">App</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Buyer ID</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Status</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Price</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Period end</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Created</th>
+                <th className="px-4 py-2 font-medium text-gray-700">App</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Buyer ID</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Status</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Price</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Period end</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Created</th>
               </tr>
             </thead>
             <tbody>
@@ -362,7 +343,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-4 py-6 text-center text-gray-400"
+                    className="px-4 py-6 text-center text-gray-700"
                   >
                     No subscriptions.
                   </td>
@@ -371,7 +352,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
                 subscriptions.map((s) => (
                   <tr key={s.id} className="border-t border-gray-100">
                     <td className="px-4 py-3 font-medium">{s.app_name}</td>
-                    <td className="px-4 py-3 text-xs text-gray-400 font-mono">
+                    <td className="px-4 py-3 text-xs text-gray-700 font-mono">
                       {s.buyer_id.slice(0, 8)}…
                     </td>
                     <td className="px-4 py-3">
@@ -383,10 +364,10 @@ export default async function AdminDashboard({ searchParams }: Props) {
                       )}
                     </td>
                     <td className="px-4 py-3">{s.formatted_price}/mo</td>
-                    <td className="px-4 py-3 text-gray-400">
+                    <td className="px-4 py-3 text-gray-700">
                       {dateShort(s.current_period_end)}
                     </td>
-                    <td className="px-4 py-3 text-gray-400">
+                    <td className="px-4 py-3 text-gray-700">
                       {dateShort(s.created_at)}
                     </td>
                   </tr>
@@ -405,7 +386,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
                 ← Prev
               </Link>
             )}
-            <span className="text-gray-400">
+            <span className="text-gray-700">
               {subPage} / {subTotalPages}
             </span>
             {subPage < subTotalPages && (
@@ -422,7 +403,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
 
       {/* Audit Log */}
       <section>
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-700 mb-3">
           Audit Log ({auditTotal})
         </h2>
 
@@ -473,11 +454,11 @@ export default async function AdminDashboard({ searchParams }: Props) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-left">
               <tr>
-                <th className="px-4 py-2 font-medium text-gray-500">When</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Actor</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Action</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Entity</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Entity ID</th>
+                <th className="px-4 py-2 font-medium text-gray-700">When</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Actor</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Action</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Entity</th>
+                <th className="px-4 py-2 font-medium text-gray-700">Entity ID</th>
               </tr>
             </thead>
             <tbody>
@@ -485,7 +466,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
                 <tr>
                   <td
                     colSpan={5}
-                    className="px-4 py-6 text-center text-gray-400"
+                    className="px-4 py-6 text-center text-gray-700"
                   >
                     No audit log entries match your filters.
                   </td>
@@ -493,7 +474,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
               ) : (
                 auditEntries.map((e) => (
                   <tr key={e.id} className="border-t border-gray-100">
-                    <td className="px-4 py-2 text-xs text-gray-400 whitespace-nowrap">
+                    <td className="px-4 py-2 text-xs text-gray-700 whitespace-nowrap">
                       {new Date(e.created_at).toLocaleString()}
                     </td>
                     <td className="px-4 py-2 text-xs">
@@ -501,7 +482,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
                         {e.actor_role ?? "system"}
                       </span>
                       {e.actor_id && (
-                        <span className="text-gray-400 ml-1 font-mono">
+                        <span className="text-gray-700 ml-1 font-mono">
                           ({e.actor_id.slice(0, 8)}…)
                         </span>
                       )}
@@ -509,10 +490,10 @@ export default async function AdminDashboard({ searchParams }: Props) {
                     <td className="px-4 py-2 font-mono text-xs text-gray-700">
                       {e.action}
                     </td>
-                    <td className="px-4 py-2 text-xs text-gray-500">
+                    <td className="px-4 py-2 text-xs text-gray-700">
                       {e.entity_type}
                     </td>
-                    <td className="px-4 py-2 text-xs text-gray-400 font-mono">
+                    <td className="px-4 py-2 text-xs text-gray-700 font-mono">
                       {e.entity_id
                         ? e.entity_id.length > 20
                           ? e.entity_id.slice(0, 12) + "…"
@@ -535,7 +516,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
                 ← Prev
               </Link>
             )}
-            <span className="text-gray-400">
+            <span className="text-gray-700">
               {auditPage} / {auditTotalPages}
             </span>
             {auditPage < auditTotalPages && (
@@ -549,6 +530,6 @@ export default async function AdminDashboard({ searchParams }: Props) {
           </div>
         )}
       </section>
-    </main>
+    </div>
   );
 }

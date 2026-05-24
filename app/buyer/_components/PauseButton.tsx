@@ -39,9 +39,9 @@ export function PauseButton({
       const result = await pauseSubscriptionAction(subscriptionId, days);
       setOpen(false);
       if ("error" in result) {
-        toast(result.error, "error");
+        toast(result.error, { type: "bad" });
       } else {
-        toast(`Subscription paused until ${pauseUntilDate(days)}.`, "success");
+        toast(`Subscription paused until ${pauseUntilDate(days)}.`, { type: "ok" });
       }
     });
   }
@@ -100,9 +100,9 @@ export function ResumeButton({ subscriptionId }: { subscriptionId: string }) {
       const result = await resumeSubscriptionAction(subscriptionId);
       setOpen(false);
       if ("error" in result) {
-        toast(result.error, "error");
+        toast(result.error, { type: "bad" });
       } else {
-        toast("Subscription resumed. Access restored.", "success");
+        toast("Subscription resumed. Access restored.", { type: "ok" });
       }
     });
   }

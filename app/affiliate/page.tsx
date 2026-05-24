@@ -96,13 +96,8 @@ export default async function AffiliateDashboardPage() {
   const earnedBadges = badgesWithStatus.filter((b) => b.earned);
 
   return (
-    <main className="max-w-3xl mx-auto px-4 py-10 space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Affiliate Dashboard</h1>
-        {profile.display_name && (
-          <p className="text-sm text-gray-500 mt-1">{profile.display_name}</p>
-        )}
-      </div>
+    <div className="max-w-3xl mx-auto space-y-8">
+      <h1 className="text-lg font-semibold">Affiliate Dashboard</h1>
 
       {/* Stripe Connect onboarding */}
       {!onboardingDone && (
@@ -146,7 +141,7 @@ export default async function AffiliateDashboardPage() {
             </div>
           )}
           {nextBadge && (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-700">
               Next badge:{" "}
               <span className="font-medium text-gray-700">
                 {nextBadge.badge.icon_emoji} {nextBadge.badge.display_name}
@@ -160,13 +155,13 @@ export default async function AffiliateDashboardPage() {
       {/* Aggregate stats */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <p className="text-xs text-gray-500">Active Attributed Subscribers</p>
+          <p className="text-xs text-gray-700">Active Attributed Subscribers</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{totalActiveSubs}</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <p className="text-xs text-gray-500">Estimated MRR Earned</p>
+          <p className="text-xs text-gray-700">Estimated MRR Earned</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{formatCents(totalMrrCents)}</p>
-          <p className="text-xs text-gray-400 mt-0.5">Based on active subscriber prices</p>
+          <p className="text-xs text-gray-700 mt-0.5">Based on active subscriber prices</p>
         </div>
       </div>
 
@@ -178,7 +173,7 @@ export default async function AffiliateDashboardPage() {
           </div>
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-xs text-gray-400 border-b border-gray-100">
+              <tr className="text-xs text-gray-700 border-b border-gray-100">
                 <th className="text-left px-4 py-2 font-medium">App</th>
                 <th className="text-right px-4 py-2 font-medium">Active Subs</th>
                 <th className="text-right px-4 py-2 font-medium">Est. MRR Earned</th>
@@ -218,6 +213,6 @@ export default async function AffiliateDashboardPage() {
         <h2 className="text-sm font-semibold text-gray-700 mb-4">Your Referral Links</h2>
         <LinksList links={links} appUrl={appUrl} />
       </div>
-    </main>
+    </div>
   );
 }

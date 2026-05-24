@@ -16,9 +16,9 @@ export default function CancelButton({ subscriptionId }: { subscriptionId: strin
       const result = await cancelSubscriptionAction(subscriptionId);
       setOpen(false);
       if ("error" in result) {
-        toast(result.error, "error");
+        toast(result.error, { type: "bad" });
       } else {
-        toast("Subscription will cancel at the end of the billing period.", "success");
+        toast("Subscription will cancel at the end of the billing period.", { type: "ok" });
       }
     });
   }

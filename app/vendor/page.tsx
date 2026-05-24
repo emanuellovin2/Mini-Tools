@@ -25,6 +25,7 @@ import MRRWaterfallChart from "./_components/MRRWaterfallChart";
 import CohortRetentionTable from "./_components/CohortRetentionTable";
 import ChurnRateCard from "./_components/ChurnRateCard";
 import LTVCard from "./_components/LTVCard";
+import AppFilterSelect from "./_components/AppFilterSelect";
 
 export const metadata: Metadata = { title: "Vendor Dashboard — [PLATFORM]" };
 
@@ -69,26 +70,26 @@ function AppRow({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium text-sm">{app.name}</span>
           <span
-            className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[app.status] ?? "bg-gray-100 text-gray-500"}`}
+            className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[app.status] ?? "bg-gray-100 text-gray-700"}`}
           >
             {app.status}
           </span>
           {app.category && (
-            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+            <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
               {app.category}
             </span>
           )}
         </div>
 
-        <div className="mt-1 flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+        <div className="mt-1 flex items-center gap-4 text-xs text-gray-700 flex-wrap">
           <span>{formatCents(app.price_cents)}/mo</span>
           {app.min_price_cents != null && (
-            <span className="text-gray-400">
+            <span className="text-gray-700">
               floor {formatCents(app.min_price_cents)}/mo (resellable)
             </span>
           )}
           {app.affiliate_commission_bps != null && (
-            <span className="text-gray-400">
+            <span className="text-gray-700">
               affiliate {app.affiliate_commission_bps / 100}%
             </span>
           )}
@@ -110,13 +111,13 @@ function EarningsSummary({ stats }: { stats: VendorSubscriptionStat[] }) {
   return (
     <div className="grid grid-cols-2 gap-4">
       <div className="bg-gray-50 rounded-xl p-4">
-        <p className="text-xs text-gray-500 mb-1">Active subscribers</p>
+        <p className="text-xs text-gray-700 mb-1">Active subscribers</p>
         <p className="text-2xl font-bold">{active.length}</p>
       </div>
       <div className="bg-gray-50 rounded-xl p-4">
-        <p className="text-xs text-gray-500 mb-1">Est. MRR (gross)</p>
+        <p className="text-xs text-gray-700 mb-1">Est. MRR (gross)</p>
         <p className="text-2xl font-bold">{formatCents(totalMrr)}</p>
-        <p className="text-xs text-gray-400 mt-1">Stripe earnings wire up in #5–#7</p>
+        <p className="text-xs text-gray-700 mt-1">Stripe earnings wire up in #5–#7</p>
       </div>
     </div>
   );
@@ -167,23 +168,8 @@ export default async function VendorDashboard({
   const trailing3Bps = Math.round((c1 + c2 + c3) / 3);
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 py-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold">Vendor Dashboard</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{user.email}</p>
-          </div>
-          <form action="/api/auth/signout" method="POST">
-            <button
-              type="submit"
-              className="text-sm text-gray-500 hover:text-red-600 transition-colors"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
+    <div className="max-w-5xl mx-auto">
+      <h1 className="text-lg font-semibold mb-6">Vendor Dashboard</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left column */}
@@ -200,7 +186,7 @@ export default async function VendorDashboard({
                   <span className="inline-block text-xs px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200 font-medium">
                     Custom rate {(effectiveCutBps / 100).toFixed(2)}% (set by admin)
                   </span>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-gray-700 mt-1">
                     This overrides the standard tier pricing.
                   </p>
                 </div>
@@ -216,7 +202,7 @@ export default async function VendorDashboard({
 
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <h2 className="font-semibold mb-1">Reseller Openness</h2>
-              <p className="text-xs text-gray-400 mb-3">
+              <p className="text-xs text-gray-700 mb-3">
                 Controls whether resellers can list or white-label your app.
               </p>
               <ResellerOpennessForm
@@ -241,28 +227,7 @@ export default async function VendorDashboard({
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-semibold">Analytics</h2>
                 {/* Per-app filter */}
-                <form method="GET">
-                  <select
-                    name="app"
-                    defaultValue={selectedAppId ?? ""}
-                    onChange={(e) => {
-                      (e.currentTarget.form as HTMLFormElement).submit();
-                    }}
-                    className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                  >
-                    <option value="">All apps</option>
-                    {apps.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
-                  <noscript>
-                    <button type="submit" className="ml-2 text-xs underline">
-                      Filter
-                    </button>
-                  </noscript>
-                </form>
+                <AppFilterSelect apps={apps} selectedAppId={selectedAppId ?? null} />
               </div>
 
               {/* KPI cards */}
@@ -274,7 +239,7 @@ export default async function VendorDashboard({
 
               {/* MRR waterfall bar chart */}
               <div className="mb-6">
-                <p className="text-xs font-medium text-gray-500 mb-3">
+                <p className="text-xs font-medium text-gray-700 mb-3">
                   New vs Churned MRR — last 6 months
                 </p>
                 <MRRWaterfallChart data={waterfall} />
@@ -282,17 +247,17 @@ export default async function VendorDashboard({
 
               {/* Cohort retention heatmap */}
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-3">
+                <p className="text-xs font-medium text-gray-700 mb-3">
                   Cohort retention
                 </p>
                 <CohortRetentionTable rows={cohort} />
               </div>
 
-              <p className="text-xs text-gray-400 mt-4">
+              <p className="text-xs text-gray-700 mt-4">
                 MRR includes direct + affiliate subs. Reseller-sold subs counted at vendor floor.{" "}
                 <a
                   href="#methodology"
-                  className="underline hover:text-gray-600"
+                  className="underline hover:text-gray-900"
                   id="methodology"
                 >
                   Methodology
@@ -309,12 +274,12 @@ export default async function VendorDashboard({
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <h2 className="font-semibold mb-4">
                 My Apps{" "}
-                <span className="text-gray-400 font-normal text-sm">
+                <span className="text-gray-700 font-normal text-sm">
                   ({apps.length})
                 </span>
               </h2>
               {apps.length === 0 ? (
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-gray-700">
                   No apps yet. Submit one below.
                 </p>
               ) : (
@@ -336,7 +301,6 @@ export default async function VendorDashboard({
             </div>
           </div>
         </div>
-      </div>
-    </main>
+    </div>
   );
 }
