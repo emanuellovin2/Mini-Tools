@@ -69,6 +69,12 @@ const serverEnvSchema = z.object({
   SLACK_CLIENT_SECRET: z.string().min(1).optional(),
   // #53 — HMAC-SHA256 key for signing client branding cookies (1h TTL)
   CLIENT_BRANDING_SECRET: z.string().min(16).optional(),
+  // #45 — Partner-client erasure grace window (days). Default 30.
+  ERASURE_GRACE_DAYS: z.string().optional().default("30").transform(Number),
+  // #45 — Retention window for workflow run I/O content (days). Default 90.
+  RETENTION_DAYS_WORKFLOW_RUN_IO: z.string().optional().default("90").transform(Number),
+  // #45 — Retention window for gateway debug logs (days). Default 90.
+  RETENTION_DAYS_GATEWAY_LOGS: z.string().optional().default("90").transform(Number),
 });
 
 export type Env = z.infer<typeof serverEnvSchema>;

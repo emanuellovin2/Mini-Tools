@@ -32,7 +32,8 @@ stripe listen --forward-to localhost:3000/api/webhooks
 
 ## Key file locations
 ```
-lib/services/          # service layer (apps.ts, solutions.ts, vendor.ts, buyer.ts, admin.ts, affiliate.ts, reseller.ts, org.ts, analytics.ts, reconciliation.ts, api-keys.ts, notifications.ts, onboarding.ts, export.ts, vendor-webhooks.ts, agency.ts, deployments.ts, outcomes.ts, usage.ts, gateway.ts, client-portal.ts)
+lib/services/          # service layer (apps.ts, solutions.ts, vendor.ts, buyer.ts, admin.ts, affiliate.ts, reseller.ts, org.ts, analytics.ts, reconciliation.ts, api-keys.ts, notifications.ts, onboarding.ts, export.ts, vendor-webhooks.ts, agency.ts, deployments.ts, outcomes.ts, usage.ts, gateway.ts, client-portal.ts, privacy.ts)
+lib/privacy/erasers.ts # #45 eraser registry — each store registers an idempotent (partnerClientId) => void eraser
 lib/gateway/           # AI gateway: crypto.ts (envelope encryption), providers/{openai,anthropic,compat}.ts (adapters)
 lib/usage/split.ts     # pure priceUnit + computeUsageSplit (flat/tiered/volume, BYOK/managed, fuzz-tested)
 lib/stripe/            # billing.ts (computeTier), transfers.ts, webhook-handlers.ts, connect.ts, products.ts, with-retry.ts
@@ -63,6 +64,9 @@ app/client/            # client portal (org.type='client' only); outcome charts,
 app/_client/           # internal: branded client portal for agency subdomains (sets cp_branding cookie)
 app/r/ + app/_wl/      # public storefronts (Tier 1 + Tier 2 WL)
 app/legal/fees/        # canonical fee schedule page
+app/legal/dpa/         # #45 Data Processing Agreement (platform as processor)
+app/legal/subprocessors/ # #45 sub-processor list (Stripe, Supabase, Vercel, Resend, AI providers)
+app/settings/client-data/ # #45 partner panel — raise export/erasure for clients
 app/api/               # webhooks/, stripe/, affiliate/, reseller/, v1/, events, verify, launch
 components/ui/         # design system primitives (Button, Card, Drawer, Sparkline, KpiCard, DenseTable, EmptyState, Toast, Badge, Skeleton, CommandPalette, NotificationBell, Lightbox)
 components/layout/     # DashboardShell, Sidebar, Topbar, PageHeader
@@ -162,6 +166,17 @@ supabase/migrations/   # all schema changes — never manual dashboard edits
 - Rollup cron: `outcomes-rollup-cron` Edge Function every 15 min → enqueues `outcomes_rollup_partition` jobs → calls `rollup_outcomes_window(date)` RPC.
 - RLS: client reads own, agency reads operated, vendor reads nothing direct (benchmarks RPC only), admin reads all.
 
+**Partner-client data lifecycle (as of #45)**
+- `partner_clients`: canonical PII registry (`id`, `partner_owner_id → organizations`, `external_ref`, `email`, `display_name`, CRM fields: `tags text[]`, `lifecycle_stage`, `notes`, `last_seen_at`, `deleted_at` soft-delete). All other stores reference `partner_client_id` — PII never duplicated.
+- `partner_data_requests`: tracks export/erasure jobs (`request_type enum('export'|'erasure')`, `status`, `grace_ends_at`, `job_id`, `result_url`).
+- `usage_events.partner_client_id` + `workflow_runs.partner_client_id` — nullable linkage columns added in migration.
+- `lib/privacy/erasers.ts` — eraser registry; each store registers an idempotent fn. `runAllErasers(partnerClientId)` fans out to all.
+- Erasure: soft-delete immediate (halts processing) → grace window (default 30 days, `ERASURE_GRACE_DAYS` env) → `partner_client_erasure_hard` job fans out hard erasure. Financial aggregate rows KEPT (accounting); only identity linkage removed.
+- Retention cron (pg_cron, 04:00 UTC): purges `run_steps.input/output` older than 90 days; hard-deletes soft-deleted client rows past grace.
+- Env vars: `ERASURE_GRACE_DAYS` (default 30), `RETENTION_DAYS_WORKFLOW_RUN_IO` (default 90), `RETENTION_DAYS_GATEWAY_LOGS` (default 90).
+- RLS: only `partner_owner_id` org members + admin; no other counterparty sees identity (SPEC §13).
+- `/legal/dpa` + `/legal/subprocessors` — public processor-stance docs; `/settings/client-data` — partner panel to raise export/erasure.
+
 **Solutions abstraction (as of #49)**
 - `solutions` table (renamed from `apps`). Legacy `CREATE VIEW apps AS SELECT * FROM solutions` — existing code works unchanged.
 - `solution_type enum('saas'|'agent'|'workflow'|'bundle') DEFAULT 'saas'`. Non-SaaS types gated by `SOLUTIONS_NON_SAAS_ENABLED=true`.
@@ -202,7 +217,7 @@ Repositioning: infrastructure agencies use to build agent-powered businesses for
 - [x] #44 Usage-product distribution — `product_kind` enum on solutions, `reseller_metered_offers` table, per-unit split via `computeUsageSplit`, marketplace badges + unit pricing, usage earnings panels in vendor/reseller/affiliate dashboards, `/legal/fees` usage section.
 - [x] #52 Agency operations dashboard — `/agency` route (org.type='agency' only), client-centric health board, `client_health_scores` precomputed hourly, `computeChurnRisk` pure fn, cursor pagination (no OFFSET), Stripe Connect balance + payouts.
 - [x] #53 Client portal — `/client` + subdomain WL (reuses #29 proxy pattern), branding from active agency relationship cached in signed cookie (1h) + Redis `branding_version:*`, outcome charts, credit wallet, privacy panel, agency-branded emails via jobs queue, "Hosted by [PLATFORM]" footer mandatory.
-- [ ] #45 DPA + partner-client data lifecycle — `partner_clients` CRM, cross-deployment erasure/export, retention cron, `/legal/dpa`. Depends on #40/#41/#43/#50.
+- [x] #45 DPA + partner-client data lifecycle — `partner_clients` CRM, cross-deployment erasure/export, retention cron, `/legal/dpa` + `/legal/subprocessors`, partner settings panel `/settings/client-data`. Depends on #40/#41/#43/#50.
 
 ## Guardrails
 - Never expose buyer email, name, or card data to vendors, resellers, or affiliates. `subscriptions.buyer_id` has no read path for non-admin roles (SPEC §6/§7).

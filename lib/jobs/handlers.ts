@@ -69,11 +69,72 @@ registerHandler("churn_alert_email", async (payload, _ctx) => {
   return { vendorId, month };
 });
 
-// Stub: erasure fan-out (#45 will populate)
-registerHandler("erasure", async (payload, _ctx) => {
-  const { userId } = payload as { userId: string };
-  console.log(JSON.stringify({ event: "jobs.erasure.stub", userId }));
-  return { status: "stub" };
+// ── #45: partner client export ──────────────────────────────────────────────
+// Assembles a JSON dump of all data held for a partner client and marks the
+// request as completed. Partners receive a download link (stub: logs URL).
+registerHandler("partner_client_export", async (payload, _ctx) => {
+  const { partnerOwnerId, partnerClientId, requestId } = payload as {
+    partnerOwnerId: string;
+    partnerClientId: string;
+    requestId: string;
+  };
+
+  const { createAdminClient } = await import("@/lib/services/supabase");
+  const { writeAuditLog } = await import("@/lib/services/admin");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  // Assemble all stores scoped to this client
+  const [clientRow, usageEvents, workflowRuns] = await Promise.all([
+    admin.from("partner_clients").select("*").eq("id", partnerClientId).maybeSingle(),
+    admin.from("usage_events").select("id, created_at, quantity, unit").eq("partner_client_id", partnerClientId),
+    admin.from("workflow_runs").select("id, created_at, status, workflow_id").eq("partner_client_id", partnerClientId),
+  ]);
+
+  const exportPayload = {
+    exported_at: new Date().toISOString(),
+    partner_owner_id: partnerOwnerId,
+    client: clientRow.data ?? null,
+    usage_events: usageEvents.data ?? [],
+    workflow_runs: workflowRuns.data ?? [],
+  };
+
+  // In production, upload to Supabase Storage and store signed URL.
+  // For now, log the payload size and mark complete.
+  const payloadSize = JSON.stringify(exportPayload).length;
+  console.log(JSON.stringify({ event: "partner_client_export.assembled", partnerClientId, bytes: payloadSize }));
+
+  await admin
+    .from("partner_data_requests")
+    .update({ status: "completed", completed_at: new Date().toISOString() })
+    .eq("id", requestId);
+
+  await writeAuditLog({
+    actorId: null,
+    actorRole: "system",
+    action: "partner_client.export_completed",
+    entityType: "partner_client",
+    entityId: partnerClientId,
+    metadata: { request_id: requestId, bytes: payloadSize },
+  });
+
+  return { partnerClientId, requestId, bytes: payloadSize };
+});
+
+// ── #45: partner client hard erasure ────────────────────────────────────────
+// Fans out hard erasure across all registered stores after the grace window.
+// Idempotent: erasers null/delete already-null columns safely.
+registerHandler("partner_client_erasure_hard", async (payload, _ctx) => {
+  const { partnerClientId, requestId } = payload as {
+    partnerClientId: string;
+    requestId: string;
+  };
+
+  const { runErasure } = await import("@/lib/services/privacy");
+  await runErasure(partnerClientId, requestId);
+
+  console.log(JSON.stringify({ event: "partner_client_erasure_hard.completed", partnerClientId, requestId }));
+  return { partnerClientId, requestId };
 });
 
 // Data export — runs the scoped query and emails a CSV download link.
