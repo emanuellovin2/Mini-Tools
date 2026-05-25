@@ -164,6 +164,17 @@ supabase/migrations/   # all schema changes — never manual dashboard edits
 - Migration: `workflow_runs.subworkflow_depth + parent_run_id` (`supabase/migrations/20260606000001_agent_step.sql`).
 - All LLM calls go through reserve→call→settle (gateway credit pattern); no direct provider calls.
 
+**Visual builder + adaptive shell (as of #58)**
+- **No new tables.** The builder is a client over the existing `workflow_steps` + `workflow_versions` write paths.
+- `lib/workflows/graph-schema.ts` — **single shared Zod schema** (`VisualGraphSchema`/`VisualEdgeSchema`/`VisualNodeSchema`) imported by both client and server. `validateGraph(graph, ctx)` is async (DB entitlement checks) and runs server-side on every save + publish. Publish is impossible when it returns errors.
+- `toWorkflowGraph(visual)` / `fromWorkflowGraph(wfGraph)` — lossless conversion between `VisualGraph` (canvas format with positions) and `WorkflowGraph` (execution format). UI position stored as `_ui_position` in step config; stripped by `stripUiMeta()` before execution or validation.
+- `validateGraph` enforces: structural integrity, per-node config schemas (agent MUST have `budget_cents + max_iterations`), cycle detection with allow-list for intentional branch loops, step-count quota, and cross-tenant ownership checks for `connector_accounts`, `provider_keys`, `knowledge_bases`, `instruction_sets`.
+- API routes: `GET /api/builder/[workflowId]` (load), `POST /api/builder/[workflowId]/draft` (save steps), `POST /api/builder/[workflowId]/publish` (validate + snapshot with optimistic version lock → 409 on conflict).
+- Canvas: `app/builder/[workflowId]/` — server page + `components/builder/Canvas.tsx` (pure React, no external library), `NodeCard.tsx`, `ConfigDrawer.tsx`. Nodes are absolutely-positioned divs; edges drawn as SVG bezier curves; nodes outside viewport are CSS-hidden (virtualization seam without unmounting, to keep port refs valid).
+- `components/layout/AdaptiveShell.tsx` — chat↔canvas mode toggle over the same org/deployment context. Chat mode proxies to `/api/gateway/[provider]`. IDE/spreadsheet modes explicitly deferred — documented as "use a connector."
+- `BUILDER_ENABLED` env flag gates all builder routes; off = no behavior change.
+- Zod validator tests: `lib/workflows/__tests__/graph-schema.test.ts` — 16 tests covering structural, config, cycles, quota, and cross-tenant entitlement rejection.
+
 **Connectors (as of #43)**
 - `connector_accounts`: org-owned encrypted credential vault. Same AES-256-GCM envelope pattern as `provider_keys` — `ciphertext`/`dek_wrapped`/`key_version` for access token; `refresh_*` trio for refresh token. `expires_at` null = non-expiring. `org_id` column (not `owner_id`).
 - Registry in `lib/connectors/registry.ts`: HTTP (none auth), Gmail (oauth2), Slack (oauth2), Sheets (oauth2). Adding a connector = new `ConnectorDef` + handler file in `lib/connectors/handlers/`.
@@ -272,7 +283,7 @@ Repositioning: infrastructure agencies use to build agent-powered businesses for
 - [x] #55 Knowledge & Retrieval (RAG) — `pgvector`, tenant-sharded `knowledge_bases/documents/chunks`, durable async ingest on jobs queue, `VectorIndex` + embedding-provider abstractions (swap-at-scale seam), hybrid vector+FTS retrieval RPC, gateway + workflow `ai`-step injection, metering, `knowledge` eraser, quotas. "Enrich Engine" = re-index, not training. **Substrate for #57.**
 - [x] #56 Hierarchical instruction sets — `instruction_sets` (global/project/client/deployment) + immutable `instruction_versions` (Git-like), deterministic structured merge resolved cache-first (mirrors `getEffectiveConfig` + version-counter invalidation), diff/rollback, generalizes `gateway_products.system_prompt`. Parallel-able with #55.
 - [x] #57 Multi-agent orchestration — new `agent` workflow step; durable checkpointed iterations (one per executor slice, no long-running fns), hard per-run cost ceiling via gateway reservations, loop/no-progress guards, typed handoff (Researcher→Writer→Critic), tools = connectors+http+knowledge.retrieve+sub-workflow. Depends on #55/#56/#41/#42.
-- [ ] #58 Visual builder + adaptive shell — canvas over `workflow_versions.graph`, server-authoritative shared Zod graph validator (entitlement + cost-guard checks), draft/publish via existing APIs, optimistic version lock (CRDT deferred), shell toggles chat↔canvas. IDE/spreadsheet modes out of scope.
+- [x] #58 Visual builder + adaptive shell — canvas over `workflow_versions.graph`, server-authoritative shared Zod graph validator (entitlement + cost-guard checks), draft/publish via existing APIs, optimistic version lock (CRDT deferred), shell toggles chat↔canvas. IDE/spreadsheet modes out of scope.
 
 ## Guardrails
 - Never expose buyer email, name, or card data to vendors, resellers, or affiliates. `subscriptions.buyer_id` has no read path for non-admin roles (SPEC §6/§7).
