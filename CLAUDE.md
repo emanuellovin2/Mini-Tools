@@ -48,6 +48,11 @@ lib/cache/revalidate.ts # tagged ISR invalidation helpers
 lib/validation/env.ts   # boot-time Zod env validation (authoritative list of env vars)
 lib/analytics/          # hash.ts, funnel.ts
 lib/agency/churn-risk.ts # computeChurnRisk pure fn (mirrors refresh_client_health_scores SQL)
+lib/knowledge/         # vector-index.ts (interface), pg-vector-index.ts (impl + factory), embeddings/{index,openai,compat}.ts, ingest/{parse,chunk,embed}.ts, graph.ts (stub)
+lib/services/knowledge.ts  # bases + documents CRUD, ingest dispatch, retrieve(), debugRetrieve()
+app/settings/knowledge/    # list bases, create, per-base doc management + Enrich Engine button
+app/api/knowledge/upload/  # POST — magic-bytes verified file upload to knowledge-uploads bucket
+app/api/knowledge/debug-retrieve/ # POST — admin-only relevance panel
 lib/connectors/        # registry.ts (static defs), handlers/{http,gmail,slack,sheets}.ts
 lib/services/connectors.ts # signState/verifyState (OAuth CSRF), connectAccount, handleOAuthCallback, refreshTokenIfExpired, runConnectorAction
 app/settings/connections/ # Connections dashboard (list + revoke), OAuth success/error feedback
@@ -185,6 +190,22 @@ supabase/migrations/   # all schema changes — never manual dashboard edits
 - All marketplace listing pages route through `solutionsIndex` (`lib/search/solutions.ts`) — never raw table queries from page code.
 - Zod discriminated union per type in `lib/types/solutions.ts`. `lib/services/solutions.ts` for CRUD + template fork + version history.
 
+**Knowledge & RAG (as of #55)**
+- `knowledge_bases`: grouping unit per embedding generation. `visibility` (`private|org|public`). `embedding_model` pinned at creation — all chunks in the base share it. `tenant_shard_id` immutable; data residency via `region`.
+- `knowledge_documents`: one row per source artifact. `source_type` (`upload|url|connector`). `(knowledge_base_id, content_hash)` UNIQUE — idempotent re-upload returns existing doc. Status machine: `pending→parsing→chunking→embedding→ready|failed`. Soft-deleted; hard-erased via #45 eraser.
+- `knowledge_chunks`: retrieval unit. **Partitioned `BY LIST (tenant_shard_id)`** — shard column first in all composite indexes. `embedding vector(1536)` (HNSW `vector_cosine_ops`). `fts tsvector GENERATED` for hybrid retrieval. `embedding_version` allows dual-generation zero-downtime reindex.
+- **`VectorIndex` interface** (`lib/knowledge/vector-index.ts`): all vector reads/writes go through this. pgvector impl in `pg-vector-index.ts`. No service code imports vector queries directly — CI grep-enforced.
+- **`EmbeddingProvider` interface** (`lib/knowledge/embeddings/index.ts`): mirrors gateway provider pattern. Adding a provider = one new file. BYOK per org via `#41` vault; platform key fallback for `cost_mode='managed'`.
+- **Ingest pipeline** (all async on jobs queue): `knowledge_parse` (text extraction + hash + idempotency check) → `knowledge_embed_batch` (chunk + embed + upsert + meter) → status=ready. `knowledge_reindex` = Enrich Engine: new `embedding_version` rows alongside old; `MAX(version)` wins in RPC.
+- **`match_knowledge_chunks` RPC**: `STABLE SECURITY DEFINER`. Org + base filter inside the function (defense-in-depth). Hybrid vector + FTS via **Reciprocal Rank Fusion**.
+- **Gateway integration** (#41): `gateway_products.knowledge_base_ids` → retrieve top-k → inject as system context before provider call (gated by `KNOWLEDGE_ENABLED`).
+- **Workflow `ai` step** (#42): `knowledge_base_ids` config field — same retrieval-then-inject pattern.
+- Erasure: `knowledge` eraser registered in `lib/privacy/erasers.ts`.
+- Quotas: `knowledge_bases` (default 10/org), `knowledge_documents` (default 500/org). `enforceQuota()` in creation paths.
+- Env vars: `KNOWLEDGE_ENABLED` (flag), `EMBEDDING_PROVIDER` (default `openai`), `EMBEDDING_MODEL` (default `text-embedding-3-small`), `EMBEDDING_DIMS` (default `1536`), `KNOWLEDGE_MAX_DOC_BYTES` (default 25MB), `EMBEDDING_COMPAT_BASE_URL` (required for `openai_compat` provider).
+- Storage bucket `knowledge-uploads`: org-prefixed paths, private read. Upload validation: magic-bytes verified, no SVG, size-capped (same pattern as brand uploads).
+- ENGINEERING.md §13 documents the abstraction rules; violation = reject PR.
+
 ## How to work
 - Build one numbered prompt at a time. Tick it in Progress when done.
 - Tech stack (do not swap): Next.js App Router TS, Supabase, Vercel, Stripe Connect, Resend, JWT RS256.
@@ -218,6 +239,13 @@ Repositioning: infrastructure agencies use to build agent-powered businesses for
 - [x] #52 Agency operations dashboard — `/agency` route (org.type='agency' only), client-centric health board, `client_health_scores` precomputed hourly, `computeChurnRisk` pure fn, cursor pagination (no OFFSET), Stripe Connect balance + payouts.
 - [x] #53 Client portal — `/client` + subdomain WL (reuses #29 proxy pattern), branding from active agency relationship cached in signed cookie (1h) + Redis `branding_version:*`, outcome charts, credit wallet, privacy panel, agency-branded emails via jobs queue, "Hosted by [PLATFORM]" footer mandatory.
 - [x] #45 DPA + partner-client data lifecycle — `partner_clients` CRM, cross-deployment erasure/export, retention cron, `/legal/dpa` + `/legal/subprocessors`, partner settings panel `/settings/client-data`. Depends on #40/#41/#43/#50.
+
+**Phase 7 — Wave 10 (the intelligence layer) — build in order: #55 → #56 → #57 → #58 (#55/#56 parallel-able)**
+
+- [x] #55 Knowledge & Retrieval (RAG) — `pgvector`, tenant-sharded `knowledge_bases/documents/chunks`, durable async ingest on jobs queue, `VectorIndex` + embedding-provider abstractions (swap-at-scale seam), hybrid vector+FTS retrieval RPC, gateway + workflow `ai`-step injection, metering, `knowledge` eraser, quotas. "Enrich Engine" = re-index, not training. **Substrate for #57.**
+- [ ] #56 Hierarchical instruction sets — `instruction_sets` (global/project/client/deployment) + immutable `instruction_versions` (Git-like), deterministic structured merge resolved cache-first (mirrors `getEffectiveConfig` + version-counter invalidation), diff/rollback, generalizes `gateway_products.system_prompt`. Parallel-able with #55.
+- [ ] #57 Multi-agent orchestration — new `agent` workflow step; durable checkpointed iterations (one per executor slice, no long-running fns), hard per-run cost ceiling via gateway reservations, loop/no-progress guards, typed handoff (Researcher→Writer→Critic), tools = connectors+http+knowledge.retrieve+sub-workflow. Depends on #55/#56/#41/#42.
+- [ ] #58 Visual builder + adaptive shell — canvas over `workflow_versions.graph`, server-authoritative shared Zod graph validator (entitlement + cost-guard checks), draft/publish via existing APIs, optimistic version lock (CRDT deferred), shell toggles chat↔canvas. IDE/spreadsheet modes out of scope.
 
 ## Guardrails
 - Never expose buyer email, name, or card data to vendors, resellers, or affiliates. `subscriptions.buyer_id` has no read path for non-admin roles (SPEC §6/§7).

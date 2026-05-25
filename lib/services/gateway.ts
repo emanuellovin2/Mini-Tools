@@ -549,12 +549,42 @@ export async function resolveAndForward(args: ForwardArgs): Promise<ForwardRespo
     plaintextKey = await decryptProviderKey(byokKeyId);
   }
 
+  // 7a. Knowledge retrieval injection (#55) — gated by KNOWLEDGE_ENABLED
+  let resolvedSystemPrompt = product.system_prompt as string | null;
+  const knowledgeBaseIds = (product as Record<string, unknown>).knowledge_base_ids as string[] | null;
+  if (process.env.KNOWLEDGE_ENABLED === "true" && knowledgeBaseIds?.length) {
+    try {
+      const { retrieve } = await import("@/lib/services/knowledge");
+      const reqBody = args.body as Record<string, unknown>;
+      const userQuery = extractLastUserMessage(reqBody);
+      if (userQuery) {
+        const chunks = await retrieve({
+          orgId: args.buyerOrgId,
+          baseIds: knowledgeBaseIds,
+          query: userQuery,
+          topK: 5,
+          plaintextApiKey: plaintextKey || process.env.OPENAI_API_KEY,
+        });
+        if (chunks.length > 0) {
+          const context = chunks.map((c) => c.content).join("\n\n---\n\n");
+          const contextHeader = "Relevant context from the knowledge base:\n\n";
+          resolvedSystemPrompt = resolvedSystemPrompt
+            ? `${resolvedSystemPrompt}\n\n${contextHeader}${context}`
+            : `${contextHeader}${context}`;
+        }
+      }
+    } catch (err) {
+      // Retrieval failure is non-fatal — log and continue without context
+      console.error(JSON.stringify({ event: "gateway.knowledge_retrieval_error", error: String(err) }));
+    }
+  }
+
   let forwardResult;
   try {
     forwardResult = await adapter.forward(
       args.body,
       plaintextKey,
-      product.system_prompt,
+      resolvedSystemPrompt,
       product.max_tokens_cap
     );
   } catch (err) {
@@ -672,6 +702,24 @@ export async function getGatewayUsage(
   const spentCents = byProduct.reduce((s, r) => s + r.totalCents, 0);
 
   return { byProduct, spentCents, capCents: null };
+}
+
+// ---------------------------------------------------------------------------
+// #55 — extract the last user message text for knowledge retrieval query
+// ---------------------------------------------------------------------------
+
+function extractLastUserMessage(body: Record<string, unknown>): string | null {
+  const messages = body.messages as { role: string; content: unknown }[] | undefined;
+  if (!Array.isArray(messages)) return null;
+  const userMsgs = messages.filter((m) => m.role === "user");
+  const last = userMsgs[userMsgs.length - 1];
+  if (!last) return null;
+  if (typeof last.content === "string") return last.content;
+  if (Array.isArray(last.content)) {
+    const textPart = (last.content as { type: string; text?: string }[]).find((p) => p.type === "text");
+    return textPart?.text ?? null;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------

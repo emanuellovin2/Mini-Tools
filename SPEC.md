@@ -230,3 +230,43 @@ Built in #47. The unit of ownership, billing, and payout is an **organization**,
 - **All product/money/data ownership references `org_id`**: apps, reseller_offers, affiliate_links, usage_meters, provider_keys, connector_accounts, workflows, metered products, credit_wallets, partner_clients, api_keys, and the Connect-bearing path. RLS checks membership via `is_org_member(org_id, min_role)`, not `user_id`.
 - The **anti-poaching boundary (§6, §7, §13)** is unchanged in spirit, now expressed in org terms: a *vendor* is "a member of the vendor org," and no org gets a path to buyer PII it did not acquire. `partner_owner_id` (§13) is the owning org, making a client book a **shared team asset**.
 - **Pre-launch migration:** existing single-user ownership backfills to each user's personal org (no live data; clean-break OK).
+
+## 16. Knowledge & Retrieval (RAG)
+Built in #55. The substrate that gives agency-deployed agents long-term memory and business-context awareness.
+
+### What it is (and is not)
+The platform provides **retrieval-augmented generation** — documents are parsed, chunked, embedded, and indexed so agents can retrieve the most relevant passages at call time. This is **not fine-tuning or training**: we never modify model weights. The "Enrich Engine" (re-index) improves retrieval context by re-embedding with a newer model or chunker; it does not touch any model. No cross-tenant training, ever.
+
+### Data model
+- **`knowledge_bases`**: org-owned, one embedding generation = one index. `visibility` (`private|org|public`). `embedding_model` pinned at creation — all chunks in the base share it. `tenant_shard_id` for data sharding; `region` for data residency (both immutable after insert).
+- **`knowledge_documents`**: one source artifact. Status machine: `pending → parsing → chunking → embedding → ready | failed`. `(knowledge_base_id, content_hash)` UNIQUE — re-uploading the same file returns the existing doc without re-embedding. Soft-deleted; hard-erased via #45 eraser.
+- **`knowledge_chunks`**: retrieval unit. Partitioned `BY LIST (tenant_shard_id)`. `embedding vector(1536)` column with HNSW index (`vector_cosine_ops`). `fts tsvector GENERATED ALWAYS` for full-text hybrid. `embedding_version` supports dual-generation zero-downtime re-index.
+
+### Scale frame
+Target: 100M orgs × ~50 docs × ~200 chunks ≈ 1T chunks. No single Postgres node can hold 1T vectors with a usable HNSW index. Therefore all vector access goes through the `VectorIndex` interface (see ENGINEERING.md §13) — the pgvector impl is the default, not the contract.
+
+### Ingest pipeline (fully async)
+`knowledge_parse` job: fetch source → extract text (PDF/markdown/text/URL) → compute SHA-256 content hash → idempotency check → advance to chunking.
+`knowledge_embed_batch` job: chunk text (~512-token windows, ~64-token overlap) → embed in batches (rate-limit safe) → upsert via `VectorIndex` → meter tokens via #40 → status=ready.
+`knowledge_reindex` job: re-embed with `embedding_version + 1`; new rows coexist with old; `MAX(version)` wins in the retrieval RPC.
+
+### Retrieval
+`match_knowledge_chunks` RPC (`STABLE SECURITY DEFINER`): org + base filter inside the function (defense in depth). Vector candidates ranked by cosine distance; FTS candidates via `websearch_to_tsquery`. Merged via **Reciprocal Rank Fusion**.
+
+### Integration points
+- **Gateway (#41)**: `gateway_products.knowledge_base_ids` → retrieve top-k → inject as system context before provider call. Gated by `KNOWLEDGE_ENABLED`.
+- **Workflow `ai` step (#42)**: `knowledge_base_ids` config field — same pattern; consumed by #57 `agent` step as long-term memory.
+
+### Access boundaries
+- `knowledge_chunks` are never directly SELECTable by app code — only via the `match_knowledge_chunks` RPC.
+- Public bases (`visibility='public'`) are retrievable cross-org (read-only). Source documents are never exposed via public retrieval — only chunks.
+- RLS: `is_org_member(org_id)` for writes; `visibility='public'` check inside the retrieval RPC for cross-org reads.
+
+### Erasure (#45)
+`knowledge` eraser registered in `lib/privacy/erasers.ts`. Soft-delete is immediate (halts retrieval). Hard erase via `partner_client_erasure_hard` fan-out removes chunks via `deleteByDocument`.
+
+### Quotas (#48)
+`knowledge_bases` (default 10/org), `knowledge_documents` (default 500/org). `enforceQuota()` called before every INSERT. Default-deny.
+
+### Env vars
+`KNOWLEDGE_ENABLED` (flag — false disables all routes/retrieval), `EMBEDDING_PROVIDER` (default `openai`), `EMBEDDING_MODEL` (default `text-embedding-3-small`), `EMBEDDING_DIMS` (default `1536`), `KNOWLEDGE_MAX_DOC_BYTES` (default 25MB), `EMBEDDING_COMPAT_BASE_URL` (required for `openai_compat`).

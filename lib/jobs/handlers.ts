@@ -29,6 +29,12 @@ export async function runJob(job: Job, workerId: string): Promise<unknown> {
 
 // ── Built-in handlers ────────────────────────────────────────────────────────
 
+// Legacy erasure stub — kept for backward compatibility with pre-#45 job rows.
+// New erasure jobs are dispatched as partner_client_erasure_hard.
+registerHandler("erasure", async (_payload, _ctx) => {
+  return { status: "stub" };
+});
+
 // Churn alert email — sends a churn notice + records an audit_log row.
 // Enqueued by dispatchChurnAlerts; one job per (vendor, month).
 registerHandler("churn_alert_email", async (payload, _ctx) => {
@@ -415,6 +421,226 @@ registerHandler("agency_health_refresh", async (payload, _ctx) => {
   const updated = await triggerHealthScoreRefresh(agencyOrgId);
   console.log(JSON.stringify({ event: "agency_health_refresh.ok", agencyOrgId, updated }));
   return { agencyOrgId, updated };
+});
+
+// ── #55: knowledge parse ─────────────────────────────────────────────────────
+// Fetches the source, extracts text, computes content_hash, checks idempotency,
+// advances status to chunking, then enqueues knowledge_embed_batch.
+registerHandler("knowledge_parse", async (payload, _ctx) => {
+  const { docId, orgId } = payload as { docId: string; orgId: string };
+  if (!docId) throw new Error("knowledge_parse: missing docId");
+
+  const { createAdminClient } = await import("@/lib/services/supabase");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  // Fetch doc row
+  const { data: doc, error: docErr } = await admin
+    .from("knowledge_documents")
+    .select("*")
+    .eq("id", docId)
+    .single();
+  if (docErr) throw new Error(`knowledge_parse: fetch doc: ${docErr.message}`);
+  const d = doc as Record<string, unknown>;
+
+  // Already ready or failed — skip
+  if (d.status === "ready" || d.status === "failed") return { docId, status: d.status };
+
+  // Mark parsing
+  await admin.from("knowledge_documents").update({ status: "parsing" }).eq("id", docId);
+
+  try {
+    const { parseDocument } = await import("@/lib/knowledge/ingest/parse");
+    const { text, contentHash, title } = await parseDocument({
+      sourceType: d.source_type as "upload" | "url" | "connector",
+      sourceRef: d.source_ref as string,
+      mimeType: d.mime_type as string | null,
+    });
+
+    // Idempotency check: same content already indexed in this base?
+    const { data: existing } = await admin
+      .from("knowledge_documents")
+      .select("id, status")
+      .eq("knowledge_base_id", d.knowledge_base_id as string)
+      .eq("content_hash", contentHash)
+      .neq("id", docId)
+      .maybeSingle();
+
+    if (existing && (existing as { status: string }).status === "ready") {
+      // Duplicate upload — short-circuit, mark this doc ready by reference
+      await admin.from("knowledge_documents").update({
+        status: "ready",
+        content_hash: contentHash,
+        title: title ?? d.title ?? null,
+        error: null,
+      }).eq("id", docId);
+      return { docId, status: "ready", reason: "duplicate" };
+    }
+
+    // Advance to chunking
+    await admin.from("knowledge_documents").update({
+      status: "chunking",
+      content_hash: contentHash,
+      title: title ?? d.title ?? null,
+    }).eq("id", docId);
+
+    // Enqueue embed batch with the extracted text
+    const { enqueueJob } = await import("@/lib/jobs/queue");
+    await enqueueJob("knowledge_embed_batch", {
+      docId, orgId, text,
+      knowledgeBaseId: d.knowledge_base_id as string,
+      tenantShardId: d.tenant_shard_id as number,
+    }, {
+      idempotencyKey: `knowledge_embed_batch:${docId}:1`,
+      orgId,
+    });
+
+    console.log(JSON.stringify({ event: "knowledge_parse.ok", docId, contentHash }));
+    return { docId, contentHash };
+  } catch (err) {
+    await admin.from("knowledge_documents").update({
+      status: "failed",
+      error: String(err),
+    }).eq("id", docId);
+    throw err;
+  }
+});
+
+// ── #55: knowledge embed batch ────────────────────────────────────────────────
+// Chunks text, embeds via provider, upserts through VectorIndex, meters tokens.
+registerHandler("knowledge_embed_batch", async (payload, _ctx) => {
+  const { docId, orgId, text, knowledgeBaseId, tenantShardId } = payload as {
+    docId: string;
+    orgId: string;
+    text: string;
+    knowledgeBaseId: string;
+    tenantShardId: number;
+  };
+
+  const { createAdminClient } = await import("@/lib/services/supabase");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  // Fetch base for model info
+  const { data: base, error: baseErr } = await admin
+    .from("knowledge_bases")
+    .select("embedding_model, chunker_version")
+    .eq("id", knowledgeBaseId)
+    .single();
+  if (baseErr) throw new Error(`knowledge_embed_batch: fetch base: ${baseErr.message}`);
+  const b = base as { embedding_model: string; chunker_version: string };
+
+  await admin.from("knowledge_documents").update({ status: "embedding" }).eq("id", docId);
+
+  try {
+    // Resolve embedding key (use platform key fallback)
+    const plaintextApiKey = process.env.OPENAI_API_KEY ?? "";
+    if (!plaintextApiKey) throw new Error("knowledge_embed_batch: no embedding API key configured");
+
+    const { embedDocument } = await import("@/lib/knowledge/ingest/embed");
+    const { chunkCount, tokensUsed } = await embedDocument({
+      documentId: docId,
+      knowledgeBaseId,
+      orgId,
+      tenantShardId,
+      text,
+      embeddingModel: b.embedding_model,
+      embeddingVersion: 1,
+      chunkerVersion: b.chunker_version,
+      plaintextApiKey,
+    });
+
+    await admin.from("knowledge_documents").update({
+      status: "ready",
+      chunk_count: chunkCount,
+      error: null,
+    }).eq("id", docId);
+
+    console.log(JSON.stringify({ event: "knowledge_embed_batch.ok", docId, chunkCount, tokensUsed }));
+    return { docId, chunkCount, tokensUsed };
+  } catch (err) {
+    await admin.from("knowledge_documents").update({
+      status: "failed",
+      error: String(err),
+    }).eq("id", docId);
+    throw err;
+  }
+});
+
+// ── #55: knowledge reindex (Enrich Engine) ───────────────────────────────────
+// Re-embeds docs in a base using a new embedding_version. Writes new version
+// rows alongside old; the match_knowledge_chunks RPC picks the max version,
+// achieving zero-downtime cutover. This is retrieval improvement, not training.
+registerHandler("knowledge_reindex", async (payload, _ctx) => {
+  const { knowledgeBaseId, documentId, orgId } = payload as {
+    knowledgeBaseId: string;
+    documentId?: string;
+    orgId: string;
+  };
+
+  const { createAdminClient } = await import("@/lib/services/supabase");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  // Find the current max embedding_version in this base
+  const { data: versionRow } = await admin
+    .from("knowledge_chunks")
+    .select("embedding_version")
+    .eq("knowledge_base_id", knowledgeBaseId)
+    .order("embedding_version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const currentVersion = (versionRow as { embedding_version: number } | null)?.embedding_version ?? 1;
+  const newVersion = currentVersion + 1;
+
+  // Fetch docs to re-embed
+  let docsQuery = admin
+    .from("knowledge_documents")
+    .select("id, source_type, source_ref, mime_type, tenant_shard_id")
+    .eq("knowledge_base_id", knowledgeBaseId)
+    .eq("org_id", orgId)
+    .eq("status", "ready")
+    .is("deleted_at", null);
+
+  if (documentId) docsQuery = docsQuery.eq("id", documentId);
+
+  const { data: docs, error } = await docsQuery;
+  if (error) throw new Error(`knowledge_reindex: ${error.message}`);
+
+  const { data: base } = await admin
+    .from("knowledge_bases")
+    .select("embedding_model, chunker_version")
+    .eq("id", knowledgeBaseId)
+    .single();
+  const b = base as { embedding_model: string; chunker_version: string };
+
+  const plaintextApiKey = process.env.OPENAI_API_KEY ?? "";
+  const { embedDocument } = await import("@/lib/knowledge/ingest/embed");
+  const { parseDocument } = await import("@/lib/knowledge/ingest/parse");
+
+  let reindexed = 0;
+  for (const doc of (docs as Record<string, unknown>[]) ?? []) {
+    const { text } = await parseDocument({
+      sourceType: doc.source_type as "upload" | "url" | "connector",
+      sourceRef: doc.source_ref as string,
+      mimeType: doc.mime_type as string | null,
+    });
+    await embedDocument({
+      documentId: doc.id as string,
+      knowledgeBaseId,
+      orgId,
+      tenantShardId: doc.tenant_shard_id as number,
+      text,
+      embeddingModel: b.embedding_model,
+      embeddingVersion: newVersion,
+      chunkerVersion: b.chunker_version,
+      plaintextApiKey,
+    });
+    reindexed++;
+  }
+
+  console.log(JSON.stringify({ event: "knowledge_reindex.ok", knowledgeBaseId, newVersion, reindexed }));
+  return { knowledgeBaseId, newVersion, reindexed };
 });
 
 // ── #53: client welcome email ────────────────────────────────────────────────

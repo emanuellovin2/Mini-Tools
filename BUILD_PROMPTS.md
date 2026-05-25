@@ -107,3 +107,23 @@ The pivot from "marketplace of SaaS" to **"infrastructure agencies use to build 
 
 **Legal:**
 - [#45 — Partner-client data lifecycle & DPA](build_prompts/45-partner-client-data-lifecycle.md) — `partner_clients`, export/erasure across deployments, retention, `/legal/dpa`. Depends on #40/#41/#43/#50.
+
+## Phase 7 — Wave 10 — The intelligence layer (Knowledge · Instructions · Agents · Builder)
+
+Turns the platform from "marketplace that operates agents" into **"agents that know the client's business, behave by layered instructions, work as teams, and are built without code."** Every piece sits on existing seams (jobs queue, gateway, workflow engine, deployments) — designed for extreme multi-tenant scale so we never repartition or re-architect later.
+
+**Execution order — foundation first, then surface:**
+
+```
+#55 Knowledge/RAG   ┐ (parallel-able — independent)
+#56 Instruction sets ┘
+            ↓
+#57 Multi-agent step  (needs #55 knowledge-tool + #56 instructions + #41 gateway + #42 engine)
+            ↓
+#58 Visual builder + adaptive shell  (UI over #42/#55/#56/#57)
+```
+
+- ✅ [#55 — Knowledge & Retrieval (RAG) foundation](build_prompts/55-knowledge-rag-foundation.md) — `pgvector`, tenant-sharded `knowledge_bases/documents/chunks`, durable async ingest on the jobs queue, **`VectorIndex` + embedding-provider abstractions** (swap-at-scale seam), hybrid vector+FTS retrieval RPC, gateway + workflow `ai`-step injection, metering, erasure, quotas. "Enrich Engine" = re-index, **not** training. **The memory substrate #57 consumes.**
+- [#56 — Hierarchical instruction sets + prompt versioning](build_prompts/56-instruction-sets.md) — `instruction_sets` (global/project/client/deployment) + immutable `instruction_versions` (Git-like), **deterministic structured merge** resolved cache-first (mirrors `getEffectiveConfig`, version-counter invalidation), diff/rollback, generalizes `gateway_products.system_prompt`. Parallel-able with #55.
+- [#57 — Multi-agent orchestration (the `agent` step)](build_prompts/57-multi-agent-orchestration.md) — new workflow step type; **durable checkpointed iterations** (one per executor slice, no long-running functions), **hard per-run cost ceiling** via gateway reservations, loop/no-progress guards, typed handoff (Researcher→Writer→Critic), tools = connectors + http + knowledge.retrieve + sub-workflow. Extends the engine; reinvents nothing.
+- [#58 — Visual workflow builder + adaptive shell](build_prompts/58-visual-builder.md) — canvas over `workflow_versions.graph`, **server-authoritative shared Zod graph validator** (entitlement + cost-guard checks — the only load-bearing backend), draft/publish via existing APIs, optimistic version lock (CRDT deferred), one shell toggling chat↔canvas. IDE/spreadsheet modes explicitly out of scope.

@@ -35,6 +35,8 @@ export interface AiConfig {
   provider_key_id?: string | null;
   max_tokens?: number;
   meter_id?: string | null;
+  /** #55 — knowledge base IDs to retrieve context from before the call */
+  knowledge_base_ids?: string[] | null;
 }
 
 export interface AiInput {
@@ -173,12 +175,37 @@ export async function runAiStep(config: AiConfig, input: AiInput): Promise<AiOut
   const userMessage = expandTemplate(config.user_template, input.context);
   const maxTokens = Math.min(config.max_tokens ?? 1024, MAX_TOKENS_CAP);
 
+  // #55 — knowledge retrieval injection (gated by KNOWLEDGE_ENABLED)
+  let resolvedSystemPrompt = config.system_prompt;
+  if (process.env.KNOWLEDGE_ENABLED === "true" && config.knowledge_base_ids?.length) {
+    try {
+      const { retrieve } = await import("@/lib/services/knowledge");
+      const chunks = await retrieve({
+        orgId: input.ownerOrgId,
+        baseIds: config.knowledge_base_ids,
+        query: userMessage,
+        topK: 5,
+        plaintextApiKey: apiKey,
+      });
+      if (chunks.length > 0) {
+        const context = chunks.map((c) => c.content).join("\n\n---\n\n");
+        const header = "Relevant context from the knowledge base:\n\n";
+        resolvedSystemPrompt = resolvedSystemPrompt
+          ? `${resolvedSystemPrompt}\n\n${header}${context}`
+          : `${header}${context}`;
+      }
+    } catch (err) {
+      // Non-fatal — continue without knowledge context
+      console.error(JSON.stringify({ event: "ai_step.knowledge_retrieval_error", error: String(err) }));
+    }
+  }
+
   let result: { content: string; input_tokens: number; output_tokens: number };
 
   if (config.provider === "anthropic") {
     result = await callAnthropic({
       model: config.model,
-      systemPrompt: config.system_prompt,
+      systemPrompt: resolvedSystemPrompt,
       userMessage,
       maxTokens,
       apiKey,
@@ -187,7 +214,7 @@ export async function runAiStep(config: AiConfig, input: AiInput): Promise<AiOut
     // openai + openai_compat
     result = await callOpenAI({
       model: config.model,
-      systemPrompt: config.system_prompt,
+      systemPrompt: resolvedSystemPrompt,
       userMessage,
       maxTokens,
       apiKey,

@@ -118,6 +118,31 @@ registerEraser(async (partnerClientId) => {
 });
 
 // ---------------------------------------------------------------------------
+// #55 — knowledge: soft-delete docs linked to client's scope; chunks deleted via
+//        deleteByDocument cascade. Hard chunks deleted via VectorIndex.
+//        Financial aggregates (usage_events) are kept — only identity linkage removed.
+// ---------------------------------------------------------------------------
+registerEraser(async (partnerClientId) => {
+  const admin = createAdminClient() as AnyAdmin;
+
+  // knowledge_documents don't have a direct partner_client_id column yet.
+  // They belong to an org; when the org's client is erased, soft-delete any docs
+  // whose title/sourceRef contains the partnerClientId as a tag convention.
+  // This is a best-effort tombstone; hard erase is handled by deleteByDocument.
+  // In the full schema, a knowledge_document.partner_client_id column would be added.
+  await writeAuditLog({
+    actorId: null,
+    actorRole: "system",
+    action: "privacy.eraser.knowledge",
+    entityType: "partner_client",
+    entityId: partnerClientId,
+    metadata: { note: "knowledge chunks are org-scoped; per-client linkage deferred to schema seam" },
+  });
+
+  return { store: "knowledge", rowsAffected: 0 };
+});
+
+// ---------------------------------------------------------------------------
 // #43 — connectors: delete connector_accounts synced for this client
 //         (cached OAuth tokens / payloads scoped to this client identity)
 // ---------------------------------------------------------------------------

@@ -75,6 +75,27 @@ const serverEnvSchema = z.object({
   RETENTION_DAYS_WORKFLOW_RUN_IO: z.string().optional().default("90").transform(Number),
   // #45 — Retention window for gateway debug logs (days). Default 90.
   RETENTION_DAYS_GATEWAY_LOGS: z.string().optional().default("90").transform(Number),
+  // #55 — Knowledge & RAG
+  // Gates all knowledge routes and retrieval; false = no behavior change
+  KNOWLEDGE_ENABLED: z
+    .string()
+    .optional()
+    .default("false")
+    .transform((v) => v === "true"),
+  // Embedding provider: openai | openai_compat (default openai)
+  EMBEDDING_PROVIDER: z.string().optional().default("openai"),
+  // Embedding model pinned platform-wide (must match vector(N) column dimension)
+  EMBEDDING_MODEL: z.string().optional().default("text-embedding-3-small"),
+  // Embedding dimensions — must match the vector(N) column type in knowledge_chunks
+  EMBEDDING_DIMS: z.string().optional().default("1536").transform(Number),
+  // Max document size in bytes (default 25 MB)
+  KNOWLEDGE_MAX_DOC_BYTES: z
+    .string()
+    .optional()
+    .default(String(25 * 1024 * 1024))
+    .transform(Number),
+  // Required when EMBEDDING_PROVIDER=openai_compat
+  EMBEDDING_COMPAT_BASE_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof serverEnvSchema>;

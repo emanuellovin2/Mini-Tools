@@ -291,5 +291,28 @@ Every PR that touches hot tables / new resources / new search surfaces / new eve
 
 ---
 
+## §13 — Vector index and embedding provider abstractions (#55)
+
+The knowledge/RAG layer has two non-negotiable abstraction seams. At 100M orgs × 1T chunks, pgvector on a single node is not the final destination. The seams must be correct from the first commit.
+
+### 13.1 VectorIndex interface (`lib/knowledge/vector-index.ts`)
+- All vector reads and writes MUST go through `VectorIndex`. No service code may import a vector query directly — only `pg-vector-index.ts` does.
+- CI enforcement: `grep -r "knowledge_chunks" --include="*.ts" | grep -v "pg-vector-index\|migrations\|__tests__"` must return empty.
+- Adding a new vector backend = new file implementing `VectorIndex` + update `getVectorIndex()` factory. No service code changes required.
+
+### 13.2 EmbeddingProvider interface (`lib/knowledge/embeddings/index.ts`)
+- All embedding calls MUST go through the provider abstraction. Adding a provider = one new file implementing `EmbeddingProvider` + entry in `PROVIDERS`.
+- Keys resolved via `#41` vault (`decryptSecret`) — BYOK per org; platform key fallback only when `cost_mode='managed'`. Plaintext keys never logged (existing guardrail).
+
+### 13.3 Shard column first-class
+- `knowledge_chunks` is partitioned `BY LIST (tenant_shard_id)` from day 1. `tenant_shard_id` must be first in all composite indexes on this table. Repartitioning existing vector data is prohibitively expensive — the seam cannot be retrofitted.
+- Partition 0 = shard 0. Adding a new shard: create partition + update `getVectorIndex()` routing. No migration of existing data.
+
+### 13.4 Retrieval-only, not training
+- The "Enrich Engine" (`knowledge_reindex` job) re-embeds documents to improve *retrieval context*. It never touches model weights. UI copy must be explicit: "This improves retrieval quality — it never trains or fine-tunes any model. We never train on your data; we retrieve from it."
+- New `embedding_version` rows are written alongside old; `match_knowledge_chunks` reads `MAX(embedding_version)` for zero-downtime cutover.
+
+---
+
 ## Definition of done for any prompt
 Code compiles with strict TS, inputs are validated with Zod, money/access paths have tests, RLS covers and tests new tables, the prompt's Verify step passes, and the Progress checklist in `CLAUDE.md` is updated.

@@ -31,7 +31,10 @@ export type Resource =
   | "provider_keys"
   | "gateway_tokens"
   // #44 — Usage-product distribution
-  | "reseller_metered_offers";
+  | "reseller_metered_offers"
+  // #55 — Knowledge & RAG
+  | "knowledge_bases"
+  | "knowledge_documents";
 
 interface ResourceConfig {
   quotaCol: string;
@@ -57,6 +60,9 @@ const RESOURCE_CONFIG: Record<Resource, ResourceConfig> = {
   gateway_tokens: { quotaCol: "max_gateway_tokens", table: "gateway_tokens", orgCol: "owner_id" },
   // #44 — Usage-product distribution
   reseller_metered_offers: { quotaCol: "max_count", table: "reseller_metered_offers", orgCol: "org_id" },
+  // #55 — Knowledge & RAG
+  knowledge_bases:     { quotaCol: "max_knowledge_bases",     table: "knowledge_bases",     orgCol: "org_id" },
+  knowledge_documents: { quotaCol: "max_knowledge_documents", table: "knowledge_documents", orgCol: "org_id" },
 };
 
 // org_quotas and several referenced tables are not yet in generated types —
