@@ -59,6 +59,14 @@ const serverEnvSchema = z.object({
     .optional()
     .default("false")
     .transform((v) => v === "true"),
+  // #43 — Connectors: HMAC-SHA256 key for signing OAuth state params (CSRF protection)
+  CONNECTOR_STATE_SECRET: z.string().min(16),
+  // #43 — Google OAuth app credentials (for Gmail + Sheets connectors)
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+  // #43 — Slack OAuth app credentials
+  SLACK_CLIENT_ID: z.string().min(1).optional(),
+  SLACK_CLIENT_SECRET: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof serverEnvSchema>;

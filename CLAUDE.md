@@ -46,6 +46,11 @@ lib/types/solutions.ts  # Zod discriminated union per solution_type
 lib/cache/revalidate.ts # tagged ISR invalidation helpers
 lib/validation/env.ts   # boot-time Zod env validation (authoritative list of env vars)
 lib/analytics/          # hash.ts, funnel.ts
+lib/connectors/        # registry.ts (static defs), handlers/{http,gmail,slack,sheets}.ts
+lib/services/connectors.ts # signState/verifyState (OAuth CSRF), connectAccount, handleOAuthCallback, refreshTokenIfExpired, runConnectorAction
+app/settings/connections/ # Connections dashboard (list + revoke), OAuth success/error feedback
+app/api/connectors/[id]/connect/   # GET → redirect to provider OAuth consent
+app/api/connectors/[id]/callback/  # GET → exchange code, store encrypted tokens, redirect
 app/vendor/            # vendor dashboard + actions
 app/marketplace/       # public browse (uses solutionsIndex)
 app/buyer/             # buyer dashboard v2
@@ -122,9 +127,17 @@ supabase/migrations/   # all schema changes — never manual dashboard edits
 - `workflow_runs`: durable state machine. `next_step_key` + `next_run_at` = cursor. `usage_event_id` guards against double-charge on retry. `claim_workflow_run(p_worker_id)` RPC = `SELECT ... FOR UPDATE SKIP LOCKED`.
 - `run_steps`: per-step checkpoint; `idempotency_key = {run_id}:{step_key}:{attempt}`. Executor resumes from last incomplete step on crash with no duplicate side effects.
 - Executor design: `executeRun(runId)` in `lib/services/workflows.ts` → one step per invocation. Delay step sets `next_run_at`; no long-running function. `workflow-runner-cron` Edge Function (every minute) claims due runs + enqueues `workflow_execute` jobs.
-- Step types: `ai` (BYOK via key vault, non-streaming sync call), `http` (outbound fetch), `transform` (safe `{{path}}` template expansion — NO eval), `branch` (condition evaluator — NO eval), `delay` (future `next_run_at`), `connector` (stub until #43).
+- Step types: `ai` (BYOK via key vault, non-streaming sync call), `http` (outbound fetch), `transform` (safe `{{path}}` template expansion — NO eval), `branch` (condition evaluator — NO eval), `delay` (future `next_run_at`), `connector` (`runConnectorStep` in `lib/workflows/steps/connector.ts` — live as of #43).
 - Template install (`installTemplate`): clones a `is_template=true` version into buyer's org; strips `provider_key_id` from step configs (buyer supplies own keys).
-- Key files: `lib/services/workflows.ts`, `lib/workflows/steps/{ai,http,transform,branch,delay}.ts`, `app/api/workflows/[id]/trigger/[secret]/route.ts`, `supabase/functions/workflow-runner-cron/`.
+- Key files: `lib/services/workflows.ts`, `lib/workflows/steps/{ai,http,transform,branch,delay,connector}.ts`, `app/api/workflows/[id]/trigger/[secret]/route.ts`, `supabase/functions/workflow-runner-cron/`.
+
+**Connectors (as of #43)**
+- `connector_accounts`: org-owned encrypted credential vault. Same AES-256-GCM envelope pattern as `provider_keys` — `ciphertext`/`dek_wrapped`/`key_version` for access token; `refresh_*` trio for refresh token. `expires_at` null = non-expiring. `org_id` column (not `owner_id`).
+- Registry in `lib/connectors/registry.ts`: HTTP (none auth), Gmail (oauth2), Slack (oauth2), Sheets (oauth2). Adding a connector = new `ConnectorDef` + handler file in `lib/connectors/handlers/`.
+- OAuth flow: `GET /api/connectors/[id]/connect` → consent; `GET /api/connectors/[id]/callback` → exchange code, encrypt + store. State is HMAC-SHA256 signed (15-min expiry) via `CONNECTOR_STATE_SECRET`.
+- Auto-refresh: `ensureFreshToken()` in `lib/services/connectors.ts` re-encrypts new tokens. Called before every step execution. Throws if expired and no refresh token (reconnect required).
+- Quota: `connector_accounts` default 20 per org (enforced in `connectAccount`).
+- Env vars: `CONNECTOR_STATE_SECRET` (required), `GOOGLE_CLIENT_ID/SECRET` (optional, for Gmail+Sheets), `SLACK_CLIENT_ID/SECRET` (optional).
 
 **Outcome metrics (as of #51)**
 - `deployment_metrics`: append-only, **daily** partition (not monthly). `tenant_shard_id` first in all composites. 90d raw retention; detached by `partition-rotation-cron`.
@@ -173,7 +186,7 @@ Repositioning: infrastructure agencies use to build agent-powered businesses for
 - [x] #40 Usage metering + billing — `usage_meters`, `usage_events` (monthly partitioned), prepaid `credit_wallets`, `record_usage` RPC (atomic, idempotent), `computeUsageSplit` pure fn + fuzz tests, settlement jobs, usage reconciliation, `subscriptions.acquired_by` + `partner_owner_id` (SPEC §13), SPEC §14.
 - [x] #41 AI Gateway (BYOK) — per-deployment key routing (vendor/agency/client BYOK), spend caps, encrypted `provider_keys` vault, `/api/gateway/[provider]` metered proxy.
 - [x] #42 Workflow engine — `workflows/workflow_steps/workflow_versions/workflow_runs/run_steps`, triggers (manual/schedule/webhook), tick-driven durable executor (one step per cron slice), sellable templates, `claim_workflow_run` RPC.
-- [ ] #43 Connectors — OAuth owned by client_org, delegated to deployment; versioned registry (Gmail/Slack/Sheets/HTTP), encrypted `connector_accounts`.
+- [x] #43 Connectors — OAuth owned by client_org, delegated to deployment; versioned registry (Gmail/Slack/Sheets/HTTP), encrypted `connector_accounts`. `CONNECTOR_STATE_SECRET` + optional `GOOGLE_CLIENT_ID/SECRET`, `SLACK_CLIENT_ID/SECRET`.
 - [ ] #44 Usage-product distribution — agency forks vendor templates → customises → deploys under agency brand; metered marketplace products, reseller per-unit markup, affiliate recurring %.
 - [ ] #52 Agency operations dashboard — `/agency` route (org.type='agency' only), client-centric health board, `client_health_scores` precomputed hourly, `computeChurnRisk` pure fn, cursor pagination (no OFFSET), Stripe Connect balance + payouts.
 - [ ] #53 Client portal — `/client` + subdomain WL (reuses #29 proxy pattern), branding from active agency relationship cached in signed cookie (1h) + Redis `branding_version:*`, outcome charts, credit wallet, privacy panel, agency-branded emails via jobs queue, "Hosted by [PLATFORM]" footer mandatory.

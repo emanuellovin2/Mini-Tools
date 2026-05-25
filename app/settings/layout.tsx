@@ -11,6 +11,7 @@ const SETTINGS_NAV = [
   { label: "Organization",  href: "/settings/organization" },
   { label: "Activity",      href: "/settings/organization/activity" },
   { label: "API Keys",      href: "/settings/api" },
+  { label: "Connections",   href: "/settings/connections" },
 ];
 
 export default async function SettingsLayout({ children }: { children: ReactNode }) {

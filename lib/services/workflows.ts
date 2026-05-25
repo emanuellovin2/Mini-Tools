@@ -22,6 +22,7 @@ import { runBranchStep, type BranchConfig } from "@/lib/workflows/steps/branch";
 import { runDelayStep, type DelayConfig } from "@/lib/workflows/steps/delay";
 import { runHttpStep, type HttpConfig } from "@/lib/workflows/steps/http";
 import { runAiStep, type AiConfig } from "@/lib/workflows/steps/ai";
+import { runConnectorStep, type ConnectorConfig } from "@/lib/workflows/steps/connector";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAdmin = any;
@@ -710,11 +711,30 @@ async function dispatchStep(
     }
 
     case "connector": {
-      // Connector steps light up after #43 — stub for now
-      console.log(
-        JSON.stringify({ event: "workflow.connector_step.stub", step_key: stepDef.step_key })
-      );
-      return { output: { status: "stub", message: "Connector support available after #43" } };
+      const { data: wfConn } = await admin
+        .from("workflows")
+        .select("org_id, deployment_id")
+        .eq("id", run.workflow_id)
+        .single();
+      const connOrgId = (wfConn?.org_id ?? run.org_id ?? "") as string;
+      let connBuyerId = connOrgId;
+      if (wfConn?.deployment_id) {
+        const { data: dep } = await admin
+          .from("solution_deployments")
+          .select("client_org_id")
+          .eq("id", wfConn.deployment_id)
+          .single();
+        if (dep?.client_org_id) connBuyerId = dep.client_org_id as string;
+      }
+
+      const result = await runConnectorStep(stepDef.config as unknown as ConnectorConfig, {
+        context,
+        ownerOrgId: connOrgId,
+        buyerId: connBuyerId,
+        runId: run.id,
+        stepKey: stepDef.step_key,
+      });
+      return { output: result };
     }
 
     default: {
