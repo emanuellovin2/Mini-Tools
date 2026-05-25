@@ -14,6 +14,7 @@ import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { encryptSecret, decryptSecret, type EncryptedSecret } from "@/lib/gateway/crypto";
 import { getAdapter, type ProviderName } from "@/lib/gateway/providers";
 import { getEffectiveConfig } from "@/lib/services/deployments";
+import { getEffectiveInstructions } from "@/lib/services/instructions";
 import { recordUsage } from "@/lib/services/usage";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -549,8 +550,23 @@ export async function resolveAndForward(args: ForwardArgs): Promise<ForwardRespo
     plaintextKey = await decryptProviderKey(byokKeyId);
   }
 
-  // 7a. Knowledge retrieval injection (#55) — gated by KNOWLEDGE_ENABLED
-  let resolvedSystemPrompt = product.system_prompt as string | null;
+  // 7a. Instruction set resolution (#56) — gated by INSTRUCTION_SETS_ENABLED; falls back to static system_prompt
+  let resolvedSystemPrompt: string | null = product.system_prompt as string | null;
+  if (process.env.INSTRUCTION_SETS_ENABLED === "true") {
+    try {
+      const instrOrgId = effectiveCfg.agency_org_id ?? args.buyerOrgId;
+      const instrResult = await getEffectiveInstructions({
+        orgId: instrOrgId,
+        clientOrgId: effectiveCfg.client_org_id,
+        deploymentId: args.deploymentId,
+      });
+      if (instrResult.systemPrompt) resolvedSystemPrompt = instrResult.systemPrompt;
+    } catch (err) {
+      console.error(JSON.stringify({ event: "gateway.instruction_resolution_error", error: String(err) }));
+    }
+  }
+
+  // 7b. Knowledge retrieval injection (#55) — gated by KNOWLEDGE_ENABLED
   const knowledgeBaseIds = (product as Record<string, unknown>).knowledge_base_ids as string[] | null;
   if (process.env.KNOWLEDGE_ENABLED === "true" && knowledgeBaseIds?.length) {
     try {

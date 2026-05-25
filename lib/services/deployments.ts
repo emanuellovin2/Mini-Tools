@@ -52,6 +52,10 @@ export interface EffectiveConfig {
   config: Record<string, unknown>;
   status: DeploymentStatus;
   credit_wallet_owner: CreditWalletOwner;
+  /** Agency org that owns this deployment (null for marketplace-direct). Added for #56 instruction resolution. */
+  agency_org_id: string | null;
+  /** Client org that this deployment belongs to. Added for #56 instruction resolution. */
+  client_org_id: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -439,6 +443,7 @@ export async function getEffectiveConfig(deploymentId: string): Promise<Effectiv
     .from("solution_deployments")
     .select(`
       id, status, credit_wallet_owner, runtime_config_override,
+      agency_org_id, client_org_id,
       solutions (solution_type, runtime_config)
     `)
     .eq("id", deploymentId)
@@ -462,6 +467,8 @@ export async function getEffectiveConfig(deploymentId: string): Promise<Effectiv
     },
     status: dep.status as DeploymentStatus,
     credit_wallet_owner: dep.credit_wallet_owner as CreditWalletOwner,
+    agency_org_id: (dep.agency_org_id as string | null) ?? null,
+    client_org_id: dep.client_org_id as string,
   };
 
   // Cache in both tiers

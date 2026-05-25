@@ -37,6 +37,8 @@ export interface AiConfig {
   meter_id?: string | null;
   /** #55 — knowledge base IDs to retrieve context from before the call */
   knowledge_base_ids?: string[] | null;
+  /** #56 — when set, resolve system prompt via instruction sets instead of static system_prompt */
+  instruction_set_id?: string | null;
 }
 
 export interface AiInput {
@@ -51,6 +53,10 @@ export interface AiInput {
   runId: string;
   /** Step key for idempotency key. */
   stepKey: string;
+  /** #56 — deployment ID for instruction set resolution. */
+  deploymentId?: string | null;
+  /** #56 — client org ID for instruction set resolution. */
+  clientOrgId?: string | null;
 }
 
 export interface AiOutput {
@@ -175,8 +181,23 @@ export async function runAiStep(config: AiConfig, input: AiInput): Promise<AiOut
   const userMessage = expandTemplate(config.user_template, input.context);
   const maxTokens = Math.min(config.max_tokens ?? 1024, MAX_TOKENS_CAP);
 
-  // #55 — knowledge retrieval injection (gated by KNOWLEDGE_ENABLED)
+  // #56 — instruction set resolution (gated by INSTRUCTION_SETS_ENABLED)
   let resolvedSystemPrompt = config.system_prompt;
+  if (process.env.INSTRUCTION_SETS_ENABLED === "true" && input.deploymentId) {
+    try {
+      const { getEffectiveInstructions } = await import("@/lib/services/instructions");
+      const instrResult = await getEffectiveInstructions({
+        orgId: input.ownerOrgId,
+        clientOrgId: input.clientOrgId ?? undefined,
+        deploymentId: input.deploymentId,
+      });
+      if (instrResult.systemPrompt) resolvedSystemPrompt = instrResult.systemPrompt;
+    } catch (err) {
+      console.error(JSON.stringify({ event: "ai_step.instruction_resolution_error", error: String(err) }));
+    }
+  }
+
+  // #55 — knowledge retrieval injection (gated by KNOWLEDGE_ENABLED)
   if (process.env.KNOWLEDGE_ENABLED === "true" && config.knowledge_base_ids?.length) {
     try {
       const { retrieve } = await import("@/lib/services/knowledge");

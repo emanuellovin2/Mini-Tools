@@ -206,6 +206,21 @@ supabase/migrations/   # all schema changes — never manual dashboard edits
 - Storage bucket `knowledge-uploads`: org-prefixed paths, private read. Upload validation: magic-bytes verified, no SVG, size-capped (same pattern as brand uploads).
 - ENGINEERING.md §13 documents the abstraction rules; violation = reject PR.
 
+**Instruction sets (as of #56)**
+- `instruction_sets`: editable head per scope. `UNIQUE (org_id, scope_level, scope_ref_id)` — one set per scope target. `scope_level` = `global | project | client | deployment`; `scope_ref_id` is NULL for global, otherwise the project/client/deployment UUID.
+- `instruction_versions`: immutable snapshots. `blocks jsonb` = ordered array of `{ key, mode, text }`. `content_hash` dedupes no-op publishes. Capped at 50 per set via trigger (same as `workflow_versions`).
+- **Merge precedence**: `global → project → client → deployment` (least → most specific). `replace` mode overrides same-key block from any less-specific scope (preserving the key's original order position). `append` mode concatenates after existing text. Unknown keys from more-specific scopes are appended at the end.
+- **`resolveInstructions`** (`lib/instructions/resolve.ts`): pure + deterministic — same inputs → byte-identical output. 1000-iteration property test enforces this. No IO.
+- **`getEffectiveInstructions`** (`lib/services/instructions.ts`): cache-first mirror of `getEffectiveConfig`. In-process LRU (30s) → Redis (5 min), keyed by `effins:v1:{orgId}:{projectId}:{clientOrgId}:{deploymentId}:v{counter}`. `bumpInstructionVersion(orgId)` on publish changes the counter → old keys fall out naturally within 30s.
+- **Variable expansion**: uses the workflow engine's safe `{{path}}` template expander (NO eval). Expansion happens after block merge, before handing to the model.
+- **Gateway (#41)**: `resolveAndForward` uses `getEffectiveInstructions` when `INSTRUCTION_SETS_ENABLED=true`; falls back to `gateway_products.system_prompt`. Backfill migration seeds a global set from existing `system_prompt` values.
+- **Workflow `ai` step (#42)**: passes `deploymentId` + `clientOrgId` to `runAiStep`; step resolves via `getEffectiveInstructions` when `INSTRUCTION_SETS_ENABLED=true`.
+- **`diffVersions`** (`lib/instructions/diff.ts`): pure `added/removed/changed` diff of block arrays. Powers the version-history diff view.
+- RLS: org-owned via `is_org_member`. Client/deployment-scope sets follow #50 trust boundaries.
+- Quota: `instruction_sets` per org (default 200). `enforceQuota()` on create.
+- Env vars: `INSTRUCTION_SETS_ENABLED` (flag, default off — gating the call-path resolution).
+- Settings UI: `app/settings/instructions/` — list by scope, block editor (key/mode/text), variables panel, version history with inline diff, publish/rollback, live resolved preview.
+
 ## How to work
 - Build one numbered prompt at a time. Tick it in Progress when done.
 - Tech stack (do not swap): Next.js App Router TS, Supabase, Vercel, Stripe Connect, Resend, JWT RS256.
@@ -243,7 +258,7 @@ Repositioning: infrastructure agencies use to build agent-powered businesses for
 **Phase 7 — Wave 10 (the intelligence layer) — build in order: #55 → #56 → #57 → #58 (#55/#56 parallel-able)**
 
 - [x] #55 Knowledge & Retrieval (RAG) — `pgvector`, tenant-sharded `knowledge_bases/documents/chunks`, durable async ingest on jobs queue, `VectorIndex` + embedding-provider abstractions (swap-at-scale seam), hybrid vector+FTS retrieval RPC, gateway + workflow `ai`-step injection, metering, `knowledge` eraser, quotas. "Enrich Engine" = re-index, not training. **Substrate for #57.**
-- [ ] #56 Hierarchical instruction sets — `instruction_sets` (global/project/client/deployment) + immutable `instruction_versions` (Git-like), deterministic structured merge resolved cache-first (mirrors `getEffectiveConfig` + version-counter invalidation), diff/rollback, generalizes `gateway_products.system_prompt`. Parallel-able with #55.
+- [x] #56 Hierarchical instruction sets — `instruction_sets` (global/project/client/deployment) + immutable `instruction_versions` (Git-like), deterministic structured merge resolved cache-first (mirrors `getEffectiveConfig` + version-counter invalidation), diff/rollback, generalizes `gateway_products.system_prompt`. Parallel-able with #55.
 - [ ] #57 Multi-agent orchestration — new `agent` workflow step; durable checkpointed iterations (one per executor slice, no long-running fns), hard per-run cost ceiling via gateway reservations, loop/no-progress guards, typed handoff (Researcher→Writer→Critic), tools = connectors+http+knowledge.retrieve+sub-workflow. Depends on #55/#56/#41/#42.
 - [ ] #58 Visual builder + adaptive shell — canvas over `workflow_versions.graph`, server-authoritative shared Zod graph validator (entitlement + cost-guard checks), draft/publish via existing APIs, optimistic version lock (CRDT deferred), shell toggles chat↔canvas. IDE/spreadsheet modes out of scope.
 

@@ -706,6 +706,8 @@ async function dispatchStep(
         buyerId,
         runId: run.id,
         stepKey: stepDef.step_key,
+        deploymentId: deploymentId ?? null,
+        clientOrgId: buyerId !== orgId ? buyerId : null,
       });
       return { output: result };
     }

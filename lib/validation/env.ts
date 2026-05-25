@@ -96,6 +96,14 @@ const serverEnvSchema = z.object({
     .transform(Number),
   // Required when EMBEDDING_PROVIDER=openai_compat
   EMBEDDING_COMPAT_BASE_URL: z.string().url().optional(),
+
+  // #56 — Hierarchical instruction sets
+  // Gates instruction set resolution in gateway + workflow ai step; false = use static system_prompt
+  INSTRUCTION_SETS_ENABLED: z
+    .string()
+    .optional()
+    .default("false")
+    .transform((v) => v === "true"),
 });
 
 export type Env = z.infer<typeof serverEnvSchema>;

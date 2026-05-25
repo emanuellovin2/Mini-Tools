@@ -34,7 +34,9 @@ export type Resource =
   | "reseller_metered_offers"
   // #55 — Knowledge & RAG
   | "knowledge_bases"
-  | "knowledge_documents";
+  | "knowledge_documents"
+  // #56 — Hierarchical instruction sets
+  | "instruction_sets";
 
 interface ResourceConfig {
   quotaCol: string;
@@ -63,6 +65,8 @@ const RESOURCE_CONFIG: Record<Resource, ResourceConfig> = {
   // #55 — Knowledge & RAG
   knowledge_bases:     { quotaCol: "max_knowledge_bases",     table: "knowledge_bases",     orgCol: "org_id" },
   knowledge_documents: { quotaCol: "max_knowledge_documents", table: "knowledge_documents", orgCol: "org_id" },
+  // #56 — Hierarchical instruction sets
+  instruction_sets:    { quotaCol: "max_instruction_sets",    table: "instruction_sets",    orgCol: "org_id" },
 };
 
 // org_quotas and several referenced tables are not yet in generated types —
