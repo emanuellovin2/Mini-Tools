@@ -90,7 +90,7 @@ async function seedFixture() {
   // Create auth users
   for (const [key, email] of Object.entries(TEST_EMAILS)) {
     const userId = IDs[`${key.toUpperCase()}_USER` as keyof typeof IDs] ??
-                   IDs[`${key.replace("client", "CLIENT_").replace("A", "A").replace("B", "B")}_USER` as keyof typeof IDs];
+                   IDs[`${key.replace("client", "CLIENT_")}_USER` as keyof typeof IDs];
     try {
       await admin.auth.admin.createUser({ id: userId as string, email, password: PASSWORD, email_confirm: true });
     } catch { /* already exists */ }

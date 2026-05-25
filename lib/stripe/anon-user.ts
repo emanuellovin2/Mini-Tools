@@ -4,10 +4,14 @@ import { createAdminClient } from "@/lib/services/supabase";
 const BASE62 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 export function generateAnonUserId(): string {
-  const bytes = crypto.randomBytes(16);
   let id = "usr_";
-  for (const byte of bytes) {
-    id += BASE62[byte % 62];
+  while (id.length < 20) {
+    const bytes = crypto.randomBytes(16);
+    for (const byte of bytes) {
+      if (id.length >= 20) break;
+      // Rejection sampling: discard bytes >= 248 to avoid modulo bias
+      if (byte < 248) id += BASE62[byte % 62];
+    }
   }
   return id;
 }
