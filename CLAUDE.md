@@ -148,9 +148,21 @@ supabase/migrations/   # all schema changes — never manual dashboard edits
 - `workflow_runs`: durable state machine. `next_step_key` + `next_run_at` = cursor. `usage_event_id` guards against double-charge on retry. `claim_workflow_run(p_worker_id)` RPC = `SELECT ... FOR UPDATE SKIP LOCKED`.
 - `run_steps`: per-step checkpoint; `idempotency_key = {run_id}:{step_key}:{attempt}`. Executor resumes from last incomplete step on crash with no duplicate side effects.
 - Executor design: `executeRun(runId)` in `lib/services/workflows.ts` → one step per invocation. Delay step sets `next_run_at`; no long-running function. `workflow-runner-cron` Edge Function (every minute) claims due runs + enqueues `workflow_execute` jobs.
-- Step types: `ai` (BYOK via key vault, non-streaming sync call), `http` (outbound fetch), `transform` (safe `{{path}}` template expansion — NO eval), `branch` (condition evaluator — NO eval), `delay` (future `next_run_at`), `connector` (`runConnectorStep` in `lib/workflows/steps/connector.ts` — live as of #43).
-- Template install (`installTemplate`): clones a `is_template=true` version into buyer's org; strips `provider_key_id` from step configs (buyer supplies own keys).
-- Key files: `lib/services/workflows.ts`, `lib/workflows/steps/{ai,http,transform,branch,delay,connector}.ts`, `app/api/workflows/[id]/trigger/[secret]/route.ts`, `supabase/functions/workflow-runner-cron/`.
+- Step types: `ai` (BYOK via key vault, non-streaming sync call), `http` (outbound fetch), `transform` (safe `{{path}}` template expansion — NO eval), `branch` (condition evaluator — NO eval), `delay` (future `next_run_at`), `connector` (`runConnectorStep` in `lib/workflows/steps/connector.ts` — live as of #43), `agent` (role-driven LLM agent — see below).
+- Template install (`installTemplate`): clones a `is_template=true` version into buyer's org; strips `provider_key_id` + connector `account_id` from step configs (buyer supplies own keys).
+- Key files: `lib/services/workflows.ts`, `lib/workflows/steps/{ai,http,transform,branch,delay,connector,agent}.ts`, `app/api/workflows/[id]/trigger/[secret]/route.ts`, `supabase/functions/workflow-runner-cron/`.
+
+**Multi-agent orchestration (as of #57)**
+- `agent` step type: role-driven LLM agent with tools (connector/http/knowledge.retrieve/sub-workflow), BYOK key, instruction-set resolution (#56), knowledge injection (#55), hard cost ceiling.
+- **One iteration per executor invocation** (never a long-running function). The executor's `next_step_key` cycles through virtual iteration keys: `<step_key>:iter:0` → `<step_key>:iter:1` → … → handoff step. The base step definition in the graph is looked up by stripping `:iter:N`; each iteration's state (messages, spent_cents) lives in the corresponding `run_steps.output` row — crash-safe, zero duplicate LLM charges.
+- **Budget guards** (`lib/workflows/agent/budget.ts`): per-step `budget_cents` + platform `AGENT_MAX_RUN_BUDGET_CENTS` hard ceiling checked BEFORE every LLM call. Budget exhausted → reservation released, step fails cleanly.
+- **Loop guards** (`lib/workflows/agent/loop.ts`): `max_iterations` (per-step) + `AGENT_MAX_ITERATIONS_CAP` (global) + no-progress detection (same tool+args repeated 3× → abort).
+- **Scratchpad** (`lib/workflows/agent/scratchpad.ts`): bounded at 40 messages + 8k chars/message; oldest turns summarized-by-truncation, system message always preserved.
+- **Typed handoff** (`lib/workflows/agent/handoff.ts`): `output_schema` (JSON Schema subset) validated on final answer. Researcher → Writer → Critic are three `agent` steps wired by `handoff` config field. Invalid schema = step failure, never silent coercion.
+- **Tools** (least privilege — agent sees only `tools[]` from its config): connector → `runConnectorStep`, http → `runHttpStep`, `knowledge.retrieve` → scoped to declared `base_ids`, `sub_workflow` → `enqueueRun` bounded by `AGENT_MAX_SUBWORKFLOW_DEPTH`.
+- Env vars: `AGENT_MAX_ITERATIONS_CAP` (default 12), `AGENT_MAX_RUN_BUDGET_CENTS` (default 500), `AGENT_MAX_SUBWORKFLOW_DEPTH` (default 3).
+- Migration: `workflow_runs.subworkflow_depth + parent_run_id` (`supabase/migrations/20260606000001_agent_step.sql`).
+- All LLM calls go through reserve→call→settle (gateway credit pattern); no direct provider calls.
 
 **Connectors (as of #43)**
 - `connector_accounts`: org-owned encrypted credential vault. Same AES-256-GCM envelope pattern as `provider_keys` — `ciphertext`/`dek_wrapped`/`key_version` for access token; `refresh_*` trio for refresh token. `expires_at` null = non-expiring. `org_id` column (not `owner_id`).
@@ -259,7 +271,7 @@ Repositioning: infrastructure agencies use to build agent-powered businesses for
 
 - [x] #55 Knowledge & Retrieval (RAG) — `pgvector`, tenant-sharded `knowledge_bases/documents/chunks`, durable async ingest on jobs queue, `VectorIndex` + embedding-provider abstractions (swap-at-scale seam), hybrid vector+FTS retrieval RPC, gateway + workflow `ai`-step injection, metering, `knowledge` eraser, quotas. "Enrich Engine" = re-index, not training. **Substrate for #57.**
 - [x] #56 Hierarchical instruction sets — `instruction_sets` (global/project/client/deployment) + immutable `instruction_versions` (Git-like), deterministic structured merge resolved cache-first (mirrors `getEffectiveConfig` + version-counter invalidation), diff/rollback, generalizes `gateway_products.system_prompt`. Parallel-able with #55.
-- [ ] #57 Multi-agent orchestration — new `agent` workflow step; durable checkpointed iterations (one per executor slice, no long-running fns), hard per-run cost ceiling via gateway reservations, loop/no-progress guards, typed handoff (Researcher→Writer→Critic), tools = connectors+http+knowledge.retrieve+sub-workflow. Depends on #55/#56/#41/#42.
+- [x] #57 Multi-agent orchestration — new `agent` workflow step; durable checkpointed iterations (one per executor slice, no long-running fns), hard per-run cost ceiling via gateway reservations, loop/no-progress guards, typed handoff (Researcher→Writer→Critic), tools = connectors+http+knowledge.retrieve+sub-workflow. Depends on #55/#56/#41/#42.
 - [ ] #58 Visual builder + adaptive shell — canvas over `workflow_versions.graph`, server-authoritative shared Zod graph validator (entitlement + cost-guard checks), draft/publish via existing APIs, optimistic version lock (CRDT deferred), shell toggles chat↔canvas. IDE/spreadsheet modes out of scope.
 
 ## Guardrails

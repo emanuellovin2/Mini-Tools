@@ -104,6 +104,14 @@ const serverEnvSchema = z.object({
     .optional()
     .default("false")
     .transform((v) => v === "true"),
+
+  // #57 — Multi-agent orchestration
+  // Hard per-agent-step iteration ceiling (default 12)
+  AGENT_MAX_ITERATIONS_CAP: z.string().optional().default("12").transform(Number),
+  // Hard per-run cost ceiling in cents (default $5.00 = 500 cents)
+  AGENT_MAX_RUN_BUDGET_CENTS: z.string().optional().default("500").transform(Number),
+  // Max sub-workflow recursion depth (default 3)
+  AGENT_MAX_SUBWORKFLOW_DEPTH: z.string().optional().default("3").transform(Number),
 });
 
 export type Env = z.infer<typeof serverEnvSchema>;

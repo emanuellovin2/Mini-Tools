@@ -23,6 +23,7 @@ import { runDelayStep, type DelayConfig } from "@/lib/workflows/steps/delay";
 import { runHttpStep, type HttpConfig } from "@/lib/workflows/steps/http";
 import { runAiStep, type AiConfig } from "@/lib/workflows/steps/ai";
 import { runConnectorStep, type ConnectorConfig } from "@/lib/workflows/steps/connector";
+import { runAgentStep, type AgentStepConfig } from "@/lib/workflows/steps/agent";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAdmin = any;
@@ -35,7 +36,7 @@ export type WorkflowStatus = "draft" | "active" | "paused";
 export type TriggerType = "manual" | "schedule" | "webhook";
 export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "canceled";
 export type StepStatus = "pending" | "running" | "succeeded" | "failed" | "skipped";
-export type StepType = "ai" | "http" | "transform" | "branch" | "delay" | "connector";
+export type StepType = "ai" | "http" | "transform" | "branch" | "delay" | "connector" | "agent";
 
 export interface WorkflowStep {
   step_key: string;
@@ -456,14 +457,34 @@ export async function executeRun(runId: string): Promise<{
     return { status: "succeeded", stepExecuted: null, nextStepKey: null };
   }
 
-  const stepDef = graph.steps[currentStepKey];
+  // Resolve step definition — agent steps use virtual iteration keys (<key>:iter:<N>)
+  let stepDef = graph.steps[currentStepKey];
+  let agentIterationIndex = 0;
   if (!stepDef) {
-    const errMsg = `unknown step key: ${currentStepKey}`;
-    await admin
-      .from("workflow_runs")
-      .update({ status: "failed", error: errMsg, finished_at: new Date().toISOString() })
-      .eq("id", runId);
-    return { status: "failed", stepExecuted: currentStepKey, nextStepKey: null };
+    const agentResolved = resolveAgentIterKey(graph, currentStepKey);
+    if (agentResolved) {
+      stepDef = { ...agentResolved.baseStepDef, step_key: currentStepKey };
+      agentIterationIndex = agentResolved.iterationIndex;
+    } else {
+      const errMsg = `unknown step key: ${currentStepKey}`;
+      await admin
+        .from("workflow_runs")
+        .update({ status: "failed", error: errMsg, finished_at: new Date().toISOString() })
+        .eq("id", runId);
+      return { status: "failed", stepExecuted: currentStepKey, nextStepKey: null };
+    }
+  }
+
+  // Agent steps: redirect bare key to first virtual iteration key so all
+  // iterations use consistent :iter:N keys in the run context.
+  if (stepDef.step_type === "agent" && !AGENT_ITER_RE.test(currentStepKey)) {
+    const firstIterKey = `${currentStepKey}:iter:0`;
+    await admin.from("workflow_runs").update({
+      next_step_key: firstIterKey,
+      next_run_at: new Date().toISOString(),
+      status: "running",
+    }).eq("id", runId);
+    return { status: "running", stepExecuted: currentStepKey, nextStepKey: firstIterKey };
   }
 
   // 5. Check for existing checkpoint (resume idempotently on crash)
@@ -513,7 +534,7 @@ export async function executeRun(runId: string): Promise<{
   let delayedNextRunAt: Date | null = null;
 
   try {
-    const result = await dispatchStep(stepDef, context, r, admin);
+    const result = await dispatchStep(stepDef, context, r, admin, agentIterationIndex);
     output = result.output;
     nextStepKeyOverride = result.nextStepKeyOverride ?? null;
     delayedNextRunAt = result.nextRunAt ?? null;
@@ -633,11 +654,36 @@ interface DispatchResult {
   nextRunAt?: Date | null;
 }
 
+// ---------------------------------------------------------------------------
+// Agent virtual iteration key helpers
+// ---------------------------------------------------------------------------
+
+const AGENT_ITER_RE = /^(.+):iter:(\d+)$/;
+
+/**
+ * Resolve a virtual agent iteration key (e.g. "researcher:iter:2") to its
+ * base step definition and iteration index.  Returns null if the key doesn't
+ * match the pattern or the base step doesn't exist in the graph.
+ */
+function resolveAgentIterKey(
+  graph: WorkflowGraph,
+  stepKey: string
+): { baseStepDef: WorkflowStep; iterationIndex: number } | null {
+  const match = AGENT_ITER_RE.exec(stepKey);
+  if (!match) return null;
+  const baseKey = match[1];
+  const iterationIndex = parseInt(match[2], 10);
+  const baseStepDef = graph.steps[baseKey];
+  if (!baseStepDef || baseStepDef.step_type !== "agent") return null;
+  return { baseStepDef, iterationIndex };
+}
+
 async function dispatchStep(
   stepDef: WorkflowStep,
   context: Record<string, unknown>,
   run: WorkflowRun & { org_id?: string },
-  admin: AnyAdmin
+  admin: AnyAdmin,
+  agentIterationIndex = 0
 ): Promise<DispatchResult> {
   switch (stepDef.step_type) {
     case "transform": {
@@ -737,6 +783,57 @@ async function dispatchStep(
         stepKey: stepDef.step_key,
       });
       return { output: result };
+    }
+
+    case "agent": {
+      const { data: wfAgent } = await admin
+        .from("workflows")
+        .select("org_id, deployment_id")
+        .eq("id", run.workflow_id)
+        .single();
+      const agentOrgId = (wfAgent?.org_id ?? run.org_id ?? "") as string;
+      let agentBuyerId = agentOrgId;
+      if (wfAgent?.deployment_id) {
+        const { data: depAgent } = await admin
+          .from("solution_deployments")
+          .select("client_org_id")
+          .eq("id", wfAgent.deployment_id)
+          .single();
+        if (depAgent?.client_org_id) agentBuyerId = depAgent.client_org_id as string;
+      }
+
+      let agentDeploymentProviderKeyId: string | null = null;
+      if (wfAgent?.deployment_id) {
+        const effectiveCfg = await getEffectiveConfig(wfAgent.deployment_id as string);
+        const cfg = effectiveCfg.config;
+        agentDeploymentProviderKeyId =
+          (cfg.byok_provider_key_id as string | null) ??
+          (cfg.agency_provider_key_id as string | null) ??
+          null;
+      }
+
+      // Derive base step key from virtual key (strip :iter:N suffix if present)
+      const baseStepKey = stepDef.step_key.replace(AGENT_ITER_RE, "$1");
+
+      const agentResult = await runAgentStep(
+        stepDef.config as unknown as AgentStepConfig,
+        {
+          context,
+          deploymentProviderKeyId: agentDeploymentProviderKeyId,
+          ownerOrgId: agentOrgId,
+          buyerId: agentBuyerId,
+          runId: run.id,
+          stepKey: baseStepKey,
+          iterationIndex: agentIterationIndex,
+          deploymentId: wfAgent?.deployment_id ?? null,
+          clientOrgId: agentBuyerId !== agentOrgId ? agentBuyerId : null,
+        }
+      );
+
+      return {
+        output: agentResult.continuing ? agentResult.output : (agentResult.handoffPayload ?? agentResult.output),
+        nextStepKeyOverride: agentResult.nextStepKeyOverride,
+      };
     }
 
     default: {
@@ -882,10 +979,23 @@ export async function installTemplate(args: {
   return { workflowId: (newWf as { id: string }).id };
 }
 
-/** Strip provider key IDs from step config when installing a template. */
+/** Strip provider key IDs and connector account IDs when installing a template. */
 function sanitizeTemplateStepConfig(config: Record<string, unknown>): Record<string, unknown> {
   const sanitized = { ...config };
   delete sanitized.provider_key_id;
+
+  // Agent steps: scrub account_id from every tool ref (buyer supplies own credentials)
+  if (Array.isArray(sanitized.tools)) {
+    sanitized.tools = (sanitized.tools as Array<Record<string, unknown>>).map((t) => {
+      if (t.type === "connector") {
+        const { account_id: _dropped, ...rest } = t;
+        void _dropped;
+        return rest;
+      }
+      return t;
+    });
+  }
+
   return sanitized;
 }
 
