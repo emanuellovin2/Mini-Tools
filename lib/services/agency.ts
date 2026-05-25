@@ -333,6 +333,44 @@ export async function acceptAgencyInvite(
     metadata: { agency_org_id: rel.agency_org_id },
   });
 
+  // Enqueue agency-branded welcome email (fire-and-forget; idempotent via rel.id key)
+  void (async () => {
+    try {
+      const { enqueueJob } = await import("@/lib/jobs/queue");
+
+      const { data: agencyOrg } = await admin
+        .from("organizations")
+        .select("name, slug, portal_branding")
+        .eq("id", rel.agency_org_id)
+        .maybeSingle();
+
+      const pb = (agencyOrg?.portal_branding as Record<string, string> | null) ?? {};
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://localhost:3000";
+      const agencySlug = (agencyOrg?.slug as string | null) ?? null;
+      const portalUrl = agencySlug
+        ? `${baseUrl}/_client/${agencySlug}/`
+        : `${baseUrl}/client`;
+
+      await enqueueJob(
+        "client_welcome_email",
+        {
+          clientEmail: invite.email,
+          clientName: invite.email.split("@")[0],
+          agencyName: pb.display_name ?? agencyOrg?.name ?? null,
+          agencyLogoUrl: pb.logo_url ?? null,
+          agencyBrandColor: pb.brand_color ?? null,
+          portalUrl,
+        },
+        {
+          idempotencyKey: `client_welcome:${rel.id}`,
+          orgId: rel.agency_org_id,
+        }
+      );
+    } catch (e) {
+      console.error(JSON.stringify({ event: "client_welcome_email.enqueue_failed", relId: rel.id, error: String(e) }));
+    }
+  })();
+
   return { relationshipId: rel.id, agencyOrgId: rel.agency_org_id };
 }
 

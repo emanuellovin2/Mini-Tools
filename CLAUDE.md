@@ -32,7 +32,7 @@ stripe listen --forward-to localhost:3000/api/webhooks
 
 ## Key file locations
 ```
-lib/services/          # service layer (apps.ts, solutions.ts, vendor.ts, buyer.ts, admin.ts, affiliate.ts, reseller.ts, org.ts, analytics.ts, reconciliation.ts, api-keys.ts, notifications.ts, onboarding.ts, export.ts, vendor-webhooks.ts, agency.ts, deployments.ts, outcomes.ts, usage.ts, gateway.ts)
+lib/services/          # service layer (apps.ts, solutions.ts, vendor.ts, buyer.ts, admin.ts, affiliate.ts, reseller.ts, org.ts, analytics.ts, reconciliation.ts, api-keys.ts, notifications.ts, onboarding.ts, export.ts, vendor-webhooks.ts, agency.ts, deployments.ts, outcomes.ts, usage.ts, gateway.ts, client-portal.ts)
 lib/gateway/           # AI gateway: crypto.ts (envelope encryption), providers/{openai,anthropic,compat}.ts (adapters)
 lib/usage/split.ts     # pure priceUnit + computeUsageSplit (flat/tiered/volume, BYOK/managed, fuzz-tested)
 lib/stripe/            # billing.ts (computeTier), transfers.ts, webhook-handlers.ts, connect.ts, products.ts, with-retry.ts
@@ -59,6 +59,8 @@ app/affiliate/         # affiliate dashboard + public profiles
 app/affiliates/        # public leaderboard + profile pages
 app/reseller/          # reseller dashboard + offers + brand
 app/admin/             # admin dashboard + reconciliation
+app/client/            # client portal (org.type='client' only); outcome charts, wallet, privacy
+app/_client/           # internal: branded client portal for agency subdomains (sets cp_branding cookie)
 app/r/ + app/_wl/      # public storefronts (Tier 1 + Tier 2 WL)
 app/legal/fees/        # canonical fee schedule page
 app/api/               # webhooks/, stripe/, affiliate/, reseller/, v1/, events, verify, launch
@@ -111,6 +113,15 @@ supabase/migrations/   # all schema changes — never manual dashboard edits
 - `getEffectiveConfig(deploymentId)` in `lib/services/deployments.ts` — merges `solutions.runtime_config` + `runtime_config_override`. Redis-cached (5 min) + in-process LRU (30 s). **#41 and #42 must ONLY read config via this function, never raw rows.**
 - RLS: client reads own deployments, agency reads operated deployments, vendor reads aggregate via `get_vendor_deployment_stats()` RPC only (no raw rows). No cross-tenant reads.
 - Orphaned deployments: can be adopted (`operated_by=NULL`), transferred to new agency, or archived. Auto-archived after 90 days via pg_cron.
+
+**Client portal (as of #53)**
+- `organizations.portal_branding jsonb` — agency-set branding (logo_url, brand_color, display_name) for client-facing surfaces.
+- Signed branding cookie (`cp_branding`): HMAC-SHA256, 1h TTL, `CLIENT_BRANDING_SECRET` env var. `encodeBrandingCookie`/`decodeBrandingCookie` in `lib/services/client-portal.ts`.
+- Redis `branding_version:{clientOrgId}` counter — bump via `bumpBrandingVersion()` on agency branding update to invalidate cookies.
+- `resolveSlugOrgType(slug)` — Redis-cached (5 min) lookup used in proxy.ts to route agency subdomains to `/_client/[slug]/` vs. reseller subdomains to `/_wl/[slug]/`.
+- `/_client/[agency-slug]/` internal route sets branding cookie + shows branded landing page. `/client` is the authenticated client dashboard.
+- `client_welcome_email` job enqueued in `acceptAgencyInvite`; handler in `lib/jobs/handlers.ts`; email in `lib/email/resend.ts → sendClientWelcomeEmail`.
+- "Hosted by [PLATFORM]" footer is mandatory in both `/client` layout and `/_client/` layout.
 
 **AI Gateway (as of #41)**
 - `provider_keys`: envelope encryption (per-record DEK wrapped by versioned master key). `KEY_VAULT_MASTER_KEYS` (JSON versioned map) + `KEY_VAULT_ACTIVE_VERSION`. `lib/gateway/crypto.ts` → `encryptSecret/decryptSecret` — reused by #43. `rotateMasterKey()` re-wraps DEKs only.
@@ -190,7 +201,7 @@ Repositioning: infrastructure agencies use to build agent-powered businesses for
 - [x] #43 Connectors — OAuth owned by client_org, delegated to deployment; versioned registry (Gmail/Slack/Sheets/HTTP), encrypted `connector_accounts`. `CONNECTOR_STATE_SECRET` + optional `GOOGLE_CLIENT_ID/SECRET`, `SLACK_CLIENT_ID/SECRET`.
 - [x] #44 Usage-product distribution — `product_kind` enum on solutions, `reseller_metered_offers` table, per-unit split via `computeUsageSplit`, marketplace badges + unit pricing, usage earnings panels in vendor/reseller/affiliate dashboards, `/legal/fees` usage section.
 - [x] #52 Agency operations dashboard — `/agency` route (org.type='agency' only), client-centric health board, `client_health_scores` precomputed hourly, `computeChurnRisk` pure fn, cursor pagination (no OFFSET), Stripe Connect balance + payouts.
-- [ ] #53 Client portal — `/client` + subdomain WL (reuses #29 proxy pattern), branding from active agency relationship cached in signed cookie (1h) + Redis `branding_version:*`, outcome charts, credit wallet, privacy panel, agency-branded emails via jobs queue, "Hosted by [PLATFORM]" footer mandatory.
+- [x] #53 Client portal — `/client` + subdomain WL (reuses #29 proxy pattern), branding from active agency relationship cached in signed cookie (1h) + Redis `branding_version:*`, outcome charts, credit wallet, privacy panel, agency-branded emails via jobs queue, "Hosted by [PLATFORM]" footer mandatory.
 - [ ] #45 DPA + partner-client data lifecycle — `partner_clients` CRM, cross-deployment erasure/export, retention cron, `/legal/dpa`. Depends on #40/#41/#43/#50.
 
 ## Guardrails

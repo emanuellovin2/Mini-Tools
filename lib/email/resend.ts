@@ -306,3 +306,35 @@ export async function sendExportReady(opts: {
     })
   );
 }
+
+// ---------------------------------------------------------------------------
+// Client welcome email (#53)
+// ---------------------------------------------------------------------------
+
+export async function sendClientWelcomeEmail(opts: {
+  clientEmail: string;
+  clientName: string;
+  portalUrl: string;
+  wlBranding?: WLEmailBranding;
+}): Promise<boolean> {
+  const clientName = escapeHtml(opts.clientName);
+  const portalUrl = escapeHtml(opts.portalUrl);
+  const subjectPrefix = opts.wlBranding ? `[${opts.wlBranding.displayName}] ` : "";
+  const header = buildEmailHeader(opts.wlBranding);
+  const footer = buildEmailFooter(opts.wlBranding);
+
+  return safeSend("client_welcome", (resend) =>
+    resend.emails.send({
+      from: fromAddress(),
+      to: opts.clientEmail,
+      subject: `${subjectPrefix}Welcome to your client portal`,
+      html: `
+        ${header}
+        <p>Hi ${clientName},</p>
+        <p>Your client portal is ready. You can view your deployments, outcome metrics, and account details at the link below.</p>
+        <p><a href="${portalUrl}" style="color:#635bff;font-weight:600;">Open my portal →</a></p>
+        ${footer}
+      `,
+    })
+  );
+}

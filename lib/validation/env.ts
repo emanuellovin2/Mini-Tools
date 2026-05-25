@@ -67,6 +67,8 @@ const serverEnvSchema = z.object({
   // #43 — Slack OAuth app credentials
   SLACK_CLIENT_ID: z.string().min(1).optional(),
   SLACK_CLIENT_SECRET: z.string().min(1).optional(),
+  // #53 — HMAC-SHA256 key for signing client branding cookies (1h TTL)
+  CLIENT_BRANDING_SECRET: z.string().min(16).optional(),
 });
 
 export type Env = z.infer<typeof serverEnvSchema>;

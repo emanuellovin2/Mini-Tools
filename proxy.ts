@@ -14,7 +14,7 @@ const RESERVED_SUBDOMAINS = RESERVED_SLUGS;
 // Note: each prefix is matched with `startsWith`, so a bare "/r" would also match
 // "/reseller" (the reseller dashboard) and silently bypass auth. Storefront URLs are
 // always /r/<reseller-slug>/<offer-slug> so the trailing slash form is exact enough.
-const PUBLIC_PATHS = ["/login", "/signup", "/api/auth", "/api/webhooks", "/api/verify", "/.well-known", "/marketplace", "/app", "/r/", "/affiliates", "/_wl/", "/invite/"];
+const PUBLIC_PATHS = ["/login", "/signup", "/api/auth", "/api/webhooks", "/api/verify", "/.well-known", "/marketplace", "/app", "/r/", "/affiliates", "/_wl/", "/_client/", "/invite/"];
 const AUTH_ONLY_PUBLIC = ["/login", "/signup"];
 
 // Capture ?aff=<code> on any public page visit and set an HTTP-only attribution cookie.
@@ -109,9 +109,13 @@ export async function proxy(request: NextRequest) {
           const canonical = new URL(`https://${baseHost}${pathname}${request.nextUrl.search}`);
           return NextResponse.redirect(canonical);
         }
-        // Rewrite to internal WL route
+        // Determine if slug belongs to an agency org or a reseller.
+        // Agency slugs rewrite to /_client/<slug>; resellers rewrite to /_wl/<slug>.
+        // Result cached in Redis (5 min) to avoid per-request DB hits.
+        const orgType = await resolveSlugOrgTypeInProxy(slug, request);
+        const internalPrefix = orgType === "agency" ? "/_client" : "/_wl";
         const url = request.nextUrl.clone();
-        url.pathname = `/_wl/${slug}${pathname === "/" ? "" : pathname}`;
+        url.pathname = `${internalPrefix}/${slug}${pathname === "/" ? "" : pathname}`;
         return NextResponse.rewrite(url);
       }
     }
@@ -226,6 +230,69 @@ async function refreshSession(request: NextRequest) {
 
   await supabase.auth.getUser();
   return response;
+}
+
+// ---------------------------------------------------------------------------
+// Slug → org type resolution (agency vs. reseller) with Redis caching.
+// Uses Upstash REST API directly (fetch-based, Edge-compatible).
+// ---------------------------------------------------------------------------
+
+async function resolveSlugOrgTypeInProxy(
+  slug: string,
+  request: NextRequest
+): Promise<"agency" | "reseller"> {
+  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const cacheKey = `slug_org_type:${slug}`;
+
+  // 1. Redis cache
+  if (redisUrl && redisToken) {
+    try {
+      const res = await fetch(`${redisUrl}/get/${cacheKey}`, {
+        headers: { Authorization: `Bearer ${redisToken}` },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { result?: string | null };
+        if (json.result === "agency") return "agency";
+        if (json.result === "reseller") return "reseller";
+      }
+    } catch {
+      // Redis unavailable — fall through to DB
+    }
+  }
+
+  // 2. Supabase anon lookup (organizations.slug is publicly routable)
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: () => void 0,
+      },
+    }
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (supabase as any)
+    .from("organizations")
+    .select("type")
+    .eq("slug", slug)
+    .eq("type", "agency")
+    .maybeSingle();
+
+  const orgType: "agency" | "reseller" = data ? "agency" : "reseller";
+
+  // 3. Cache result for 5 min
+  if (redisUrl && redisToken) {
+    fetch(`${redisUrl}/set/${cacheKey}/${orgType}/EX/300`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${redisToken}` },
+    }).catch(() => void 0);
+  }
+
+  return orgType;
 }
 
 export const config = {

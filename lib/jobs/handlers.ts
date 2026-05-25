@@ -356,3 +356,39 @@ registerHandler("agency_health_refresh", async (payload, _ctx) => {
   return { agencyOrgId, updated };
 });
 
+// ── #53: client welcome email ────────────────────────────────────────────────
+// Enqueued by acceptAgencyInvite when a client relationship becomes active.
+// Idempotent: Resend deduplicates on the email side; job idempotency_key = rel_id.
+registerHandler("client_welcome_email", async (payload, _ctx) => {
+  const { clientEmail, clientName, agencyName, agencyLogoUrl, agencyBrandColor, portalUrl } =
+    payload as {
+      clientEmail: string;
+      clientName: string;
+      agencyName: string;
+      agencyLogoUrl: string | null;
+      agencyBrandColor: string | null;
+      portalUrl: string;
+    };
+
+  const { sendClientWelcomeEmail } = await import("@/lib/email/resend");
+
+  const wlBranding =
+    agencyName
+      ? {
+          displayName: agencyName,
+          logoUrl: agencyLogoUrl ?? "",
+          brandColor: agencyBrandColor ?? "#635bff",
+        }
+      : undefined;
+
+  await sendClientWelcomeEmail({
+    clientEmail,
+    clientName,
+    portalUrl,
+    wlBranding,
+  });
+
+  console.log(JSON.stringify({ event: "client_welcome_email.sent", clientEmail }));
+  return { clientEmail };
+});
+
