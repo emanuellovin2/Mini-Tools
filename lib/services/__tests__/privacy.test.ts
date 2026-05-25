@@ -69,14 +69,24 @@ beforeAll(async () => {
   if (!canRun) return;
   const a = adminClient();
 
-  // Users
+  // Users: ensure correct UUIDs are in auth.users, cleaning up any stale entries
+  // (from previous failed runs that may have created users with random UUIDs).
   for (const [email, id] of [
     [EMAILS.partner, IDs.PARTNER_USER],
     [EMAILS.other,   IDs.OTHER_USER],
   ] as [string, string][]) {
-    await a.auth.admin.createUser({
-      user_id: id, email, password: PW, email_confirm: true,
-    });
+    // Check if user already exists with the correct UUID
+    const { data: byId } = await a.auth.admin.getUserById(id);
+    if (!byId?.user) {
+      // Find and delete any stale user with this email but wrong UUID
+      const { data: allUsers } = await a.auth.admin.listUsers({ perPage: 1000 });
+      const stale = (allUsers?.users ?? []).find(
+        (u: { id: string; email?: string }) => u.email === email && u.id !== id
+      );
+      if (stale) await a.auth.admin.deleteUser(stale.id);
+      // Create with the correct UUID
+      await a.auth.admin.createUser({ id, email, password: PW, email_confirm: true });
+    }
     await a.from("profiles").upsert({ id, role: "vendor" });
   }
 
@@ -96,6 +106,16 @@ beforeAll(async () => {
       max_provider_keys: 100, max_gateway_tokens: 100, max_reseller_metered_offers: 100,
     });
   }
+
+  // Workflow + workflow_version: required for workflow_runs FK in test 5
+  await a.from("workflows").upsert({
+    id: IDs.WORKFLOW, org_id: IDs.PARTNER_ORG,
+    name: "Privacy Test Workflow", status: "active", trigger_type: "manual",
+  });
+  await a.from("workflow_versions").upsert({
+    id: IDs.WORKFLOW_VERSION, workflow_id: IDs.WORKFLOW,
+    version: 1, graph: { start_step_key: "step-1", steps: {} },
+  });
 });
 
 afterAll(async () => {
@@ -214,13 +234,12 @@ describeMaybe("#45 partner-client data lifecycle", () => {
     const a = adminClient();
     // Seed a workflow_run linked to this client
     const runId = crypto.randomUUID();
+    // workflow_runs has no trigger_type / org_id columns (those are on workflows)
     await a.from("workflow_runs").insert({
       id: runId,
       workflow_id: IDs.WORKFLOW,
       version_id: IDs.WORKFLOW_VERSION,
       status: "succeeded",
-      trigger_type: "manual",
-      org_id: IDs.PARTNER_ORG,
       partner_client_id: pcId,
     });
     await a.from("run_steps").insert({

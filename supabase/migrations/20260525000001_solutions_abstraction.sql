@@ -47,7 +47,7 @@ CREATE INDEX IF NOT EXISTS sol_org_status_type_idx
 
 CREATE INDEX IF NOT EXISTS sol_active_type_idx
   ON public.solutions (status, solution_type, created_at DESC)
-  WHERE status = 'active';
+  WHERE status = 'approved';
 
 CREATE INDEX IF NOT EXISTS sol_template_idx
   ON public.solutions (is_template, status)
@@ -88,7 +88,7 @@ CREATE POLICY sv_org_read ON public.solution_versions
     EXISTS (
       SELECT 1 FROM public.solutions s
       WHERE s.id = solution_id
-        AND s.org_id = ANY(public.my_org_ids())
+        AND s.org_id = ANY(SELECT public.my_org_ids())
     )
   );
 
@@ -212,7 +212,7 @@ CREATE TRIGGER guard_solution_version_downgrade
 -- Simple SELECT * view is auto-updatable in Postgres:
 --   INSERT/UPDATE/DELETE on apps pass through to solutions transparently.
 -- Drop this view in #21 (docs-sync) after auditing all callsites.
-CREATE OR REPLACE VIEW public.apps AS
+CREATE OR REPLACE VIEW public.apps WITH (security_invoker = true) AS
   SELECT * FROM public.solutions;
 
 -- Grant same privileges as the table had (RLS on solutions covers security)
@@ -251,6 +251,7 @@ COMMENT ON TYPE public.solution_type IS
 -- 15. Add solution_type to the list_marketplace_apps RPC output
 -- ---------------------------------------------------------------------------
 -- Update the RPC to expose solution_type so frontend can display type badges.
+DROP FUNCTION IF EXISTS public.list_marketplace_apps(text, text, integer, integer);
 CREATE OR REPLACE FUNCTION public.list_marketplace_apps(
   p_page        int DEFAULT 1,
   p_page_size   int DEFAULT 24,
@@ -373,6 +374,7 @@ $$;
 -- ---------------------------------------------------------------------------
 -- 16. get_featured_apps: select from solutions directly
 -- ---------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.get_featured_apps(integer);
 CREATE OR REPLACE FUNCTION public.get_featured_apps(p_limit int DEFAULT 5)
 RETURNS TABLE (
   id              uuid,
@@ -416,6 +418,7 @@ $$;
 -- ---------------------------------------------------------------------------
 -- 17. get_marketplace_app: add solution_type + runtime_config to detail view
 -- ---------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.get_marketplace_app(uuid);
 CREATE OR REPLACE FUNCTION public.get_marketplace_app(p_id uuid)
 RETURNS TABLE (
   id                       uuid,

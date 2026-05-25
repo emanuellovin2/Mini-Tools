@@ -77,7 +77,7 @@ CREATE POLICY "reviews_vendor_update" ON public.app_reviews
   FOR UPDATE TO authenticated
   USING (
     app_id IN (
-      SELECT id FROM public.apps WHERE org_id = ANY(public.my_org_ids())
+      SELECT id FROM public.apps WHERE org_id = ANY(SELECT public.my_org_ids())
     )
   );
 
@@ -136,7 +136,7 @@ CREATE TRIGGER app_reviews_rating_refresh
 --
 -- ORDER BY encodes each sort key as a zero-padded text string so a single CASE
 -- expression can drive ascending vs descending without dynamic SQL.
-
+DROP FUNCTION IF EXISTS public.list_marketplace_apps(text, text, integer, integer);
 CREATE OR REPLACE FUNCTION public.list_marketplace_apps(
   p_search        text    DEFAULT NULL,
   p_category      text    DEFAULT NULL,
@@ -332,7 +332,7 @@ AS $$
 $$;
 
 -- (H) Updated get_marketplace_app RPC to include ratings -------------------------
-
+DROP FUNCTION IF EXISTS public.get_marketplace_app(uuid);
 CREATE OR REPLACE FUNCTION public.get_marketplace_app(p_id uuid)
 RETURNS TABLE (
   id                       uuid,

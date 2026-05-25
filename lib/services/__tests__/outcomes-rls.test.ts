@@ -56,11 +56,12 @@ const IDs = {
   REL_B:         "51000000-0000-0004-0000-000000000002",
 } as const;
 
+// Use lowercase — GoTrue normalises emails to lowercase on storage
 const EMAILS = {
   agency:  "rls51-agency@test.local",
   agency2: "rls51-agency2@test.local",
-  clientA: "rls51-clientA@test.local",
-  clientB: "rls51-clientB@test.local",
+  clientA: "rls51-clienta@test.local",
+  clientB: "rls51-clientb@test.local",
   vendor:  "rls51-vendor@test.local",
 } as const;
 
@@ -85,14 +86,9 @@ beforeAll(async () => {
   if (!canRun) return;
   const a = admin();
 
-  // Auth users
-  for (const [role, email] of Object.entries(EMAILS)) {
-    await a.auth.admin.createUser({ email, password: PW, email_confirm: true }).catch(() => {});
-    void role;
-  }
-
-  // Profiles
-  const userMap = {
+  // Auth users — create with fixed UUIDs so auth.uid() matches org_members rows.
+  // Pattern: check by ID first; if missing, clean up stale email-conflicts, then create.
+  const userMap: Record<string, string> = {
     [EMAILS.agency]:  IDs.AGENCY_USER,
     [EMAILS.agency2]: IDs.AGENCY2_USER,
     [EMAILS.clientA]: IDs.CLIENT_A_USER,
@@ -100,8 +96,20 @@ beforeAll(async () => {
     [EMAILS.vendor]:  IDs.VENDOR_USER,
   };
   for (const [email, id] of Object.entries(userMap)) {
-    await a.from("profiles").upsert({ id, email, role: "vendor" }).catch(() => {});
-    void email;
+    const { data: byId } = await a.auth.admin.getUserById(id);
+    if (!byId?.user) {
+      const { data: allUsers } = await a.auth.admin.listUsers({ perPage: 1000 });
+      // GoTrue normalises emails to lowercase; compare case-insensitively
+      const emailLower = email.toLowerCase();
+      const stale = (allUsers?.users ?? []).find(
+        (u: { id: string; email?: string }) =>
+          u.email?.toLowerCase() === emailLower && u.id !== id
+      );
+      if (stale) await a.auth.admin.deleteUser(stale.id);
+      // Always pass a lowercase email to avoid GoTrue normalisation surprises
+      await a.auth.admin.createUser({ id, email: emailLower, password: PW, email_confirm: true });
+    }
+    await a.from("profiles").upsert({ id, role: "vendor" }).then(null, () => {});
   }
 
   // Organizations
@@ -111,7 +119,7 @@ beforeAll(async () => {
     { id: IDs.CLIENT_ORG_A, name: "Client A", type: "client", slug: null },
     { id: IDs.CLIENT_ORG_B, name: "Client B", type: "client", slug: null },
     { id: IDs.VENDOR_ORG,  name: "Vendor",    type: "personal", slug: "rls51-vendor" },
-  ]).catch(() => {});
+  ]).then(null, () => {});
 
   // org_members
   await a.from("org_members").upsert([
@@ -120,16 +128,23 @@ beforeAll(async () => {
     { org_id: IDs.CLIENT_ORG_A, user_id: IDs.CLIENT_A_USER, role: "owner" },
     { org_id: IDs.CLIENT_ORG_B, user_id: IDs.CLIENT_B_USER, role: "owner" },
     { org_id: IDs.VENDOR_ORG,   user_id: IDs.VENDOR_USER,   role: "owner" },
-  ]).catch(() => {});
+  ]).then(null, () => {});
 
-  // Solution
+  // Solution — vendor_id + price_cents are NOT NULL; approved apps need ≥3 screenshots
   await a.from("solutions").upsert({
     id: IDs.AGENT_SOL,
     name: "Test Agent",
     solution_type: "agent",
     status: "approved",
+    vendor_id: IDs.VENDOR_USER,
     org_id: IDs.VENDOR_ORG,
-  }).catch(() => {});
+    price_cents: 1000,
+    screenshot_urls: [
+      "https://example.com/rls51-1.png",
+      "https://example.com/rls51-2.png",
+      "https://example.com/rls51-3.png",
+    ],
+  }).then(null, () => {});
 
   // org_quotas for agencies
   await a.from("org_quotas").upsert([
@@ -137,13 +152,13 @@ beforeAll(async () => {
     { org_id: IDs.AGENCY_ORG2 },
     { org_id: IDs.CLIENT_ORG_A },
     { org_id: IDs.CLIENT_ORG_B },
-  ]).catch(() => {});
+  ]).then(null, () => {});
 
   // Client relationships
   await a.from("client_relationships").upsert([
     { id: IDs.REL_A, agency_org_id: IDs.AGENCY_ORG,  client_org_id: IDs.CLIENT_ORG_A, status: "active" },
     { id: IDs.REL_B, agency_org_id: IDs.AGENCY_ORG2, client_org_id: IDs.CLIENT_ORG_B, status: "active" },
-  ]).catch(() => {});
+  ]).then(null, () => {});
 
   // Deployments
   await a.from("solution_deployments").upsert([
@@ -157,29 +172,29 @@ beforeAll(async () => {
       client_org_id: IDs.CLIENT_ORG_B, agency_org_id: IDs.AGENCY_ORG2,
       status: "active", region: "us-east-1", credit_wallet_owner: "client",
     },
-  ]).catch(() => {});
+  ]).then(null, () => {});
 
   // Seed deployment_metrics (service role insert bypasses RLS)
   await a.from("deployment_metrics").insert([
     { deployment_id: IDs.DEP_A, metric_key: "lead.new",    metric_value: 10, metric_unit: "count", dimensions: {}, emitted_at: new Date().toISOString() },
     { deployment_id: IDs.DEP_B, metric_key: "meeting.held", metric_value: 5,  metric_unit: "count", dimensions: {}, emitted_at: new Date().toISOString() },
-  ]).catch(() => {});
+  ]).then(null, () => {});
 
   // Seed rollup rows
   const today = new Date().toISOString().slice(0, 10);
   await a.from("deployment_metrics_rollup").insert([
     { deployment_id: IDs.DEP_A, metric_key: "lead.new",    metric_unit: "count", dimensions_hash: "abc", date: today, total_value: 10, raw_count: 1, rollup_watermark: new Date().toISOString() },
     { deployment_id: IDs.DEP_B, metric_key: "meeting.held", metric_unit: "count", dimensions_hash: "def", date: today, total_value: 5,  raw_count: 1, rollup_watermark: new Date().toISOString() },
-  ]).catch(() => {});
+  ]).then(null, () => {});
 });
 
 afterAll(async () => {
   if (!canRun) return;
   const a = admin();
-  await a.from("deployment_metrics_rollup").delete().in("deployment_id", [IDs.DEP_A, IDs.DEP_B]).catch(() => {});
-  await a.from("deployment_metrics").delete().in("deployment_id", [IDs.DEP_A, IDs.DEP_B]).catch(() => {});
-  await a.from("solution_deployments").delete().in("id", [IDs.DEP_A, IDs.DEP_B]).catch(() => {});
-  await a.from("client_relationships").delete().in("id", [IDs.REL_A, IDs.REL_B]).catch(() => {});
+  await a.from("deployment_metrics_rollup").delete().in("deployment_id", [IDs.DEP_A, IDs.DEP_B]).then(null, () => {});
+  await a.from("deployment_metrics").delete().in("deployment_id", [IDs.DEP_A, IDs.DEP_B]).then(null, () => {});
+  await a.from("solution_deployments").delete().in("id", [IDs.DEP_A, IDs.DEP_B]).then(null, () => {});
+  await a.from("client_relationships").delete().in("id", [IDs.REL_A, IDs.REL_B]).then(null, () => {});
 });
 
 // ---------------------------------------------------------------------------

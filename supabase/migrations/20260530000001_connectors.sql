@@ -6,6 +6,11 @@
 -- Envelope encryption reuses the #41 AES-256-GCM pattern (same master keys).
 -- =============================================================================
 
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN NEW.updated_at = now(); RETURN NEW; END;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- 1. connector_accounts — per-org credential store
 -- ---------------------------------------------------------------------------
@@ -52,7 +57,7 @@ CREATE INDEX IF NOT EXISTS connector_accounts_org_connector_idx
 -- updated_at trigger
 CREATE OR REPLACE TRIGGER connector_accounts_updated_at
   BEFORE UPDATE ON public.connector_accounts
-  FOR EACH ROW EXECUTE FUNCTION moddatetime(updated_at);
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- ---------------------------------------------------------------------------
 -- 2. RLS
@@ -80,8 +85,7 @@ CREATE POLICY "connector_accounts_member_delete" ON public.connector_accounts
   USING (is_org_member(org_id));
 
 -- ---------------------------------------------------------------------------
--- 3. Quota default for connector_accounts
+-- 3. Quota column for connector_accounts
 -- ---------------------------------------------------------------------------
-INSERT INTO public.org_quotas (resource_type, default_limit) VALUES
-  ('connector_accounts', 20)
-ON CONFLICT (resource_type) DO NOTHING;
+ALTER TABLE public.org_quotas
+  ADD COLUMN IF NOT EXISTS max_connector_accounts int NOT NULL DEFAULT 20;

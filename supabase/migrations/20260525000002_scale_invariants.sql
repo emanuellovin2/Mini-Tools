@@ -20,7 +20,7 @@ ALTER TABLE public.analytics_events
 
 -- Shard-aware composite index — prefix (region, tenant_shard_id) so future
 -- regional routers can narrow scans with constant-true predicates cheaply.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS org_region_idx
+CREATE INDEX IF NOT EXISTS org_region_idx
   ON public.organizations (region, id);
 
 -- ---------------------------------------------------------------------------
@@ -89,10 +89,10 @@ ALTER TABLE public.settlement_batches ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "sb_service_only" ON public.settlement_batches
   USING (false) WITH CHECK (false);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS settlement_batches_recipient_period_idx
+CREATE INDEX IF NOT EXISTS settlement_batches_recipient_period_idx
   ON public.settlement_batches (recipient_org_id, period_start DESC);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS settlement_batches_status_idx
+CREATE INDEX IF NOT EXISTS settlement_batches_status_idx
   ON public.settlement_batches (status, created_at)
   WHERE status IN ('pending', 'processing');
 
@@ -188,22 +188,24 @@ END;
 $$;
 
 -- Register cron job (runs every minute).
--- Requires pg_cron. If not available, this is a no-op (SELECT returns false).
-SELECT CASE
-  WHEN EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron')
-  THEN (
-    SELECT cron.schedule(
-      'kill-runaway-tenant-queries',
-      '* * * * *',
-      'SELECT public.kill_runaway_tenant_queries()'
-    )::text
-  )
-  ELSE 'pg_cron not enabled — skipping cron registration'
+-- Requires pg_cron. If not available, this is a no-op.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    EXECUTE $q$
+      SELECT cron.schedule(
+        'kill-runaway-tenant-queries',
+        '* * * * *',
+        'SELECT public.kill_runaway_tenant_queries()'
+      )
+    $q$;
+  END IF;
 END;
+$$;
 
 -- ---------------------------------------------------------------------------
 -- 7. analytics_events region index (shard-aware composite)
 -- ---------------------------------------------------------------------------
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ae_region_shard_idx
+CREATE INDEX IF NOT EXISTS ae_region_shard_idx
   ON public.analytics_events (region, created_at DESC)
   WHERE region IS NOT NULL;

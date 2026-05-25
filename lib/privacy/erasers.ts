@@ -23,7 +23,13 @@ export function registerEraser(fn: EraserFn): void {
   _erasers.push(fn);
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function runAllErasers(partnerClientId: string): Promise<void> {
+  // Guard: non-UUID strings can never match DB rows — return early (idempotent no-op)
+  if (!UUID_RE.test(partnerClientId)) return;
+
   const results = await Promise.allSettled(_erasers.map((fn) => fn(partnerClientId)));
   const failures = results.filter((r) => r.status === "rejected");
   if (failures.length > 0) {

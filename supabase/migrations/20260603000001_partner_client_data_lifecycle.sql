@@ -52,8 +52,12 @@ END $$;
 -- ---------------------------------------------------------------------------
 -- 2. partner_data_requests — tracks export / erasure jobs
 -- ---------------------------------------------------------------------------
-CREATE TYPE IF NOT EXISTS public.data_request_type AS ENUM ('export', 'erasure');
-CREATE TYPE IF NOT EXISTS public.data_request_status AS ENUM ('pending', 'processing', 'completed', 'failed');
+DO $$ BEGIN
+  CREATE TYPE public.data_request_type AS ENUM ('export', 'erasure');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE public.data_request_status AS ENUM ('pending', 'processing', 'completed', 'failed');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS public.partner_data_requests (
   id                  uuid                             PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -120,23 +124,22 @@ CREATE INDEX IF NOT EXISTS workflow_runs_partner_client_idx
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
-    PERFORM cron.schedule(
-      'retention-purge-cron',
-      '0 4 * * *',
-      $$
-        -- Purge workflow run I/O older than retention window (default 90 days)
-        UPDATE public.run_steps
-           SET input  = NULL,
-               output = NULL
-         WHERE created_at < now() - interval '90 days'
-           AND (input IS NOT NULL OR output IS NOT NULL);
+    EXECUTE $q$
+      SELECT cron.schedule(
+        'retention-purge-cron',
+        '0 4 * * *',
+        $cmd$
+          UPDATE public.run_steps
+             SET input  = NULL,
+                 output = NULL
+           WHERE created_at < now() - interval '90 days'
+             AND (input IS NOT NULL OR output IS NOT NULL);
 
-        -- Hard-delete partner_clients whose grace period has expired
-        -- (soft-deleted with deleted_at set; grace = 30 days by default)
-        DELETE FROM public.partner_clients
-         WHERE deleted_at IS NOT NULL
-           AND deleted_at < now() - interval '30 days';
-      $$
-    );
+          DELETE FROM public.partner_clients
+           WHERE deleted_at IS NOT NULL
+             AND deleted_at < now() - interval '30 days';
+        $cmd$
+      )
+    $q$;
   END IF;
 END $$;

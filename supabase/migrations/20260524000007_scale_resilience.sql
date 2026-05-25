@@ -79,11 +79,12 @@ CREATE TABLE public.jobs (
   org_id           uuid        REFERENCES public.organizations(id),
   idempotency_key  text,
   created_at       timestamptz NOT NULL DEFAULT now(),
-  finished_at      timestamptz
+  finished_at      timestamptz,
+  PRIMARY KEY (id, created_at)
 ) PARTITION BY RANGE (created_at);
 
--- Unique idempotency key per type (partial — only when key is set)
-CREATE UNIQUE INDEX jobs_idempotency_idx ON public.jobs (type, idempotency_key)
+-- Unique idempotency key per type+month (partition key required in unique index)
+CREATE UNIQUE INDEX jobs_idempotency_idx ON public.jobs (type, idempotency_key, created_at)
   WHERE idempotency_key IS NOT NULL;
 
 -- Hot path: worker poll
@@ -159,7 +160,7 @@ CREATE POLICY org_quotas_admin_read ON public.org_quotas
 
 CREATE TABLE public.vendor_webhook_deliveries (
   id            uuid        NOT NULL DEFAULT gen_random_uuid(),
-  job_id        uuid        REFERENCES public.jobs(id),
+  job_id        uuid,
   org_id        uuid        NOT NULL REFERENCES public.organizations(id),
   endpoint_url  text        NOT NULL,
   event_type    text        NOT NULL,

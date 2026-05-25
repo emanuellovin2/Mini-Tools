@@ -38,6 +38,9 @@ ALTER TABLE public.solutions
 -- Reseller floor: min_unit_price_cents required when product is resellable + metered
 -- (enforced at app layer; DB only enforces non-negative)
 
+-- Recreate apps view so SELECT * picks up new columns added to solutions
+CREATE OR REPLACE VIEW public.apps WITH (security_invoker = true) AS SELECT * FROM public.solutions;
+
 -- ---------------------------------------------------------------------------
 -- 2. reseller_metered_offers
 -- ---------------------------------------------------------------------------
@@ -87,20 +90,10 @@ ALTER TABLE public.subscriptions
   );
 
 -- ---------------------------------------------------------------------------
--- 4. Quota: reseller_metered_offers (default 50 per org)
+-- 4. Quota column for reseller_metered_offers (default 50 per org)
 -- ---------------------------------------------------------------------------
-INSERT INTO public.org_quotas (org_id, resource_type, max_count)
-SELECT id, 'reseller_metered_offers', 50
-FROM   public.organizations
-ON CONFLICT (org_id, resource_type) DO NOTHING;
-
-INSERT INTO public.org_quotas (org_id, resource_type, max_count)
-SELECT DISTINCT org_id, 'reseller_metered_offers', 50
-FROM   public.org_members
-WHERE  org_id NOT IN (
-  SELECT org_id FROM public.org_quotas WHERE resource_type = 'reseller_metered_offers'
-)
-ON CONFLICT (org_id, resource_type) DO NOTHING;
+ALTER TABLE public.org_quotas
+  ADD COLUMN IF NOT EXISTS max_reseller_metered_offers int NOT NULL DEFAULT 50;
 
 -- ---------------------------------------------------------------------------
 -- 5. RLS: reseller_metered_offers
@@ -121,6 +114,7 @@ CREATE POLICY reseller_metered_offers_public_read ON public.reseller_metered_off
 -- ---------------------------------------------------------------------------
 -- 6. Update list_marketplace_apps RPC — add product_kind, vendor_unit_price_cents, meter_unit
 -- ---------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.list_marketplace_apps(text, text, integer, integer);
 CREATE OR REPLACE FUNCTION public.list_marketplace_apps(
   p_search          text    DEFAULT NULL,
   p_category        text    DEFAULT NULL,

@@ -31,6 +31,18 @@ BEGIN
 END;
 $$;
 
+-- Helper: count keys in a jsonb object (IMMUTABLE for use in CHECK constraints)
+CREATE OR REPLACE FUNCTION public.jsonb_key_count(j jsonb)
+RETURNS int LANGUAGE sql IMMUTABLE AS $$
+  SELECT count(*)::int FROM jsonb_object_keys(j);
+$$;
+
+-- Helper: max value length in a jsonb object
+CREATE OR REPLACE FUNCTION public.jsonb_max_value_len(j jsonb)
+RETURNS int LANGUAGE sql IMMUTABLE AS $$
+  SELECT coalesce(max(length(value)), 0) FROM jsonb_each_text(j);
+$$;
+
 -- ---------------------------------------------------------------------------
 -- 1. deployment_metrics — append-only, daily partitioned
 --    One row per metric emission from an agent/workflow/bundle deployment.
@@ -58,10 +70,10 @@ CREATE TABLE IF NOT EXISTS public.deployment_metrics (
   created_at        timestamptz NOT NULL DEFAULT now(),
 
   CONSTRAINT dm_dimensions_max_keys CHECK (
-    (SELECT count(*) FROM jsonb_object_keys(dimensions)) <= 16
+    public.jsonb_key_count(dimensions) <= 16
   ),
   CONSTRAINT dm_dimensions_max_value_len CHECK (
-    NOT EXISTS (SELECT 1 FROM jsonb_each_text(dimensions) WHERE length(value) > 64)
+    public.jsonb_max_value_len(dimensions) <= 64
   ),
   CONSTRAINT dm_dimensions_no_pii CHECK (
     NOT public.dimensions_has_pii(dimensions)
@@ -76,10 +88,10 @@ CREATE INDEX IF NOT EXISTS dm_deploy_key_idx
 CREATE INDEX IF NOT EXISTS dm_deploy_emitted_idx
   ON public.deployment_metrics (tenant_shard_id, deployment_id, emitted_at DESC);
 
--- Partial unique for same-day idempotency at DB level (per-partition).
+-- Partial unique for same-day idempotency at DB level (per-partition, created_at required).
 -- Cross-day dedup is handled at the application layer (7-day window query).
 CREATE UNIQUE INDEX IF NOT EXISTS dm_idempotency_idx
-  ON public.deployment_metrics (deployment_id, metric_key, idempotency_key)
+  ON public.deployment_metrics (deployment_id, metric_key, idempotency_key, created_at)
   WHERE idempotency_key IS NOT NULL;
 
 -- ---------------------------------------------------------------------------
@@ -374,14 +386,16 @@ WHERE max_deployment_metric_keys IS NULL;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
-    PERFORM cron.schedule(
-      'outcomes-rollup-cron',
-      '*/15 * * * *',
-      $$
-        SELECT rollup_outcomes_window(CURRENT_DATE);
-        SELECT rollup_outcomes_window(CURRENT_DATE - 1);
-      $$
-    );
+    EXECUTE $q$
+      SELECT cron.schedule(
+        'outcomes-rollup-cron',
+        '*/15 * * * *',
+        $cmd$
+          SELECT rollup_outcomes_window(CURRENT_DATE);
+          SELECT rollup_outcomes_window(CURRENT_DATE - 1);
+        $cmd$
+      )
+    $q$;
   END IF;
 END $$;
 
@@ -389,14 +403,16 @@ END $$;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
-    PERFORM cron.schedule(
-      'metrics-daily-partition-cron',
-      '10 0 * * *',
-      $$
-        SELECT create_daily_metric_partition(CURRENT_DATE + 1);
-        SELECT create_daily_metric_partition(CURRENT_DATE + 2);
-      $$
-    );
+    EXECUTE $q$
+      SELECT cron.schedule(
+        'metrics-daily-partition-cron',
+        '10 0 * * *',
+        $cmd$
+          SELECT create_daily_metric_partition(CURRENT_DATE + 1);
+          SELECT create_daily_metric_partition(CURRENT_DATE + 2);
+        $cmd$
+      )
+    $q$;
   END IF;
 END $$;
 
@@ -404,22 +420,24 @@ END $$;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
-    PERFORM cron.schedule(
-      'metrics-daily-partition-detach-cron',
-      '20 0 * * *',
-      $$
-        DO $inner$
-        DECLARE
-          cutoff date := CURRENT_DATE - 90;
-          tbl text := 'deployment_metrics_' || to_char(cutoff, 'YYYY_MM_DD');
-        BEGIN
-          EXECUTE format(
-            'ALTER TABLE public.deployment_metrics DETACH PARTITION IF EXISTS public.%I',
-            tbl
-          );
-        END;
-        $inner$
-      $$
-    );
+    EXECUTE $q$
+      SELECT cron.schedule(
+        'metrics-daily-partition-detach-cron',
+        '20 0 * * *',
+        $cmd$
+          DO $inner$
+          DECLARE
+            cutoff date := CURRENT_DATE - 90;
+            tbl text := 'deployment_metrics_' || to_char(cutoff, 'YYYY_MM_DD');
+          BEGIN
+            EXECUTE format(
+              'ALTER TABLE public.deployment_metrics DETACH PARTITION IF EXISTS public.%I',
+              tbl
+            );
+          END;
+          $inner$
+        $cmd$
+      )
+    $q$;
   END IF;
 END $$;

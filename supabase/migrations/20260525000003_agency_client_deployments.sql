@@ -40,14 +40,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS cr_one_active_agency_per_client
   WHERE status = 'active';
 
 -- Agency dashboard: list all clients for a given agency, filtered by status.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS cr_agency_status_accepted_idx
+CREATE INDEX IF NOT EXISTS cr_agency_status_accepted_idx
   ON public.client_relationships (agency_org_id, status, accepted_at DESC)
   WHERE status = 'active';
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS cr_agency_all_idx
+CREATE INDEX IF NOT EXISTS cr_agency_all_idx
   ON public.client_relationships (agency_org_id, status, created_at DESC);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS cr_client_idx
+CREATE INDEX IF NOT EXISTS cr_client_idx
   ON public.client_relationships (client_org_id, status);
 
 -- ---------------------------------------------------------------------------
@@ -85,21 +85,21 @@ CREATE TABLE IF NOT EXISTS public.solution_deployments (
 );
 
 -- Hot path: client portal (§53) — client sees all their deployments.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS sd_client_status_created_idx
+CREATE INDEX IF NOT EXISTS sd_client_status_created_idx
   ON public.solution_deployments (tenant_shard_id, client_org_id, status, created_at DESC);
 
 -- Hot path: agency dashboard (§52) — agency sees all operated deployments.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS sd_agency_status_created_idx
+CREATE INDEX IF NOT EXISTS sd_agency_status_created_idx
   ON public.solution_deployments (tenant_shard_id, agency_org_id, status, created_at DESC)
   WHERE agency_org_id IS NOT NULL;
 
 -- Vendor aggregate stats — only active/pending rows; strips client identity.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS sd_solution_status_active_idx
+CREATE INDEX IF NOT EXISTS sd_solution_status_active_idx
   ON public.solution_deployments (solution_id, status)
   WHERE status IN ('active','pending_setup');
 
 -- Orphan cleanup cron query: find orphaned deployments older than 90 days.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS sd_orphaned_created_idx
+CREATE INDEX IF NOT EXISTS sd_orphaned_created_idx
   ON public.solution_deployments (created_at)
   WHERE status = 'orphaned';
 
@@ -281,13 +281,21 @@ $$;
 -- 10. pg_cron: 90-day orphan auto-archive (runs at 04:00 UTC daily)
 --     Orphaned deployments older than 90 days are archived; usage history kept.
 -- ---------------------------------------------------------------------------
-SELECT cron.schedule(
-  'archive-orphaned-deployments',
-  '0 4 * * *',
-  $$
-    UPDATE public.solution_deployments
-    SET    status = 'archived', archived_at = now()
-    WHERE  status = 'orphaned'
-      AND  created_at < now() - interval '90 days';
-  $$
-) WHERE EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron');
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    EXECUTE $q$
+      SELECT cron.schedule(
+        'archive-orphaned-deployments',
+        '0 4 * * *',
+        $cmd$
+          UPDATE public.solution_deployments
+          SET    status = 'archived', archived_at = now()
+          WHERE  status = 'orphaned'
+            AND  created_at < now() - interval '90 days';
+        $cmd$
+      )
+    $q$;
+  END IF;
+END;
+$$;

@@ -114,18 +114,25 @@ async function seedFixture() {
     { org_id: IDs.VENDOR_ORG,   user_id: IDs.VENDOR_USER,   role: "owner" },
   ]);
 
-  // Solutions
+  // Solutions (approved apps need ≥3 screenshots per apps_approved_has_screenshots constraint)
+  const SCREENSHOTS = [
+    "https://example.com/rls50-1.png",
+    "https://example.com/rls50-2.png",
+    "https://example.com/rls50-3.png",
+  ];
   await a.from("solutions").upsert([
     {
       id: IDs.AGENT_SOL, org_id: IDs.VENDOR_ORG, vendor_id: IDs.VENDOR_USER,
       name: "Test Agent", solution_type: "agent",
       runtime_config: { model: "claude-3", provider: "anthropic" },
       price_cents: 1000, status: "approved",
+      screenshot_urls: SCREENSHOTS,
     },
     {
       id: IDs.SAAS_SOL, org_id: IDs.VENDOR_ORG, vendor_id: IDs.VENDOR_USER,
       name: "Test SaaS", solution_type: "saas",
       price_cents: 500, status: "approved",
+      screenshot_urls: SCREENSHOTS,
     },
   ]);
 

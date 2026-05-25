@@ -279,12 +279,11 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 8. Quota defaults for new resource types
+-- 8. Quota columns for gateway resource types
 -- ---------------------------------------------------------------------------
-INSERT INTO public.org_quotas (resource_type, default_limit) VALUES
-  ('provider_keys', 10),
-  ('gateway_tokens', 20)
-ON CONFLICT (resource_type) DO NOTHING;
+ALTER TABLE public.org_quotas
+  ADD COLUMN IF NOT EXISTS max_provider_keys  int NOT NULL DEFAULT 10,
+  ADD COLUMN IF NOT EXISTS max_gateway_tokens int NOT NULL DEFAULT 20;
 
 -- ---------------------------------------------------------------------------
 -- 9. pg_cron: expire held reservations every 5 minutes
@@ -293,10 +292,12 @@ ON CONFLICT (resource_type) DO NOTHING;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
-    PERFORM cron.schedule(
-      'gateway-reservation-sweep',
-      '*/5 * * * *',
-      $$SELECT expire_gateway_reservations()$$
-    );
+    EXECUTE $q$
+      SELECT cron.schedule(
+        'gateway-reservation-sweep',
+        '*/5 * * * *',
+        $cmd$SELECT expire_gateway_reservations()$cmd$
+      )
+    $q$;
   END IF;
 END $$;

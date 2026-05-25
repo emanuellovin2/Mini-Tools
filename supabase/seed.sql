@@ -92,31 +92,35 @@ END $$;
 
 INSERT INTO public.apps (
   id, vendor_id, name, description, category,
-  price_cents, min_price_cents, auth_url, status
+  price_cents, min_price_cents, auth_url, status, screenshot_urls
 ) VALUES
   ('00000000-0000-0000-0001-000000000001',
    '00000000-0000-0000-0000-000000000002',
    'AI Writer Pro', 'AI-powered writing assistant', 'writing',
    2900, 2000,
-   'https://aiwriter.example.com/auth', 'approved'),
+   'https://aiwriter.example.com/auth', 'approved',
+   ARRAY['https://example.com/s1.png','https://example.com/s2.png','https://example.com/s3.png']),
 
   ('00000000-0000-0000-0001-000000000002',
    '00000000-0000-0000-0000-000000000002',
    'DataViz Tool', 'Data visualisation SaaS', 'analytics',
    4900, NULL,
-   'https://dataviz.example.com/auth', 'pending'),
+   'https://dataviz.example.com/auth', 'pending',
+   ARRAY[]::text[]),
 
   ('00000000-0000-0000-0001-000000000003',
    '00000000-0000-0000-0000-000000000002',
    'Old App', 'Rejected legacy app', 'misc',
    1900, NULL,
-   'https://oldapp.example.com/auth', 'rejected'),
+   'https://oldapp.example.com/auth', 'rejected',
+   ARRAY[]::text[]),
 
   ('00000000-0000-0000-0001-000000000004',
    '00000000-0000-0000-0000-000000000003',
    'Beta Tool', 'App by vendor B (not charges-enabled)', 'tools',
    3900, NULL,
-   'https://betatool.example.com/auth', 'approved');
+   'https://betatool.example.com/auth', 'approved',
+   ARRAY['https://example.com/b1.png','https://example.com/b2.png','https://example.com/b3.png']);
 
 -- ============================================================
 -- Subscriptions

@@ -193,11 +193,20 @@ describeMaybe("Seed data integrity", () => {
 
   it("vendor cannot set vendor_cut_bps_override on another vendor's profile", async () => {
     const vendorA = await signIn("vendor-a@test.com", "password123");
-    const { error } = await vendorA
+    // RLS blocks cross-profile updates silently (0 rows affected, no error thrown).
+    // PostgREST returns null error with an empty-match result — the trigger never fires.
+    await vendorA
       .from("profiles")
       .update({ vendor_cut_bps_override: 0 })
       .eq("id", IDs.VENDOR_B);
-    expect(error).not.toBeNull();
+    // Verify vendor_b's profile was NOT actually changed (still null)
+    const admin = adminClient();
+    const { data } = await (admin as AnyClient)
+      .from("profiles")
+      .select("vendor_cut_bps_override")
+      .eq("id", IDs.VENDOR_B)
+      .single();
+    expect((data as { vendor_cut_bps_override: number | null } | null)?.vendor_cut_bps_override).toBeNull();
   });
 
   it("vendor_b app is approved but does not appear in public listing (charges_enabled=false)", async () => {

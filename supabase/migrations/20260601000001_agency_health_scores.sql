@@ -185,12 +185,20 @@ $$;
 
 -- Hourly pg_cron: refresh all agency health scores.
 -- Uses a CTE to fan out per agency, calling the RPC for each.
-select cron.schedule(
-  'agency-health-refresh-cron',
-  '0 * * * *',
-  $$
-    select refresh_client_health_scores(org_id)
-    from organizations
-    where type = 'agency';
-  $$
-);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    EXECUTE $q$
+      SELECT cron.schedule(
+        'agency-health-refresh-cron',
+        '0 * * * *',
+        $cmd$
+          SELECT refresh_client_health_scores(org_id)
+          FROM organizations
+          WHERE type = 'agency';
+        $cmd$
+      )
+    $q$;
+  END IF;
+END;
+$$;

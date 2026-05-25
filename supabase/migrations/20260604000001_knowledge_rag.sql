@@ -296,21 +296,22 @@ ALTER TABLE public.org_quotas
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
-    PERFORM cron.schedule(
-      'knowledge-retention-cron',
-      '30 4 * * *',
-      $$
-        -- Hard-delete knowledge docs soft-deleted more than 90 days ago
-        WITH deleted_docs AS (
-          DELETE FROM public.knowledge_documents
-          WHERE deleted_at IS NOT NULL
-            AND deleted_at < now() - interval '90 days'
-          RETURNING id
-        )
-        SELECT count(*) FROM deleted_docs;
-      $$
-    );
+    EXECUTE $q$
+      SELECT cron.schedule(
+        'knowledge-retention-cron',
+        '30 4 * * *',
+        $cmd$
+          WITH deleted_docs AS (
+            DELETE FROM public.knowledge_documents
+            WHERE deleted_at IS NOT NULL
+              AND deleted_at < now() - interval '90 days'
+            RETURNING id
+          )
+          SELECT count(*) FROM deleted_docs;
+        $cmd$
+      )
+    $q$;
   END IF;
 EXCEPTION WHEN OTHERS THEN
-  NULL; -- pg_cron not available in all envs
+  NULL;
 END $$;

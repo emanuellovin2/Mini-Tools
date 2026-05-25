@@ -63,6 +63,7 @@ ALTER TABLE public.apps
   );
 
 -- (C) Update list_marketplace_apps RPC to include screenshots
+DROP FUNCTION IF EXISTS public.list_marketplace_apps(text, text, integer, integer);
 CREATE OR REPLACE FUNCTION public.list_marketplace_apps(
   p_search    text    DEFAULT NULL,
   p_category  text    DEFAULT NULL,
@@ -111,6 +112,7 @@ AS $$
 $$;
 
 -- (D) Update get_marketplace_app RPC to include screenshots
+DROP FUNCTION IF EXISTS public.get_marketplace_app(uuid);
 CREATE OR REPLACE FUNCTION public.get_marketplace_app(p_id uuid)
 RETURNS TABLE (
   id              uuid,
