@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { createAdminClient } from "@/lib/services/supabase";
 import { writeAuditLog } from "@/lib/services/admin";
 import { enforceQuota } from "@/lib/quotas/enforce";
+import { getStripe } from "@/lib/stripe/client";
 
 // New tables (client_relationships, organizations.type extension) are not in the
 // generated Database type yet — cast via any until `npm run types` is run.
@@ -500,4 +501,216 @@ export async function adoptOrphanedDeployment(
     entityId: deploymentId,
     actorOrgId: clientOrgId,
   });
+}
+
+// ---------------------------------------------------------------------------
+// #52 Agency health board
+// ---------------------------------------------------------------------------
+
+export interface ClientHealthScore {
+  id: string;
+  agency_org_id: string;
+  client_org_id: string;
+  relationship_id: string;
+  client_name: string;
+  client_slug: string | null;
+  score: number;
+  churn_risk: "low" | "medium" | "high";
+  active_deployments: number;
+  failed_deployments: number;
+  orphaned_deployments: number;
+  metric_events_7d: number;
+  last_activity_at: string | null;
+  credits_remaining_cents: number;
+  days_since_accepted: number | null;
+  computed_at: string;
+}
+
+export interface HealthBoardPage {
+  items: ClientHealthScore[];
+  next_cursor: string | null;
+}
+
+/**
+ * Cursor-paginated (keyset on client_org_id) list of health scores for an agency.
+ * Sorted by score ASC (most-at-risk first) then client_org_id ASC for stable paging.
+ * Never uses OFFSET.
+ */
+export async function getAgencyHealthBoard(
+  agencyOrgId: string,
+  limit = 25,
+  cursor?: string // last client_org_id from previous page
+): Promise<HealthBoardPage> {
+  const admin = createAdminClient() as AnyAdmin;
+
+  let query = admin
+    .from("client_health_scores")
+    .select(`
+      id, agency_org_id, client_org_id, relationship_id,
+      score, churn_risk,
+      active_deployments, failed_deployments, orphaned_deployments,
+      metric_events_7d, last_activity_at, credits_remaining_cents, days_since_accepted,
+      computed_at,
+      organizations!client_org_id(name, slug)
+    `)
+    .eq("agency_org_id", agencyOrgId)
+    .order("score", { ascending: true })
+    .order("client_org_id", { ascending: true })
+    .limit(limit + 1);
+
+  if (cursor) {
+    // Keyset: (score, client_org_id) > cursor row. We encode cursor as base64 "score:id".
+    const decoded = Buffer.from(cursor, "base64url").toString("utf8");
+    const [scoreStr, lastId] = decoded.split(":");
+    const score = parseInt(scoreStr, 10);
+    // Rows where score > pivot OR (score = pivot AND id > lastId)
+    query = query.or(`score.gt.${score},and(score.eq.${score},client_org_id.gt.${lastId})`);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`getAgencyHealthBoard: ${error.message}`);
+
+  const rows = (data ?? []) as (Record<string, unknown> & {
+    organizations: { name: string; slug: string | null } | null;
+  })[];
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+
+  let next_cursor: string | null = null;
+  if (hasMore) {
+    const last = page[page.length - 1];
+    const raw = `${last.score}:${last.client_org_id}`;
+    next_cursor = Buffer.from(raw, "utf8").toString("base64url");
+  }
+
+  const items: ClientHealthScore[] = page.map((r) => ({
+    id: r.id as string,
+    agency_org_id: r.agency_org_id as string,
+    client_org_id: r.client_org_id as string,
+    relationship_id: r.relationship_id as string,
+    client_name: r.organizations?.name ?? "(unknown)",
+    client_slug: r.organizations?.slug ?? null,
+    score: r.score as number,
+    churn_risk: r.churn_risk as "low" | "medium" | "high",
+    active_deployments: r.active_deployments as number,
+    failed_deployments: r.failed_deployments as number,
+    orphaned_deployments: r.orphaned_deployments as number,
+    metric_events_7d: r.metric_events_7d as number,
+    last_activity_at: (r.last_activity_at as string | null) ?? null,
+    credits_remaining_cents: r.credits_remaining_cents as number,
+    days_since_accepted: (r.days_since_accepted as number | null) ?? null,
+    computed_at: r.computed_at as string,
+  }));
+
+  return { items, next_cursor };
+}
+
+/** Trigger an on-demand refresh of health scores for an agency org. */
+export async function triggerHealthScoreRefresh(agencyOrgId: string): Promise<number> {
+  const admin = createAdminClient() as AnyAdmin;
+  const { data, error } = await admin.rpc("refresh_client_health_scores", {
+    p_agency_org_id: agencyOrgId,
+  });
+  if (error) throw new Error(`triggerHealthScoreRefresh: ${error.message}`);
+  return (data as number) ?? 0;
+}
+
+// ---------------------------------------------------------------------------
+// #52 Stripe Connect balance + payouts (for the agency's own Connect account)
+// ---------------------------------------------------------------------------
+
+export interface AgencyBalance {
+  connected: boolean;
+  available_cents: number;
+  pending_cents: number;
+  currency: string;
+  charges_enabled: boolean;
+  payouts_enabled: boolean;
+}
+
+export interface AgencyPayout {
+  id: string;
+  amount_cents: number;
+  currency: string;
+  status: string;
+  arrival_date: number;
+  created: number;
+}
+
+export async function getAgencyBalance(agencyOrgId: string): Promise<AgencyBalance> {
+  const admin = createAdminClient() as AnyAdmin;
+  const { data: org } = await admin
+    .from("organizations")
+    .select("stripe_account_id, charges_enabled, payouts_enabled")
+    .eq("id", agencyOrgId)
+    .maybeSingle();
+
+  if (!org?.stripe_account_id) {
+    return {
+      connected: false,
+      available_cents: 0,
+      pending_cents: 0,
+      currency: "usd",
+      charges_enabled: false,
+      payouts_enabled: false,
+    };
+  }
+
+  try {
+    const stripe = getStripe();
+    const balance = await stripe.balance.retrieve(
+      {},
+      { stripeAccount: org.stripe_account_id }
+    );
+    return {
+      connected: true,
+      available_cents: balance.available.reduce((s, b) => s + b.amount, 0),
+      pending_cents: balance.pending.reduce((s, b) => s + b.amount, 0),
+      currency: balance.available[0]?.currency ?? "usd",
+      charges_enabled: org.charges_enabled ?? false,
+      payouts_enabled: org.payouts_enabled ?? false,
+    };
+  } catch {
+    return {
+      connected: true,
+      available_cents: 0,
+      pending_cents: 0,
+      currency: "usd",
+      charges_enabled: org.charges_enabled ?? false,
+      payouts_enabled: org.payouts_enabled ?? false,
+    };
+  }
+}
+
+export async function getAgencyPayouts(
+  agencyOrgId: string,
+  limit = 10
+): Promise<AgencyPayout[]> {
+  const admin = createAdminClient() as AnyAdmin;
+  const { data: org } = await admin
+    .from("organizations")
+    .select("stripe_account_id")
+    .eq("id", agencyOrgId)
+    .maybeSingle();
+
+  if (!org?.stripe_account_id) return [];
+
+  try {
+    const stripe = getStripe();
+    const payouts = await stripe.payouts.list(
+      { limit },
+      { stripeAccount: org.stripe_account_id }
+    );
+    return payouts.data.map((p) => ({
+      id: p.id,
+      amount_cents: p.amount,
+      currency: p.currency,
+      status: p.status,
+      arrival_date: p.arrival_date,
+      created: p.created,
+    }));
+  } catch {
+    return [];
+  }
 }

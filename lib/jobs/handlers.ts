@@ -345,3 +345,14 @@ registerHandler("settlement", async (payload, _ctx) => {
   const { settleUsageBatch } = await import("@/lib/services/usage");
   return settleUsageBatch({ vendorOrgId, vendorStripeAccountId, batchId, batchWindowEnd });
 });
+
+// ── #52: agency health score refresh ────────────────────────────────────────
+// Enqueued on-demand from the agency dashboard; idempotent RPC upsert.
+registerHandler("agency_health_refresh", async (payload, _ctx) => {
+  const { agencyOrgId } = payload as { agencyOrgId: string };
+  const { triggerHealthScoreRefresh } = await import("@/lib/services/agency");
+  const updated = await triggerHealthScoreRefresh(agencyOrgId);
+  console.log(JSON.stringify({ event: "agency_health_refresh.ok", agencyOrgId, updated }));
+  return { agencyOrgId, updated };
+});
+

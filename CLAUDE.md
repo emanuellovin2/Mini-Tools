@@ -46,6 +46,7 @@ lib/types/solutions.ts  # Zod discriminated union per solution_type
 lib/cache/revalidate.ts # tagged ISR invalidation helpers
 lib/validation/env.ts   # boot-time Zod env validation (authoritative list of env vars)
 lib/analytics/          # hash.ts, funnel.ts
+lib/agency/churn-risk.ts # computeChurnRisk pure fn (mirrors refresh_client_health_scores SQL)
 lib/connectors/        # registry.ts (static defs), handlers/{http,gmail,slack,sheets}.ts
 lib/services/connectors.ts # signState/verifyState (OAuth CSRF), connectAccount, handleOAuthCallback, refreshTokenIfExpired, runConnectorAction
 app/settings/connections/ # Connections dashboard (list + revoke), OAuth success/error feedback
@@ -188,7 +189,7 @@ Repositioning: infrastructure agencies use to build agent-powered businesses for
 - [x] #42 Workflow engine — `workflows/workflow_steps/workflow_versions/workflow_runs/run_steps`, triggers (manual/schedule/webhook), tick-driven durable executor (one step per cron slice), sellable templates, `claim_workflow_run` RPC.
 - [x] #43 Connectors — OAuth owned by client_org, delegated to deployment; versioned registry (Gmail/Slack/Sheets/HTTP), encrypted `connector_accounts`. `CONNECTOR_STATE_SECRET` + optional `GOOGLE_CLIENT_ID/SECRET`, `SLACK_CLIENT_ID/SECRET`.
 - [x] #44 Usage-product distribution — `product_kind` enum on solutions, `reseller_metered_offers` table, per-unit split via `computeUsageSplit`, marketplace badges + unit pricing, usage earnings panels in vendor/reseller/affiliate dashboards, `/legal/fees` usage section.
-- [ ] #52 Agency operations dashboard — `/agency` route (org.type='agency' only), client-centric health board, `client_health_scores` precomputed hourly, `computeChurnRisk` pure fn, cursor pagination (no OFFSET), Stripe Connect balance + payouts.
+- [x] #52 Agency operations dashboard — `/agency` route (org.type='agency' only), client-centric health board, `client_health_scores` precomputed hourly, `computeChurnRisk` pure fn, cursor pagination (no OFFSET), Stripe Connect balance + payouts.
 - [ ] #53 Client portal — `/client` + subdomain WL (reuses #29 proxy pattern), branding from active agency relationship cached in signed cookie (1h) + Redis `branding_version:*`, outcome charts, credit wallet, privacy panel, agency-branded emails via jobs queue, "Hosted by [PLATFORM]" footer mandatory.
 - [ ] #45 DPA + partner-client data lifecycle — `partner_clients` CRM, cross-deployment erasure/export, retention cron, `/legal/dpa`. Depends on #40/#41/#43/#50.
 
