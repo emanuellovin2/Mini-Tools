@@ -5,6 +5,9 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 
 export const SolutionTypeSchema = z.enum(["saas", "agent", "workflow", "bundle"]);
+
+export const ProductKindSchema = z.enum(["hosted", "gateway", "workflow_template"]);
+export type ProductKind = z.infer<typeof ProductKindSchema>;
 export type SolutionType = z.infer<typeof SolutionTypeSchema>;
 
 export const SolutionStatusSchema = z.enum([
@@ -52,6 +55,11 @@ export const SolutionBaseSchema = z.object({
   template_of_id: z.string().uuid().nullable(),
   is_template: z.boolean().default(false),
   tenant_shard_id: z.number().int().min(0).max(32767).default(0),
+  // #44 metered product fields
+  product_kind: ProductKindSchema.default("hosted"),
+  meter_id: z.string().uuid().nullable().default(null),
+  vendor_unit_price_cents: z.number().int().nonnegative().nullable().default(null),
+  min_unit_price_cents: z.number().int().nonnegative().nullable().default(null),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
 });
@@ -149,6 +157,11 @@ export const CreateSolutionInputSchema = z.object({
     .optional()
     .nullable(),
   has_free_trial: z.boolean().default(false),
+  // #44 metered product fields
+  product_kind: ProductKindSchema.default("hosted").optional(),
+  meter_id: z.string().uuid().optional().nullable(),
+  vendor_unit_price_cents: z.number().int().nonnegative().optional().nullable(),
+  min_unit_price_cents: z.number().int().nonnegative().optional().nullable(),
 });
 
 export type CreateSolutionInput = z.infer<typeof CreateSolutionInputSchema>;

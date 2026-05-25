@@ -33,6 +33,9 @@ export const marketplaceParamsSchema = z.object({
     .enum(["true", "false"])
     .transform((v) => v === "true")
     .optional(),
+  productKind: z
+    .enum(["hosted", "gateway", "workflow_template"])
+    .optional(),
 });
 
 export type MarketplaceParams = z.infer<typeof marketplaceParamsSchema>;
@@ -64,6 +67,7 @@ export function buildMarketplaceHref(
   if (merged.hasAffiliate != null)
     p.set("hasAffiliate", String(merged.hasAffiliate));
   if (merged.hasTrial != null) p.set("hasTrial", String(merged.hasTrial));
+  if (merged.productKind != null) p.set("productKind", merged.productKind);
   const qs = p.toString();
   return `/marketplace${qs ? `?${qs}` : ""}`;
 }

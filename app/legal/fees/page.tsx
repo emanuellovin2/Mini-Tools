@@ -90,6 +90,7 @@ export default function FeesPage() {
             ["#reseller", "Resellers"],
             ["#buyer", "Buyers"],
             ["#refunds", "Refunds"],
+            ["#usage", "Usage-based"],
           ].map(([href, label]) => (
             <a
               key={href}
@@ -300,6 +301,66 @@ export default function FeesPage() {
           Affiliate commission tiers are based on <em>active</em> MRR. When a subscription is
           refunded or cancelled, the affiliate&apos;s active MRR decreases, which may affect
           future tier rates (not existing snapshotted commissions).
+        </p>
+      </Section>
+
+      {/* ── Usage-based products (#44) ─────────────────────────────────────── */}
+      <Section id="usage" title="Usage-based products (Agent &amp; Workflow)">
+        <p className="text-gray-600 text-sm">
+          Gateway Agents and Workflow templates are billed per unit consumed (API call, workflow run, etc.)
+          rather than a flat monthly fee. Credits are prepaid and drawn down on each usage event.
+          Distribution economics follow the same role-based split as subscription products.
+        </p>
+
+        <Table
+          headers={["Role", "What they earn per unit", "Platform cut"]}
+          rows={[
+            [
+              "Vendor",
+              "vendor_unit_price_cents — set when publishing the product",
+              "platform_fee_cents per unit (set in the meter pricing config)",
+            ],
+            [
+              "Reseller",
+              "95% of (sell_unit_price − vendor_floor − platform_fee)",
+              "5% of the per-unit markup above the vendor floor",
+            ],
+            [
+              "Affiliate",
+              "Snapshotted % of platform_fee per unit, recurring for the subscription lifetime",
+              "Platform keeps the rest of platform_fee after affiliate share",
+            ],
+          ]}
+        />
+
+        <Example
+          title="Example: $0.15/call agent (vendor floor $0.10, platform fee $0.02)"
+          rows={[
+            { label: "Buyer pays per call", value: "$0.15" },
+            { label: "Vendor receives", value: "$0.10" },
+            { label: "Platform fee (base)", value: "$0.02" },
+            {
+              label: "Reseller markup (if reseller-sold at $0.15)",
+              value: "$0.03 → reseller keeps $0.0285 (95%), platform gets $0.0015 (5%)",
+            },
+            {
+              label: "Affiliate commission (e.g. 30% of platform fee)",
+              value: "$0.006 → affiliate gets $0.006, platform keeps $0.014",
+            },
+          ]}
+        />
+
+        <p className="text-sm text-gray-600">
+          <strong>Attribution rules:</strong> at most one of affiliate or reseller attribution per
+          metered subscription (same as subscription products). Reseller-sold takes priority over
+          an affiliate cookie if both are present. Commission percentages are snapshotted at
+          subscribe time — tier changes only affect new subscriptions.
+        </p>
+
+        <p className="text-sm text-gray-600">
+          <strong>No compute cost to the platform</strong> on BYOK products: buyers supply their
+          own provider keys, so the platform earns a fixed per-unit fee with zero variable cost.
+          Managed-mode products must price platform_fee_cents above the provider cost per unit.
         </p>
       </Section>
 

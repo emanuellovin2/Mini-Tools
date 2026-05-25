@@ -10,6 +10,7 @@ import {
   getResellerPayouts,
   getResellerKpis,
   getOfferAnalytics,
+  getResellerMeteredEarnings,
 } from "@/lib/services/reseller";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -21,6 +22,7 @@ import KickbackCard from "./_components/KickbackCard";
 import { markupSimulateAction } from "./actions";
 import type { OfferCardData } from "./_components/OfferDrawer";
 import type { OfferAnalytics } from "@/lib/services/reseller";
+import MeteredEarningsPanel from "./_components/MeteredEarningsPanel";
 import { OnboardingCard } from "@/components/ui/OnboardingCard";
 import { buildResellerSteps, getOnboardingState } from "@/lib/services/onboarding";
 
@@ -108,12 +110,13 @@ export default async function ResellerDashboard({
   const isActive = resSub.status === "active" || resSub.status === "trialing";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-  const [rawOffers, catalog, alerts, payouts, kpis] = await Promise.all([
+  const [rawOffers, catalog, alerts, payouts, kpis, meteredEarnings] = await Promise.all([
     getOffers(user.id),
     getResellableAppsCatalog(user.id),
     getResellerAlerts(user.id),
     getResellerPayouts(user.id),
     getResellerKpis(user.id),
+    getResellerMeteredEarnings(user.id, 30),
   ]);
 
   // Load per-offer analytics in parallel
@@ -356,6 +359,15 @@ export default async function ResellerDashboard({
               </div>
             </Section>
           )}
+
+          {/* Usage markup earnings (metered products) */}
+          <Section title="Usage markup — metered products">
+            <MeteredEarningsPanel
+              rows={meteredEarnings.rows}
+              totalCents={meteredEarnings.totalCents}
+              days={30}
+            />
+          </Section>
 
           {/* WL fee transparency */}
           <KickbackCard />

@@ -515,6 +515,33 @@ export async function getAffiliateRetention(
   return { original_count, active_now, retention_pct };
 }
 
+// ---------------------------------------------------------------------------
+// #44 — Affiliate usage earnings (recurring per-unit commissions)
+// ---------------------------------------------------------------------------
+
+export type AffiliateUsageEarningsRow = {
+  solution_id: string;
+  solution_name: string;
+  units_consumed: number;
+  affiliate_share_cents: number;
+};
+
+export async function getAffiliateUsageEarnings(
+  affiliateId: string,
+  days = 30
+): Promise<{ rows: AffiliateUsageEarningsRow[]; totalCents: number }> {
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (admin as any).rpc("get_affiliate_usage_earnings", {
+    p_affiliate_id: affiliateId,
+    p_days: days,
+  });
+  if (error) throw new Error(`getAffiliateUsageEarnings: ${error.message}`);
+  const rows = (data ?? []) as AffiliateUsageEarningsRow[];
+  const totalCents = rows.reduce((s: number, r: AffiliateUsageEarningsRow) => s + r.affiliate_share_cents, 0);
+  return { rows, totalCents };
+}
+
 // All approved apps with affiliate_commission_bps > 0, sorted by commission desc.
 export async function getPromotableApps(): Promise<PromotableApp[]> {
   const admin = createAdminClient();

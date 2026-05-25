@@ -14,6 +14,7 @@ import {
   getAffiliateClawbacks,
   getAffiliateRetention,
   getPromotableApps,
+  getAffiliateUsageEarnings,
 } from "@/lib/services/affiliate";
 import { getAffiliateCommissionBps } from "@/lib/stripe/transfers";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -28,6 +29,7 @@ import ProfileEditor from "./_components/ProfileEditor";
 import PayoutHistoryCard from "./_components/PayoutHistoryCard";
 import { PendingEarningsCard, ClawbacksCard } from "./_components/PendingEarningsCard";
 import RetentionCard from "./_components/RetentionCard";
+import UsageCommissionPanel from "./_components/UsageCommissionPanel";
 import type { AffiliateFunnel } from "@/lib/services/affiliate";
 import { OnboardingCard } from "@/components/ui/OnboardingCard";
 import { buildAffiliateSteps, getOnboardingState } from "@/lib/services/onboarding";
@@ -135,6 +137,7 @@ export default async function AffiliateDashboardPage() {
     retention,
     promotableApps,
     funnel,
+    usageCommissions,
   ] = await Promise.all([
     getAffiliateLinks(user.id),
     getBadgeProgress(user.id),
@@ -146,6 +149,7 @@ export default async function AffiliateDashboardPage() {
     getAffiliateRetention(user.id),
     getPromotableApps(),
     getAffiliateFunnel(user.id),
+    getAffiliateUsageEarnings(user.id, 30),
   ]);
 
   // Per-link funnels
@@ -263,6 +267,18 @@ export default async function AffiliateDashboardPage() {
         <p className="text-[11px] text-muted-foreground mt-3">
           Estimated from active subs × commission snapshot × list price. Actual payout uses net amount after Stripe fees.
         </p>
+      </Section>
+
+      {/* Usage commissions (metered products) */}
+      <Section
+        title="Usage commissions — metered products"
+        tooltip="Recurring % of the platform fee on every unit consumed by buyers you referred. Snapshotted at subscribe time."
+      >
+        <UsageCommissionPanel
+          rows={usageCommissions.rows}
+          totalCents={usageCommissions.totalCents}
+          days={30}
+        />
       </Section>
 
       {/* Pending earnings + clawbacks */}

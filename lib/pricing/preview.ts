@@ -319,6 +319,61 @@ export function previewBuyer({
   };
 }
 
+// ── Metered unit preview (#44) ───────────────────────────────────────────────
+export interface MeteredUnitPreview {
+  vendorUnitPriceCents: number;
+  platformFeeCents: number;
+  resellerMarkupCents: number | null;
+  resellerShare: number | null;
+  affiliateCents: number | null;
+  totalPerUnitCents: number;
+  estimatedCostPer1kCents: number;
+}
+
+export function previewMeteredUnit({
+  vendorUnitPriceCents,
+  platformFeeCents,
+  resellerMarkupCents,
+  affiliateCommissionBps,
+}: {
+  vendorUnitPriceCents: number;
+  platformFeeCents: number;
+  resellerMarkupCents?: number;
+  affiliateCommissionBps?: number;
+}): MeteredUnitPreview {
+  if (resellerMarkupCents != null && affiliateCommissionBps != null) {
+    throw new Error("previewMeteredUnit: affiliate and reseller are mutually exclusive");
+  }
+
+  const resellerPlatformCut =
+    resellerMarkupCents != null && resellerMarkupCents > 0
+      ? Math.floor((resellerMarkupCents * 500) / 10_000)
+      : 0;
+
+  const affiliateCents =
+    affiliateCommissionBps != null
+      ? Math.floor((platformFeeCents * affiliateCommissionBps) / 10_000)
+      : null;
+
+  const resellerShare =
+    resellerMarkupCents != null && resellerMarkupCents > 0
+      ? resellerMarkupCents - resellerPlatformCut
+      : null;
+
+  const totalPerUnitCents =
+    vendorUnitPriceCents + platformFeeCents + (resellerMarkupCents ?? 0);
+
+  return {
+    vendorUnitPriceCents,
+    platformFeeCents: platformFeeCents - (affiliateCents ?? 0) + resellerPlatformCut,
+    resellerMarkupCents: resellerMarkupCents ?? null,
+    resellerShare,
+    affiliateCents,
+    totalPerUnitCents,
+    estimatedCostPer1kCents: totalPerUnitCents * 1000,
+  };
+}
+
 // ── Sum invariant helper (used in tests) ─────────────────────────────────────
 export function assertSumInvariant(preview: BuyerPreview): void {
   const sum =

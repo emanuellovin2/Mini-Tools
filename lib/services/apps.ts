@@ -17,6 +17,10 @@ export type MarketplaceApp = {
   affiliate_commission_bps: number | null;
   has_free_trial: boolean;
   subscriber_count: number;
+  // #44 metered product fields
+  product_kind: "hosted" | "gateway" | "workflow_template";
+  vendor_unit_price_cents: number | null;
+  meter_unit: string | null;
 };
 
 export type FeaturedApp = Pick<
@@ -82,6 +86,7 @@ export async function listMarketplaceApps({
   ratingMin,
   hasAffiliate,
   hasTrial,
+  productKind,
 }: {
   page?: number;
   pageSize?: number;
@@ -93,6 +98,7 @@ export async function listMarketplaceApps({
   ratingMin?: number;
   hasAffiliate?: boolean;
   hasTrial?: boolean;
+  productKind?: "hosted" | "gateway" | "workflow_template";
 } = {}): Promise<MarketplaceListResult> {
   const admin = createAdminClient();
 
@@ -109,6 +115,7 @@ export async function listMarketplaceApps({
       p_rating_min: ratingMin ?? null,
       p_has_affiliate: hasAffiliate ?? null,
       p_has_trial: hasTrial ?? null,
+      p_product_kind: productKind ?? null,
     });
 
     if (error) throw new Error(`listMarketplaceApps: ${error.message}`);
@@ -123,6 +130,9 @@ export async function listMarketplaceApps({
         subscriber_count: Number(rest.subscriber_count ?? 0),
         affiliate_commission_bps: rest.affiliate_commission_bps ?? null,
         has_free_trial: rest.has_free_trial ?? false,
+        product_kind: (rest.product_kind ?? "hosted") as MarketplaceApp["product_kind"],
+        vendor_unit_price_cents: rest.vendor_unit_price_cents ?? null,
+        meter_unit: rest.meter_unit ?? null,
       })
     );
 

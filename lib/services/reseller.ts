@@ -1046,3 +1046,72 @@ export async function getResellerKpis(resellerId: string): Promise<ResellerKpis>
     total_buyers: activeSubs.length,
   };
 }
+
+// ---------------------------------------------------------------------------
+// #44 — Reseller metered offer management
+// ---------------------------------------------------------------------------
+
+export type ResellerMeteredOfferRow = {
+  id: string;
+  solution_id: string;
+  sell_unit_price_cents: number;
+  vendor_unit_floor_snapshot_cents: number;
+  status: string;
+  created_at: string;
+  solutions: { id: string; name: string; meter_unit?: string | null } | null;
+};
+
+export async function getMeteredOffers(resellerId: string): Promise<ResellerMeteredOfferRow[]> {
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (admin as any)
+    .from("reseller_metered_offers")
+    .select("id, solution_id, sell_unit_price_cents, vendor_unit_floor_snapshot_cents, status, created_at, solutions(id, name)")
+    .eq("reseller_id", resellerId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`getMeteredOffers: ${error.message}`);
+  return (data ?? []) as ResellerMeteredOfferRow[];
+}
+
+export async function updateMeteredOfferStatus(
+  resellerId: string,
+  offerId: string,
+  status: "draft" | "active" | "paused" | "archived"
+): Promise<void> {
+  const admin = createAdminClient();
+  if (status === "active") {
+    const resSub = await getResellerSubscription(resellerId);
+    if (!resSub || !isResellerActive(resSub.status))
+      throw new Error("Active reseller subscription required to publish metered offers");
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin as any)
+    .from("reseller_metered_offers")
+    .update({ status })
+    .eq("id", offerId)
+    .eq("reseller_id", resellerId);
+  if (error) throw new Error(`updateMeteredOfferStatus: ${error.message}`);
+}
+
+export type MeteredEarningsRow = {
+  solution_id: string;
+  solution_name: string;
+  units_sold: number;
+  reseller_share_cents: number;
+};
+
+export async function getResellerMeteredEarnings(
+  resellerId: string,
+  days = 30
+): Promise<{ rows: MeteredEarningsRow[]; totalCents: number }> {
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (admin as any).rpc("get_reseller_metered_earnings", {
+    p_reseller_id: resellerId,
+    p_days: days,
+  });
+  if (error) throw new Error(`getResellerMeteredEarnings: ${error.message}`);
+  const rows = (data ?? []) as MeteredEarningsRow[];
+  const totalCents = rows.reduce((s: number, r: MeteredEarningsRow) => s + r.reseller_share_cents, 0);
+  return { rows, totalCents };
+}

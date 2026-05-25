@@ -289,3 +289,65 @@ describe("computeUsageSplit — fuzz: sum invariant and non-negative platform", 
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// #44 — Metered product distribution fuzz tests
+// ---------------------------------------------------------------------------
+
+describe("computeUsageSplit — #44 metered offer: platformCents always >= 0, sum invariant", () => {
+  function rand(min: number, max: number) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  it("reseller metered: vendor+platform+reseller = billable for 1000 random inputs", () => {
+    for (let i = 0; i < 1000; i++) {
+      const qty = rand(1, 5000);
+      const vendorPerUnit = rand(1, 500);
+      const platformPerUnit = rand(1, 100);
+      // markup must be > 0
+      const markupPerUnit = rand(1, 200);
+      const billable = (vendorPerUnit + platformPerUnit + markupPerUnit) * qty;
+
+      const r = computeUsageSplit({
+        billableCents: billable,
+        vendorUnitPriceCents: vendorPerUnit,
+        platformFeeCents: platformPerUnit,
+        qty,
+        resellerMarkupCentsPerUnit: markupPerUnit,
+        costMode: "byok",
+      });
+
+      expect(r.platformCents).toBeGreaterThanOrEqual(0);
+      expect(r.resellerCents).not.toBeNull();
+      expect(r.affiliateCents).toBeNull();
+      const sum = r.vendorCents + r.platformCents + r.resellerCents!;
+      expect(sum).toBe(billable);
+    }
+  });
+
+  it("affiliate metered: vendor+platform+affiliate = billable, affiliate >= 0", () => {
+    for (let i = 0; i < 1000; i++) {
+      const qty = rand(1, 5000);
+      const vendorPerUnit = rand(1, 500);
+      const platformPerUnit = rand(1, 100);
+      const affiliateBps = rand(2000, 8000);
+      const billable = (vendorPerUnit + platformPerUnit) * qty;
+
+      const r = computeUsageSplit({
+        billableCents: billable,
+        vendorUnitPriceCents: vendorPerUnit,
+        platformFeeCents: platformPerUnit,
+        qty,
+        affiliateCommissionBps: affiliateBps,
+        costMode: "byok",
+      });
+
+      expect(r.platformCents).toBeGreaterThanOrEqual(0);
+      expect(r.affiliateCents).not.toBeNull();
+      expect(r.affiliateCents!).toBeGreaterThanOrEqual(0);
+      expect(r.resellerCents).toBeNull();
+      const sum = r.vendorCents + r.platformCents + r.affiliateCents!;
+      expect(sum).toBe(billable);
+    }
+  });
+});

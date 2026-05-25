@@ -29,7 +29,9 @@ export type Resource =
   | "clients"
   // #41 — AI Gateway
   | "provider_keys"
-  | "gateway_tokens";
+  | "gateway_tokens"
+  // #44 — Usage-product distribution
+  | "reseller_metered_offers";
 
 interface ResourceConfig {
   quotaCol: string;
@@ -53,6 +55,8 @@ const RESOURCE_CONFIG: Record<Resource, ResourceConfig> = {
   // #41 — AI Gateway
   provider_keys:  { quotaCol: "max_provider_keys",  table: "provider_keys",  orgCol: "owner_id" },
   gateway_tokens: { quotaCol: "max_gateway_tokens", table: "gateway_tokens", orgCol: "owner_id" },
+  // #44 — Usage-product distribution
+  reseller_metered_offers: { quotaCol: "max_count", table: "reseller_metered_offers", orgCol: "org_id" },
 };
 
 // org_quotas and several referenced tables are not yet in generated types —

@@ -44,16 +44,16 @@ const FIXED_CATEGORIES = [
 export default async function MarketplacePage({ searchParams }: Props) {
   const raw = await searchParams;
   const params = parseMarketplaceParams(raw);
-  const { page, category, search, sort, priceMin, priceMax, ratingMin, hasAffiliate, hasTrial } = params;
+  const { page, category, search, sort, priceMin, priceMax, ratingMin, hasAffiliate, hasTrial, productKind } = params;
 
   const [{ rows: apps, total, totalPages: totalPagesRaw }, categories, featured] = await Promise.all([
     solutionsIndex.search(
-      { search, category, sort, priceMin, priceMax, ratingMin, hasAffiliate, hasTrial },
+      { search, category, sort, priceMin, priceMax, ratingMin, hasAffiliate, hasTrial, productKind },
       { cursor: pageNumberToCursor(page), limit: MARKETPLACE_PAGE_SIZE }
     ),
     listMarketplaceCategories(),
     // Only fetch featured when on the default landing (no filters active)
-    !search && !category && !priceMin && !priceMax && !ratingMin && !hasAffiliate && !hasTrial && page === 1
+    !search && !category && !priceMin && !priceMax && !ratingMin && !hasAffiliate && !hasTrial && !productKind && page === 1
       ? getFeaturedApps(5)
       : Promise.resolve([]),
   ]);
@@ -143,6 +143,28 @@ export default async function MarketplacePage({ searchParams }: Props) {
         </div>
       )}
 
+      {/* Product kind filter pills */}
+      <div className="flex flex-wrap gap-2 mb-5">
+        {[
+          { kind: undefined, label: "All types" },
+          { kind: "hosted" as const, label: "SaaS" },
+          { kind: "gateway" as const, label: "Agent" },
+          { kind: "workflow_template" as const, label: "Workflow" },
+        ].map(({ kind, label }) => (
+          <Link
+            key={label}
+            href={buildMarketplaceHref(params, { productKind: kind, page: 1 })}
+            className={`shrink-0 px-3 py-1 rounded-full text-xs border transition-colors ${
+              productKind === kind
+                ? "bg-primary text-primary-foreground border-primary"
+                : "border-border hover:bg-muted"
+            }`}
+          >
+            {label}
+          </Link>
+        ))}
+      </div>
+
       {/* Main content: sidebar + grid */}
       <div className="flex gap-8">
         <FilterSidebar params={params} />
@@ -215,13 +237,34 @@ export default async function MarketplacePage({ searchParams }: Props) {
 
                     <div className="flex items-center justify-between mt-auto pt-2 gap-2">
                       <span className="text-sm font-semibold">
-                        {formatPrice(app.price_cents, app.currency)}
-                        <span className="text-muted-foreground font-normal text-xs ml-0.5">
-                          /mo
-                        </span>
+                        {app.product_kind !== "hosted" && app.vendor_unit_price_cents != null ? (
+                          <>
+                            {formatPrice(app.vendor_unit_price_cents, app.currency)}
+                            <span className="text-muted-foreground font-normal text-xs ml-0.5">
+                              /{app.meter_unit ?? "unit"}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            {formatPrice(app.price_cents, app.currency)}
+                            <span className="text-muted-foreground font-normal text-xs ml-0.5">
+                              /mo
+                            </span>
+                          </>
+                        )}
                       </span>
                       <div className="flex items-center gap-1.5">
-                        {app.has_free_trial && (
+                        {app.product_kind === "gateway" && (
+                          <span className="text-[9px] font-medium bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-full">
+                            Agent
+                          </span>
+                        )}
+                        {app.product_kind === "workflow_template" && (
+                          <span className="text-[9px] font-medium bg-orange-50 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded-full">
+                            Workflow
+                          </span>
+                        )}
+                        {app.has_free_trial && app.product_kind === "hosted" && (
                           <span className="text-[9px] font-medium bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full">
                             Free trial
                           </span>
@@ -235,6 +278,12 @@ export default async function MarketplacePage({ searchParams }: Props) {
                           )}
                       </div>
                     </div>
+                    {/* Estimated cost per 1k units for metered products */}
+                    {app.product_kind !== "hosted" && app.vendor_unit_price_cents != null && (
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        ~{formatPrice(app.vendor_unit_price_cents * 1000, app.currency)} per 1,000 {app.meter_unit ?? "units"}
+                      </p>
+                    )}
 
                     {app.subscriber_count > 0 && (
                       <p className="text-[10px] text-muted-foreground mt-1.5">

@@ -17,6 +17,7 @@ export interface SearchFilters {
   ratingMin?: number;
   hasAffiliate?: boolean;
   hasTrial?: boolean;
+  productKind?: "hosted" | "gateway" | "workflow_template";
   solutionType?: string;
   region?: string;
 }

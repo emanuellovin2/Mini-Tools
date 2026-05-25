@@ -17,6 +17,7 @@ import {
 } from "@/lib/services/vendor";
 import { getVendorFunnel } from "@/lib/services/analytics";
 import { getActiveOrg } from "@/lib/services/org";
+import { getUsageEarnings } from "@/lib/services/usage";
 import { getVendorCutBps } from "@/lib/stripe/transfers";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -33,6 +34,7 @@ import RefundsFeedCard from "./_components/RefundsFeedCard";
 import CommissionTierCard from "./_components/CommissionTierCard";
 import ResellerKickbackPanel from "./_components/ResellerKickbackPanel";
 import AppsTable from "./_components/AppsTable";
+import UsageRevenuePanel from "./_components/UsageRevenuePanel";
 import VendorFunnelCard from "./_components/VendorFunnelCard";
 import { OnboardingCard } from "@/components/ui/OnboardingCard";
 import { buildVendorSteps, getOnboardingState } from "@/lib/services/onboarding";
@@ -102,6 +104,7 @@ export default async function VendorDashboard({
     refundsFeed,
     kickback,
     vendorFunnel,
+    usageEarnings,
   ] = await Promise.all([
     getVendorApps(user.id),
     getVendorStats(),
@@ -116,6 +119,7 @@ export default async function VendorDashboard({
     getVendorRefundsDisputes(user.id),
     getVendorResellerKickback(user.id),
     getVendorFunnel(activeOrg.id),
+    getUsageEarnings(activeOrg.id, "vendor", 30),
   ]);
 
   const onboardingState = await getOnboardingState(user.id).catch(() => ({}));
@@ -290,6 +294,11 @@ export default async function VendorDashboard({
           }
           kickback={kickback}
         />
+      </Section>
+
+      {/* ── Usage revenue (metered products) ──────────────────────────────── */}
+      <Section title="Usage revenue — metered products">
+        <UsageRevenuePanel rows={usageEarnings.byProduct} totalCents={usageEarnings.totalCents} days={30} />
       </Section>
 
       {/* ── 8. Apps table ─────────────────────────────────────────────────── */}

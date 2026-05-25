@@ -126,7 +126,7 @@ export async function recordUsage(args: RecordUsageArgs): Promise<RecordUsageRes
   const { data: sub } = await admin
     .from("subscriptions")
     .select(
-      "id, affiliate_id, reseller_id, affiliate_commission_snapshot_bps, vendor_floor_snapshot_cents"
+      "id, affiliate_id, reseller_id, affiliate_commission_snapshot_bps, vendor_floor_snapshot_cents, sell_unit_price_snapshot_cents"
     )
     .eq("buyer_id", buyerId)
     .eq("status", "active")
@@ -137,14 +137,17 @@ export async function recordUsage(args: RecordUsageArgs): Promise<RecordUsageRes
   const { vendorCents: rawVendorPerUnit, platformCents: rawPlatformPerUnit } =
     priceUnit(meter.pricing as PricingConfig, cumulativeQty, quantity);
 
-  // Determine reseller markup per unit if reseller-attributed
+  // Reseller markup per unit: sell_unit_price - (vendor_floor + platform_fee)
+  // sell_unit_price_snapshot_cents covers vendor + platform + reseller markup per unit
+  const vendorPerUnit = rawVendorPerUnit / quantity;
+  const platformPerUnit = rawPlatformPerUnit / quantity;
   const resellerMarkupCentsPerUnit =
-    sub?.reseller_id != null && sub.vendor_floor_snapshot_cents != null
-      ? undefined // markup comes from the subscription price; passed as 0 here since we bill separately for now
+    sub?.reseller_id != null && sub.sell_unit_price_snapshot_cents != null
+      ? Math.max(0, sub.sell_unit_price_snapshot_cents - vendorPerUnit - platformPerUnit)
       : undefined;
 
   const billableCents =
-    (rawVendorPerUnit + rawPlatformPerUnit) + // vendor + platform
+    (rawVendorPerUnit + rawPlatformPerUnit) +
     (resellerMarkupCentsPerUnit != null ? resellerMarkupCentsPerUnit * quantity : 0);
 
   const split = computeUsageSplit({
@@ -448,4 +451,241 @@ export async function enqueueSettlementJobs(): Promise<{ jobsEnqueued: number }>
   }
 
   return { jobsEnqueued };
+}
+
+// ---------------------------------------------------------------------------
+// #44 — Metered product distribution
+// ---------------------------------------------------------------------------
+
+export interface PublishMeteredProductArgs {
+  orgId: string;
+  solutionId: string;
+  meterId: string;
+  vendorUnitPriceCents: number;
+  minUnitPriceCents?: number;
+  affiliateCommissionBps?: number;
+}
+
+export async function publishMeteredProduct(args: PublishMeteredProductArgs): Promise<void> {
+  const admin = createAdminClient() as AnyAdmin;
+  const { orgId, solutionId, meterId, vendorUnitPriceCents, minUnitPriceCents, affiliateCommissionBps } = args;
+
+  // Verify the meter belongs to this org
+  const { data: meter, error: mErr } = await admin
+    .from("usage_meters")
+    .select("id, owner_org_id, unit, product_type")
+    .eq("id", meterId)
+    .eq("owner_org_id", orgId)
+    .maybeSingle();
+  if (mErr) throw new Error(`publishMeteredProduct: meter lookup: ${mErr.message}`);
+  if (!meter) throw new Error("publishMeteredProduct: meter not found or not owned by this org");
+
+  // Map meter product_type to product_kind
+  const productKind = meter.product_type === "gateway" ? "gateway" : "workflow_template";
+
+  const updates: Record<string, unknown> = {
+    product_kind: productKind,
+    meter_id: meterId,
+    vendor_unit_price_cents: vendorUnitPriceCents,
+  };
+  if (minUnitPriceCents !== undefined) updates.min_unit_price_cents = minUnitPriceCents;
+  if (affiliateCommissionBps !== undefined) updates.affiliate_commission_bps = affiliateCommissionBps;
+
+  const { error } = await admin
+    .from("solutions")
+    .update(updates)
+    .eq("id", solutionId)
+    .eq("org_id", orgId);
+  if (error) throw new Error(`publishMeteredProduct: ${error.message}`);
+}
+
+export interface CreateMeteredOfferArgs {
+  orgId: string;
+  resellerId: string;
+  solutionId: string;
+  sellUnitPriceCents: number;
+}
+
+export async function createMeteredOffer(args: CreateMeteredOfferArgs): Promise<{ id: string }> {
+  const admin = createAdminClient() as AnyAdmin;
+  const { orgId, resellerId, solutionId, sellUnitPriceCents } = args;
+
+  // Enforce quota
+  const { enforceQuota } = await import("@/lib/quotas/enforce");
+  await enforceQuota(orgId, "reseller_metered_offers");
+
+  // Fetch the solution's vendor_unit_price_cents (floor)
+  const { data: sol, error: solErr } = await admin
+    .from("solutions")
+    .select("id, vendor_unit_price_cents, min_unit_price_cents, status, product_kind, meter_id")
+    .eq("id", solutionId)
+    .maybeSingle();
+  if (solErr) throw new Error(`createMeteredOffer: solution lookup: ${solErr.message}`);
+  if (!sol) throw new Error("createMeteredOffer: solution not found");
+  if (sol.status !== "approved") throw new Error("createMeteredOffer: solution must be approved");
+  if (sol.product_kind === "hosted") throw new Error("createMeteredOffer: only metered products can have metered offers");
+  if (sol.vendor_unit_price_cents == null) throw new Error("createMeteredOffer: solution has no vendor_unit_price_cents set");
+
+  const floor = sol.min_unit_price_cents ?? sol.vendor_unit_price_cents;
+  if (sellUnitPriceCents <= floor) {
+    throw new Error(`createMeteredOffer: sell_unit_price_cents (${sellUnitPriceCents}) must exceed floor (${floor})`);
+  }
+
+  const { data: inserted, error } = await admin
+    .from("reseller_metered_offers")
+    .insert({
+      org_id: orgId,
+      reseller_id: resellerId,
+      solution_id: solutionId,
+      sell_unit_price_cents: sellUnitPriceCents,
+      vendor_unit_floor_snapshot_cents: floor,
+      status: "draft",
+    })
+    .select("id")
+    .single();
+
+  if (error) throw new Error(`createMeteredOffer: ${error.message}`);
+  return { id: (inserted as { id: string }).id };
+}
+
+export interface UsageEarningsRow {
+  meterId: string;
+  solutionName: string | null;
+  unitsSold: number;
+  totalCents: number;
+}
+
+export async function getUsageEarnings(
+  ownerOrgId: string,
+  role: "vendor" | "reseller" | "affiliate",
+  days = 30
+): Promise<{ byProduct: UsageEarningsRow[]; totalCents: number }> {
+  const admin = createAdminClient() as AnyAdmin;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const shareCol =
+    role === "vendor" ? "vendor_share_cents" :
+    role === "reseller" ? "reseller_share_cents" :
+    "affiliate_share_cents";
+
+  // Fetch meters owned by this org (vendor) or usage events with reseller/affiliate matching
+  if (role === "vendor") {
+    const { data: meters, error: mErr } = await admin
+      .from("usage_meters")
+      .select("id")
+      .eq("owner_org_id", ownerOrgId);
+    if (mErr) throw new Error(`getUsageEarnings: ${mErr.message}`);
+
+    const meterIds: string[] = (meters ?? []).map((m: { id: string }) => m.id);
+    if (meterIds.length === 0) return { byProduct: [], totalCents: 0 };
+
+    const { data: rows, error: eErr } = await admin
+      .from("usage_events")
+      .select(`meter_id, quantity, ${shareCol}, solutions!inner(name)`)
+      .in("meter_id", meterIds)
+      .gte("created_at", since);
+    if (eErr) throw new Error(`getUsageEarnings: ${eErr.message}`);
+
+    const grouped: Record<string, { totalCents: number; unitsSold: number; name: string | null }> = {};
+    for (const ev of rows ?? []) {
+      const key = ev.meter_id as string;
+      if (!grouped[key]) grouped[key] = { totalCents: 0, unitsSold: 0, name: (ev as { solutions?: { name: string } | null }).solutions?.name ?? null };
+      grouped[key].totalCents += (ev[shareCol] as number | null) ?? 0;
+      grouped[key].unitsSold += ev.quantity as number;
+    }
+
+    const byProduct = Object.entries(grouped).map(([meterId, v]) => ({
+      meterId,
+      solutionName: v.name,
+      unitsSold: v.unitsSold,
+      totalCents: v.totalCents,
+    }));
+    return { byProduct, totalCents: byProduct.reduce((s, r) => s + r.totalCents, 0) };
+  }
+
+  // For reseller/affiliate: look up by org's profiles
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("id", ownerOrgId)
+    .maybeSingle();
+
+  const profileId = profile?.id ?? ownerOrgId;
+
+  const subFilter = role === "reseller" ? "reseller_id" : "affiliate_id";
+  const { data: subs, error: sErr } = await admin
+    .from("subscriptions")
+    .select("id")
+    .eq(subFilter, profileId);
+  if (sErr) throw new Error(`getUsageEarnings: ${sErr.message}`);
+
+  const subIds: string[] = (subs ?? []).map((s: { id: string }) => s.id);
+  if (subIds.length === 0) return { byProduct: [], totalCents: 0 };
+
+  const { data: rows, error: eErr } = await admin
+    .from("usage_events")
+    .select(`meter_id, quantity, ${shareCol}`)
+    .in("subscription_id", subIds)
+    .not(shareCol, "is", null)
+    .gte("created_at", since);
+  if (eErr) throw new Error(`getUsageEarnings: ${eErr.message}`);
+
+  const grouped: Record<string, { totalCents: number; unitsSold: number }> = {};
+  for (const ev of rows ?? []) {
+    const key = ev.meter_id as string;
+    if (!grouped[key]) grouped[key] = { totalCents: 0, unitsSold: 0 };
+    grouped[key].totalCents += (ev[shareCol] as number | null) ?? 0;
+    grouped[key].unitsSold += ev.quantity as number;
+  }
+
+  const byProduct = Object.entries(grouped).map(([meterId, v]) => ({
+    meterId,
+    solutionName: null,
+    unitsSold: v.unitsSold,
+    totalCents: v.totalCents,
+  }));
+  return { byProduct, totalCents: byProduct.reduce((s, r) => s + r.totalCents, 0) };
+}
+
+export interface UnitCostEstimate {
+  vendorCents: number;
+  platformCents: number;
+  resellerCents: number | null;
+  affiliateCents: number | null;
+  totalPerUnitCents: number;
+}
+
+export function estimateUnitCost(
+  vendorUnitPriceCents: number,
+  platformFeeCents: number,
+  attribution: {
+    resellerMarkupCents?: number;
+    affiliateCommissionBps?: number;
+  } = {}
+): UnitCostEstimate {
+  const { resellerMarkupCents, affiliateCommissionBps } = attribution;
+
+  const resellerPlatformCut = resellerMarkupCents != null && resellerMarkupCents > 0
+    ? Math.floor((resellerMarkupCents * 500) / 10_000)
+    : 0;
+
+  const affiliateCents = affiliateCommissionBps != null
+    ? Math.floor((platformFeeCents * affiliateCommissionBps) / 10_000)
+    : null;
+
+  const platformCents = platformFeeCents - (affiliateCents ?? 0) + resellerPlatformCut;
+  const resellerCents = resellerMarkupCents != null && resellerMarkupCents > 0
+    ? resellerMarkupCents - resellerPlatformCut
+    : null;
+
+  const totalPerUnitCents =
+    vendorUnitPriceCents + platformFeeCents + (resellerMarkupCents ?? 0);
+
+  return {
+    vendorCents: vendorUnitPriceCents,
+    platformCents,
+    resellerCents,
+    affiliateCents,
+    totalPerUnitCents,
+  };
 }

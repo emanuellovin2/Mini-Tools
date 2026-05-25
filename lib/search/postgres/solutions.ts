@@ -43,6 +43,7 @@ export class PostgresSolutionsIndex implements SearchIndex<MarketplaceApp> {
       ratingMin: filters.ratingMin,
       hasAffiliate: filters.hasAffiliate,
       hasTrial: filters.hasTrial,
+      productKind: filters.productKind,
     });
 
     const hasMore = page < result.totalPages;
