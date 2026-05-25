@@ -86,12 +86,12 @@ export interface BenchmarkResponse {
 
 const EMAIL_RE = /^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/i;
 const PHONE_RE = /^\+?[\d\s\-(). ]{7,18}$/;
-const PHONE_MIN_DIGITS_RE = /\d{7}/;
+const PHONE_MIN_DIGITS = 7;
 const PAN_RE = /^\d{13,19}$/;
 
 export function hasPiiValue(v: string): boolean {
   if (EMAIL_RE.test(v)) return true;
-  if (PHONE_RE.test(v) && PHONE_MIN_DIGITS_RE.test(v)) return true;
+  if (PHONE_RE.test(v) && (v.match(/\d/g)?.length ?? 0) >= PHONE_MIN_DIGITS) return true;
   if (PAN_RE.test(v)) return true;
   return false;
 }
