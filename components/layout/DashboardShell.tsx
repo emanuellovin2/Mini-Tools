@@ -99,7 +99,9 @@ export function DashboardShell({
           notificationBell={notificationBell}
           actions={orgSwitcher}
         />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-background">
+          <div className="max-w-7xl mx-auto px-6 py-6">{children}</div>
+        </main>
       </div>
     </div>
   );

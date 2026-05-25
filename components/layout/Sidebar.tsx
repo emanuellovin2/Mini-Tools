@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
 import { cn } from "@/components/ui/cn";
 
 export interface NavItem {
@@ -20,66 +19,61 @@ interface SidebarProps {
 
 export function Sidebar({ nav, collapsed, role, userEmail }: SidebarProps) {
   const pathname = usePathname();
-  const [search, setSearch] = useState("");
-
-  const filtered = search.trim()
-    ? nav.filter((n) => n.label.toLowerCase().includes(search.toLowerCase()))
-    : nav;
 
   return (
     <nav
       className={cn(
-        "flex flex-col h-full border-r border-border bg-background transition-[width] duration-200 overflow-hidden",
-        collapsed ? "w-14" : "w-[var(--sidebar-w,232px)]",
+        "flex flex-col h-full bg-surface border-r border-border",
+        "transition-[width] duration-200 overflow-hidden",
+        collapsed ? "w-14" : "w-[var(--sidebar-w,220px)]",
       )}
       aria-label="Sidebar navigation"
     >
-      {/* Logo / brand */}
-      <div className={cn("flex items-center gap-2 px-4 h-[var(--topbar-h,56px)] shrink-0 border-b border-border", collapsed && "justify-center px-0")}>
+      {/* Brand */}
+      <div
+        className={cn(
+          "flex items-center h-[var(--topbar-h,60px)] shrink-0 px-4",
+          "border-b border-border",
+          collapsed && "justify-center px-0",
+        )}
+      >
         {collapsed ? (
-          <span className="text-[13px] font-bold text-primary">P</span>
+          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
+            <span className="text-[11px] font-bold text-white">P</span>
+          </div>
         ) : (
-          <span className="text-[13px] font-semibold text-foreground tracking-tight">[PLATFORM]</span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
+              <span className="text-[11px] font-bold text-white">P</span>
+            </div>
+            <span className="text-sm font-semibold text-foreground tracking-tight">
+              Platform
+            </span>
+          </div>
         )}
       </div>
 
-      {/* Search slot */}
-      {!collapsed && (
-        <div className="px-3 pt-3 pb-1 shrink-0">
-          <input
-            type="search"
-            placeholder="Search…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={cn(
-              "w-full h-7 rounded-md border border-border bg-muted px-2.5 text-[12px]",
-              "text-foreground placeholder:text-muted-foreground outline-none",
-              "focus:ring-1 focus:ring-primary/30 focus:border-primary/50",
-            )}
-            aria-label="Search navigation"
-          />
-        </div>
-      )}
-
-      {/* Nav items */}
-      <div className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
-        {filtered.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+      {/* Nav */}
+      <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+        {nav.map((item) => {
+          const active =
+            pathname === item.href ||
+            (item.href !== "/" && pathname.startsWith(item.href + "/"));
           return (
             <Link
               key={item.href}
               href={item.href}
               title={collapsed ? item.label : undefined}
               className={cn(
-                "flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] transition-colors",
+                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors",
                 active
-                  ? "bg-primary/10 text-primary font-medium"
+                  ? "bg-muted text-foreground font-medium"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                collapsed && "justify-center px-0 w-10 mx-auto",
+                collapsed && "justify-center px-0 w-9 mx-auto",
               )}
             >
               {item.icon && (
-                <span className="shrink-0 w-4 h-4 flex items-center justify-center opacity-70">
+                <span className="w-4 h-4 flex items-center justify-center shrink-0">
                   {item.icon}
                 </span>
               )}
@@ -89,19 +83,24 @@ export function Sidebar({ nav, collapsed, role, userEmail }: SidebarProps) {
         })}
       </div>
 
-      {/* Footer — role chip + email */}
+      {/* User */}
       {!collapsed && (
-        <div className="px-3 py-3 shrink-0 border-t border-border">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-              <span className="text-[10px] font-semibold text-primary uppercase">
-                {(userEmail ?? "U")[0]}
-              </span>
+        <div className="shrink-0 border-t border-border p-3">
+          <div className="flex items-center gap-2.5 px-1 py-1">
+            <div
+              className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-semibold text-white"
+              style={{ background: "hsl(var(--primary))" }}
+            >
+              {(userEmail ?? "U")[0].toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-medium text-foreground truncate">{userEmail}</p>
+              <p className="text-xs font-medium text-foreground truncate">
+                {userEmail}
+              </p>
               {role && (
-                <p className="text-[10px] text-muted-foreground capitalize">{role}</p>
+                <p className="text-[11px] text-muted-foreground capitalize">
+                  {role}
+                </p>
               )}
             </div>
           </div>

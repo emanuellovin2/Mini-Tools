@@ -1,16 +1,6 @@
 import { ReactNode } from "react";
 import { cn } from "./cn";
 
-/* Grid-based dense table — NOT a <table> element.
-   Usage:
-     <DenseTable cols={["Name", "MRR", "Status"]} empty={<EmptyState .../>}>
-       <DenseRow onClick={...}>
-         <DenseCell>…</DenseCell>
-         <DenseCell align="right">…</DenseCell>
-       </DenseRow>
-     </DenseTable>
-*/
-
 interface DenseTableProps {
   cols: string[];
   children?: ReactNode;
@@ -19,27 +9,23 @@ interface DenseTableProps {
 }
 
 export function DenseTable({ cols, children, empty, className }: DenseTableProps) {
-  const gridCols = `grid-cols-${cols.length}`;
   return (
     <div
-      className={cn("text-[13px]", className)}
+      className={cn("text-sm overflow-hidden rounded-lg border border-border", className)}
       style={{ "--cols": cols.length } as React.CSSProperties}
       role="table"
       aria-label="data table"
     >
       {/* Head */}
       <div
-        className={cn(
-          "grid gap-x-3 px-3 py-2 border-b border-border bg-muted/50",
-          "rounded-t-lg",
-          gridCols,
-        )}
+        className={cn("grid gap-x-4 px-4 py-2.5 bg-muted border-b border-border")}
+        style={{ gridTemplateColumns: `repeat(${cols.length}, 1fr)` }}
         role="row"
       >
         {cols.map((col) => (
           <div
             key={col}
-            className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+            className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
             role="columnheader"
           >
             {col}
@@ -48,10 +34,12 @@ export function DenseTable({ cols, children, empty, className }: DenseTableProps
       </div>
 
       {/* Body */}
-      <div role="rowgroup">
-        {children ?? (empty && (
-          <div className="py-8 flex items-center justify-center">{empty}</div>
-        ))}
+      <div role="rowgroup" className="divide-y divide-border-soft bg-surface">
+        {children ?? (
+          empty && (
+            <div className="py-10 flex items-center justify-center">{empty}</div>
+          )
+        )}
       </div>
     </div>
   );
@@ -65,22 +53,31 @@ interface DenseRowProps {
 }
 
 export function DenseRow({ children, onClick, className, cols }: DenseRowProps) {
-  const gridCols = cols ? `grid-cols-${cols}` : undefined;
   return (
     <div
       className={cn(
-        "grid gap-x-3 px-3 py-2.5 border-b border-border-soft last:border-0",
-        "items-center transition-colors",
-        onClick && "cursor-pointer hover:bg-muted/40",
-        gridCols,
-        !gridCols && "grid-cols-[var(--cols,1)]",
+        "grid gap-x-4 px-4 py-3 items-center transition-colors",
+        onClick && "cursor-pointer hover:bg-muted/50",
         className,
       )}
-      style={cols ? { gridTemplateColumns: `repeat(${cols}, 1fr)` } : undefined}
+      style={
+        cols
+          ? { gridTemplateColumns: `repeat(${cols}, 1fr)` }
+          : { gridTemplateColumns: "repeat(var(--cols,1), 1fr)" }
+      }
       onClick={onClick}
       role="row"
       tabIndex={onClick ? 0 : undefined}
-      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
     >
       {children}
     </div>
@@ -97,7 +94,7 @@ export function DenseCell({ children, align = "left", className }: DenseCellProp
   return (
     <div
       className={cn(
-        "truncate text-[13px] text-foreground",
+        "truncate text-sm text-foreground",
         align === "right" && "text-right tabular-nums",
         align === "center" && "text-center",
         className,

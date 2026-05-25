@@ -13,18 +13,22 @@ export function EmptyState({ icon, title, body, cta, className }: EmptyStateProp
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center text-center py-10 px-4",
+        "flex flex-col items-center justify-center text-center py-12 px-6",
         className,
       )}
     >
       {icon && (
-        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-3 text-muted-foreground">
+        <div className="w-10 h-10 rounded-full bg-muted border border-border flex items-center justify-center mb-4 text-muted-foreground">
           {icon}
         </div>
       )}
-      <p className="text-sm font-semibold text-foreground mb-1">{title}</p>
-      {body && <p className="text-[12px] text-muted-foreground mb-4 max-w-xs">{body}</p>}
-      <div className="mt-1">{cta}</div>
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      {body && (
+        <p className="text-sm text-muted-foreground mt-1 max-w-xs leading-relaxed">
+          {body}
+        </p>
+      )}
+      {cta && <div className="mt-4">{cta}</div>}
     </div>
   );
 }

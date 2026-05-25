@@ -12,6 +12,12 @@ const signUpSchema = z.object({
   role: z.enum(["buyer", "vendor", "reseller"]),
 });
 
+const roles = [
+  { value: "buyer", label: "Buy apps", desc: "Access SaaS tools & agents" },
+  { value: "vendor", label: "Sell apps", desc: "List and monetize your SaaS" },
+  { value: "reseller", label: "Resell apps", desc: "Run your own storefront" },
+] as const;
+
 export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -35,9 +41,7 @@ export default function SignupPage() {
     const { error: authError } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { intended_role: role },
-      },
+      options: { data: { intended_role: role } },
     });
 
     if (authError) {
@@ -50,83 +54,158 @@ export default function SignupPage() {
     router.refresh();
   }
 
+  const inputStyle = {
+    background: "hsl(var(--surface))",
+    border: "1px solid hsl(var(--border))",
+    color: "hsl(var(--foreground))",
+    boxShadow: "var(--shadow-sm)",
+  };
+
+  function handleFocus(e: React.FocusEvent<HTMLInputElement>) {
+    e.currentTarget.style.borderColor = "hsl(var(--primary))";
+    e.currentTarget.style.boxShadow = "0 0 0 3px hsl(var(--primary) / 0.12)";
+  }
+  function handleBlur(e: React.FocusEvent<HTMLInputElement>) {
+    e.currentTarget.style.borderColor = "hsl(var(--border))";
+    e.currentTarget.style.boxShadow = "var(--shadow-sm)";
+  }
+
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-sm bg-white p-8 rounded-xl shadow-sm border border-gray-200">
-        <h1 className="text-2xl font-bold mb-6 text-center">[PLATFORM]</h1>
-        <h2 className="text-lg font-semibold mb-4">Create account</h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              I want to…
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {(["buyer", "vendor", "reseller"] as const).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setRole(r)}
-                  className={`py-2 rounded-lg border text-sm font-medium transition-colors ${
-                    role === r
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "border-gray-300 text-gray-700 hover:border-blue-400"
-                  }`}
-                >
-                  {r === "buyer" ? "Buy apps" : r === "vendor" ? "Sell apps" : "Resell apps"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label
-              className="block text-sm font-medium mb-1"
-              htmlFor="password"
-            >
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {error && (
-            <p className="text-red-600 text-sm" role="alert">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+    <main className="min-h-screen flex items-center justify-center py-12 px-4" style={{ background: "hsl(var(--background))" }}>
+      <div className="w-full max-w-[420px]">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <span
+            className="inline-flex items-center justify-center w-10 h-10 rounded-xl text-white text-lg font-bold mb-4"
+            style={{ background: "hsl(var(--primary))" }}
           >
-            {loading ? "Creating account…" : "Create account"}
-          </button>
-        </form>
+            P
+          </span>
+          <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "hsl(var(--foreground))" }}>
+            Create your account
+          </h1>
+          <p className="mt-1 text-sm" style={{ color: "hsl(var(--muted-foreground))" }}>
+            Get started in under a minute
+          </p>
+        </div>
 
-        <p className="mt-4 text-sm text-center text-gray-600">
+        {/* Card */}
+        <div
+          className="rounded-xl p-8"
+          style={{
+            background: "hsl(var(--surface))",
+            boxShadow: "var(--shadow-card), 0 2px 8px rgba(10,14,39,.06)",
+            border: "1px solid hsl(var(--border))",
+          }}
+        >
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Role selector */}
+            <div>
+              <label className="block text-xs font-medium mb-2" style={{ color: "hsl(var(--foreground))" }}>
+                I want to…
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {roles.map((r) => {
+                  const active = role === r.value;
+                  return (
+                    <button
+                      key={r.value}
+                      type="button"
+                      onClick={() => setRole(r.value)}
+                      className="flex flex-col items-center py-3 px-2 rounded-lg text-center transition-all"
+                      style={{
+                        border: active
+                          ? "1px solid hsl(var(--primary))"
+                          : "1px solid hsl(var(--border))",
+                        background: active
+                          ? "hsl(var(--accent-soft))"
+                          : "hsl(var(--surface))",
+                        color: active
+                          ? "hsl(var(--primary))"
+                          : "hsl(var(--muted-foreground))",
+                        boxShadow: active ? "0 0 0 3px hsl(var(--primary) / 0.1)" : "none",
+                      }}
+                    >
+                      <span className="text-[12px] font-semibold">{r.label}</span>
+                      <span className="text-[10px] mt-0.5 opacity-75 leading-tight">{r.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium mb-1.5" htmlFor="email" style={{ color: "hsl(var(--foreground))" }}>
+                Email address
+              </label>
+              <input
+                id="email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full rounded-lg px-3 py-2.5 text-sm outline-none transition-shadow"
+                style={inputStyle}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium mb-1.5" htmlFor="password" style={{ color: "hsl(var(--foreground))" }}>
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                required
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Min. 8 characters"
+                className="w-full rounded-lg px-3 py-2.5 text-sm outline-none transition-shadow"
+                style={inputStyle}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+              />
+            </div>
+
+            {error && (
+              <div
+                className="flex items-start gap-2 rounded-lg px-3 py-2.5 text-xs"
+                style={{
+                  background: "hsl(var(--bad-soft))",
+                  border: "1px solid hsl(var(--bad) / 0.2)",
+                  color: "hsl(var(--bad))",
+                }}
+              >
+                <svg className="w-3.5 h-3.5 mt-px shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 4a.75.75 0 0 1 .75.75v2.5a.75.75 0 0 1-1.5 0v-2.5A.75.75 0 0 1 8 5zm0 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" />
+                </svg>
+                <span>{error}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-60"
+              style={{
+                background: "hsl(var(--primary))",
+                color: "hsl(var(--primary-foreground))",
+                boxShadow: "0 1px 2px hsl(var(--primary) / 0.3)",
+              }}
+            >
+              {loading ? "Creating account…" : "Create account"}
+            </button>
+          </form>
+        </div>
+
+        <p className="mt-6 text-center text-sm" style={{ color: "hsl(var(--muted-foreground))" }}>
           Already have an account?{" "}
-          <Link href="/login" className="text-blue-600 hover:underline">
+          <Link href="/login" className="font-medium" style={{ color: "hsl(var(--foreground))" }}>
             Sign in
           </Link>
         </p>

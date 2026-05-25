@@ -34,60 +34,150 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-sm bg-white p-8 rounded-xl shadow-sm border border-gray-200">
-        <h1 className="text-2xl font-bold mb-6 text-center">[PLATFORM]</h1>
-        <h2 className="text-lg font-semibold mb-4">Sign in</h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label
-              className="block text-sm font-medium mb-1"
-              htmlFor="password"
-            >
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {error && (
-            <p className="text-red-600 text-sm" role="alert">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+    <main className="min-h-screen flex items-center justify-center" style={{ background: "hsl(var(--background))" }}>
+      <div className="w-full max-w-[400px] px-4">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <span
+            className="inline-flex items-center justify-center w-10 h-10 rounded-xl text-white text-lg font-bold mb-4"
+            style={{ background: "hsl(var(--primary))" }}
           >
-            {loading ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
+            P
+          </span>
+          <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "hsl(var(--foreground))" }}>
+            Sign in to your account
+          </h1>
+          <p className="mt-1 text-sm" style={{ color: "hsl(var(--muted-foreground))" }}>
+            Welcome back
+          </p>
+        </div>
 
-        <p className="mt-4 text-sm text-center text-gray-600">
-          No account?{" "}
-          <Link href="/signup" className="text-blue-600 hover:underline">
+        {/* Card */}
+        <div
+          className="rounded-xl p-8"
+          style={{
+            background: "hsl(var(--surface))",
+            boxShadow: "var(--shadow-card), 0 2px 8px rgba(10,14,39,.06)",
+            border: "1px solid hsl(var(--border))",
+          }}
+        >
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label
+                className="block text-xs font-medium mb-1.5"
+                htmlFor="email"
+                style={{ color: "hsl(var(--foreground))" }}
+              >
+                Email address
+              </label>
+              <input
+                id="email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full rounded-lg px-3 py-2.5 text-sm transition-shadow outline-none"
+                style={{
+                  background: "hsl(var(--surface))",
+                  border: "1px solid hsl(var(--border))",
+                  color: "hsl(var(--foreground))",
+                  boxShadow: "var(--shadow-sm)",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "hsl(var(--primary))";
+                  e.currentTarget.style.boxShadow = "0 0 0 3px hsl(var(--primary) / 0.12)";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "hsl(var(--border))";
+                  e.currentTarget.style.boxShadow = "var(--shadow-sm)";
+                }}
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label
+                  className="block text-xs font-medium"
+                  htmlFor="password"
+                  style={{ color: "hsl(var(--foreground))" }}
+                >
+                  Password
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium transition-colors"
+                  style={{ color: "hsl(var(--primary))" }}
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <input
+                id="password"
+                type="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full rounded-lg px-3 py-2.5 text-sm transition-shadow outline-none"
+                style={{
+                  background: "hsl(var(--surface))",
+                  border: "1px solid hsl(var(--border))",
+                  color: "hsl(var(--foreground))",
+                  boxShadow: "var(--shadow-sm)",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "hsl(var(--primary))";
+                  e.currentTarget.style.boxShadow = "0 0 0 3px hsl(var(--primary) / 0.12)";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "hsl(var(--border))";
+                  e.currentTarget.style.boxShadow = "var(--shadow-sm)";
+                }}
+              />
+            </div>
+
+            {error && (
+              <div
+                className="flex items-start gap-2 rounded-lg px-3 py-2.5 text-xs"
+                style={{
+                  background: "hsl(var(--bad-soft))",
+                  border: "1px solid hsl(var(--bad) / 0.2)",
+                  color: "hsl(var(--bad))",
+                }}
+              >
+                <svg className="w-3.5 h-3.5 mt-px shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 4a.75.75 0 0 1 .75.75v2.5a.75.75 0 0 1-1.5 0v-2.5A.75.75 0 0 1 8 5zm0 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" />
+                </svg>
+                <span>{error}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-60"
+              style={{
+                background: "hsl(var(--primary))",
+                color: "hsl(var(--primary-foreground))",
+                boxShadow: "0 1px 2px hsl(var(--primary) / 0.3)",
+              }}
+            >
+              {loading ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+        </div>
+
+        {/* Footer */}
+        <p className="mt-6 text-center text-sm" style={{ color: "hsl(var(--muted-foreground))" }}>
+          Don&apos;t have an account?{" "}
+          <Link
+            href="/signup"
+            className="font-medium transition-colors"
+            style={{ color: "hsl(var(--foreground))" }}
+          >
             Sign up
           </Link>
         </p>

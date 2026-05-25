@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/Label";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Drawer } from "@/components/ui/Drawer";
 import { DenseTable, DenseRow, DenseCell } from "@/components/ui/DenseTable";
-import { V1_EVENTS, type VendorWebhook } from "@/lib/services/vendor-webhooks";
+import { V1_EVENTS, type VendorWebhook } from "@/lib/services/vendor-webhooks.shared";
 
 interface Props { initialWebhooks: VendorWebhook[] }
 
